@@ -95,7 +95,7 @@ export default function ReviewSlateScreen() {
   if (!isAdmin) {
     return (
       <Screen centered>
-        <Notice title="Admins only" body="Ask Tyler to add your account to the admins table." />
+        <Notice title="Admins only" body="This screen is for Called It staff. An owner can add your account to the admins table." />
         <Button title="Back" variant="secondary" onPress={() => router.back()} />
       </Screen>
     );
