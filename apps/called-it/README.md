@@ -93,5 +93,31 @@ The function accepts the legacy JWT service role key. With the newer
 `sb_secret_...` keys, set `verify_jwt = false` for `generate-slate` in
 `supabase/config.toml`; the function checks the caller itself.
 
-Admins open the slate from the Home tab ("Review tonight's slate"), fix
+Admins open the slate from the Today tab ("Review tonight's slate"), fix
 anything, and tap **Approve and publish**.
+
+## Today screen and picks (UNJ-1422)
+
+The Today tab (`src/app/(tabs)/index.tsx`) shows today's published slate
+(US Eastern date): one card per question with league, start time and points,
+Yes and No buttons, a progress bar ("2 of 5 picked") and a countdown to the
+next lock. With no published slate it shows "No questions today".
+
+- **Locking is enforced by the database.** `supabase/migrations/20261110230000_picks.sql`
+  adds `picks` (one row per player per question). Players can only read their
+  own rows and cannot write the table; the only way in is
+  `make_pick(question_id, answer)`, which refuses questions that are not on a
+  published slate and raises `CI423` once `now() >= lock_at`. A pick can be
+  changed as often as the player likes until then.
+- **The countdown uses the database clock.** `server_now()` gives the offset
+  from the phone's clock, so a phone set wrong does not show a card as open
+  after the server has locked it. If the server still refuses a pick, the
+  card flips to locked and the pick is undone.
+- **Points**: `questions.points`, 10 per question for now. The bonus for less
+  popular correct picks is part of grading (UNJ-1423).
+
+Check the lock rules on a throwaway local Postgres (not a Supabase project):
+
+```bash
+supabase/tests/run-local.sh   # drops and recreates the called_it_test database
+```
