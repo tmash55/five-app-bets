@@ -68,6 +68,10 @@ export default function TodayScreen() {
     }
   };
 
+  const resultsButton = (
+    <Button title="See your results" variant="secondary" onPress={() => router.push('/results')} />
+  );
+
   const reviewButton = isAdmin ? (
     <Button title="Review tonight's slate" variant="secondary" onPress={() => router.push('/review')} />
   ) : null;
@@ -93,6 +97,7 @@ export default function TodayScreen() {
           title="No questions today"
           body="There's no slate for today yet. On game days, questions are posted before the first game, so check back later. On days with no games, there's no slate."
         />
+        {resultsButton}
         {reviewButton}
       </Screen>
     );
@@ -122,6 +127,7 @@ export default function TodayScreen() {
       {picked === total ? (
         <Text color="textSecondary">All picked. Results land after the games end.</Text>
       ) : null}
+      {resultsButton}
       {reviewButton}
     </Screen>
   );
