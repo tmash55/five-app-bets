@@ -19,11 +19,10 @@ export function TextField({ label, error, style, ...rest }: TextFieldProps) {
             color: theme.colors.text,
             backgroundColor: theme.colors.surface,
             borderColor: error ? theme.colors.danger : theme.colors.border,
-            borderWidth: 1,
+            borderWidth: theme.borderWidth.thin,
             borderRadius: theme.radius.md,
             paddingHorizontal: theme.spacing.md,
             paddingVertical: theme.spacing.sm,
-            fontFamily: theme.fonts.body,
           },
           style,
         ]}

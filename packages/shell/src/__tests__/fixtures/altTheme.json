@@ -1,0 +1,41 @@
+{
+  "appearance": "dark",
+  "colors": {
+    "light": {
+      "background": "#FFF8E7",
+      "surface": "#F5E9CC",
+      "surfaceSelected": "#EBD9A8",
+      "border": "#D9C38A",
+      "text": "#2B1D0E",
+      "textSecondary": "#6B5534",
+      "textOnPrimary": "#FFFDF5",
+      "primary": "#C2410C",
+      "danger": "#B91C1C",
+      "success": "#15803D"
+    },
+    "dark": {
+      "background": "#0B1020",
+      "surface": "#161D33",
+      "surfaceSelected": "#222B47",
+      "border": "#2F3A5C",
+      "text": "#F2F4FF",
+      "textSecondary": "#A3ABCC",
+      "textOnPrimary": "#0B1020",
+      "primary": "#FACC15",
+      "danger": "#F87171",
+      "success": "#4ADE80"
+    }
+  },
+  "fonts": { "body": "AltBody", "heading": "AltHeading", "mono": "AltMono" },
+  "typography": {
+    "title": { "font": "heading", "fontSize": 35, "lineHeight": 43, "fontWeight": "800" },
+    "heading": { "font": "heading", "fontSize": 23, "lineHeight": 29, "fontWeight": "700" },
+    "body": { "font": "body", "fontSize": 17, "lineHeight": 25, "fontWeight": "400" },
+    "label": { "font": "body", "fontSize": 15, "lineHeight": 21, "fontWeight": "500" },
+    "caption": { "font": "body", "fontSize": 11, "lineHeight": 15, "fontWeight": "400" }
+  },
+  "spacing": { "xxs": 3, "xs": 5, "sm": 9, "md": 17, "lg": 25, "xl": 33, "xxl": 65 },
+  "radius": { "sm": 0, "md": 3, "lg": 7, "pill": 998 },
+  "borderWidth": { "hairline": 5, "thin": 6, "thick": 7 },
+  "opacity": { "pressed": 0.7, "disabled": 0.4 }
+}

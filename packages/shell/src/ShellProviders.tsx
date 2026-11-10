@@ -4,7 +4,7 @@ import { AuthProvider, useAuth } from './auth/AuthProvider';
 import type { ShellConfig } from './config/env';
 import { PurchasesProvider } from './purchases/PurchasesProvider';
 import { ThemeProvider } from './theme/ThemeProvider';
-import type { ThemeOverrides } from './theme/tokens';
+import type { ThemeFile } from './theme/tokens';
 
 function PurchasesForUser({ config, children }: { config: ShellConfig; children: ReactNode }) {
   const { session } = useAuth();
@@ -22,11 +22,12 @@ export function ShellProviders({
   children,
 }: {
   config: ShellConfig;
-  theme?: ThemeOverrides;
+  /** The app's theme.json. */
+  theme?: ThemeFile;
   children: ReactNode;
 }) {
   return (
-    <ThemeProvider overrides={theme}>
+    <ThemeProvider theme={theme}>
       <AuthProvider supabase={config.supabase}>
         <PurchasesForUser config={config}>{children}</PurchasesForUser>
       </AuthProvider>

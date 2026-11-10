@@ -34,7 +34,7 @@ export function Button({ title, onPress, variant = 'primary', loading, disabled 
         paddingVertical: theme.spacing.md,
         paddingHorizontal: theme.spacing.lg,
         alignItems: 'center',
-        opacity: inactive ? 0.5 : pressed ? 0.8 : 1,
+        opacity: inactive ? theme.opacity.disabled : pressed ? theme.opacity.pressed : 1,
       })}>
       {loading ? (
         <ActivityIndicator color={theme.colors[textColor]} />

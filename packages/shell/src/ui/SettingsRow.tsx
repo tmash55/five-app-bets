@@ -28,7 +28,7 @@ export function SettingsRow({ label, detail, onPress, destructive, loading, disa
         paddingVertical: theme.spacing.md,
         paddingHorizontal: theme.spacing.md,
         backgroundColor: pressed ? theme.colors.surfaceSelected : theme.colors.surface,
-        opacity: disabled ? 0.5 : 1,
+        opacity: disabled ? theme.opacity.disabled : 1,
       })}>
       <View style={{ flex: 1, gap: theme.spacing.xxs }}>
         <Text color={destructive ? 'danger' : 'text'}>{label}</Text>
@@ -54,7 +54,7 @@ export function SettingsSection({ title, children }: { title: string; children: 
         style={{
           borderRadius: theme.radius.md,
           overflow: 'hidden',
-          gap: 1,
+          gap: theme.borderWidth.hairline,
           backgroundColor: theme.colors.border,
         }}>
         {children}

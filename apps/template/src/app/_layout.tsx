@@ -6,6 +6,8 @@ import { useEffect } from 'react';
 
 import { shellConfig } from '@/env';
 
+import theme from '../../theme.json';
+
 SplashScreen.preventAutoHideAsync();
 
 function RootNavigator() {
@@ -39,7 +41,7 @@ function RootNavigator() {
 
 export default function RootLayout() {
   return (
-    <ShellProviders config={shellConfig}>
+    <ShellProviders config={shellConfig} theme={theme}>
       <RootNavigator />
     </ShellProviders>
   );

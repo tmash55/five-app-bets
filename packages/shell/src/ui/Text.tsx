@@ -10,10 +10,9 @@ export type TextProps = RNTextProps & {
 
 export function Text({ variant = 'body', color = 'text', style, ...rest }: TextProps) {
   const theme = useTheme();
-  const font = variant === 'title' || variant === 'heading' ? theme.fonts.heading : theme.fonts.body;
   return (
     <RNText
-      style={[theme.typography[variant], { color: theme.colors[color], fontFamily: font }, style]}
+      style={[theme.typography[variant], { color: theme.colors[color] }, style]}
       {...rest}
     />
   );

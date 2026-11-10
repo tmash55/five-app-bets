@@ -46,9 +46,34 @@ npx supabase link --project-ref <ref>
 npx supabase functions deploy delete-account
 ```
 
+## Changing an app's look
+
+Each app's whole look comes from one file: `apps/<app>/theme.json`. It holds
+light and dark colors, font families, text styles, spacing, corner radius,
+border widths, pressed/disabled opacity, and `appearance` (`"system"`,
+`"light"` or `"dark"`). Edit it, or replace it with a new file, and every shell
+screen (sign in, settings, onboarding, paywall) plus the splash screen and
+Android icon background follow.
+
+- Any token you leave out falls back to the shell defaults in
+  `packages/shell/src/theme/defaultTheme.json`, so a theme file can be as
+  short as a new `primary` color.
+- A misspelled token name or a bad value (for example `"primay"` or
+  `"text": "red"`) stops the app with a message listing every problem,
+  instead of silently using a default.
+- Custom fonts: put the `.ttf`/`.otf` files in `apps/<app>/assets/fonts/`,
+  list their paths in `fontFiles` (for example
+  `"./assets/fonts/Fraunces-Bold.ttf"`), and set `fonts.heading` /
+  `fonts.body` to the font's family name. `"system"` means the platform
+  font. Fonts are embedded at build time, so rebuild the dev client after
+  adding one.
+- Splash, icon and `appearance` changes are read at build time too; color,
+  font and size changes show up on reload.
+
 ## Rules
 
-- Colors, fonts and spacing come from `useTheme()`; raw colors live only in
-  `packages/shell/src/theme/palette.json`. A test fails if a hex color shows
-  up anywhere else in the shell.
+- Colors, fonts, text sizes, spacing, corner radius, border widths and
+  opacity come from `useTheme()`. Raw values live only in theme files. Tests
+  fail if a hex color, font size, font family, padding, margin, gap or radius
+  is hard-coded anywhere else in the shell.
 - Before calling work done: `npm run typecheck`, `npm run lint`, `npm test`.
