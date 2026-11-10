@@ -43,11 +43,17 @@ let configuredKey: string | undefined;
 export function PurchasesProvider({
   revenueCat,
   appUserId,
+  analyticsDistinctId = null,
   children,
 }: {
   revenueCat: RevenueCatConfig | null;
   /** The signed-in Supabase user id, so purchases follow the account. */
   appUserId: string | null;
+  /**
+   * PostHog's id for this user. RevenueCat's PostHog integration sends trial
+   * conversions and renewals to this person.
+   */
+  analyticsDistinctId?: string | null;
   children: ReactNode;
 }) {
   const apiKey = apiKeyForPlatform(revenueCat, Platform.OS);
@@ -70,6 +76,11 @@ export function PurchasesProvider({
         .catch(() => undefined);
     }
   }, [apiKey, appUserId]);
+
+  useEffect(() => {
+    if (!apiKey || !analyticsDistinctId) return;
+    Purchases.setAttributes({ $posthogUserId: analyticsDistinctId }).catch(() => undefined);
+  }, [apiKey, analyticsDistinctId, appUserId]);
 
   const restore = useCallback(async () => {
     if (!apiKey) throw new PurchasesNotConfiguredError();

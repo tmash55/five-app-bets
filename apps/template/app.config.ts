@@ -31,6 +31,8 @@ const config: ExpoConfig = {
   },
   plugins: [
     'expo-router',
+    // Needed by posthog-react-native for the device locale on events.
+    'expo-localization',
     [
       'expo-splash-screen',
       {

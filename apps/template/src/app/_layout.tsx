@@ -4,7 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
-import { shellConfig } from '@/env';
+import { analyticsOptions, shellConfig } from '@/env';
 import { onboardingQuiz } from '@/onboarding/quiz';
 
 SplashScreen.preventAutoHideAsync();
@@ -48,7 +48,7 @@ function RootNavigator() {
 
 export default function RootLayout() {
   return (
-    <ShellProviders config={shellConfig}>
+    <ShellProviders config={shellConfig} analytics={analyticsOptions}>
       <OnboardingProvider quizId={onboardingQuiz.id}>
         <RootNavigator />
       </OnboardingProvider>

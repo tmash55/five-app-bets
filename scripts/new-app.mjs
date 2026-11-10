@@ -5,6 +5,7 @@
 //     [--slug called-it] [--android-package bet.unjuiced.calledit] \
 //     [--supabase-url https://xyz.supabase.co --supabase-anon-key ...] \
 //     [--revenuecat-ios-key ... --revenuecat-android-key ...]
+//     [--posthog-key ... --posthog-host ...]
 import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
