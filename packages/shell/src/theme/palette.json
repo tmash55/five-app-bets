@@ -1,0 +1,26 @@
+{
+  "light": {
+    "background": "#FFFFFF",
+    "surface": "#F0F0F3",
+    "surfaceSelected": "#E0E1E6",
+    "border": "#D9D9E0",
+    "text": "#11181C",
+    "textSecondary": "#60646C",
+    "textOnPrimary": "#FFFFFF",
+    "primary": "#208AEF",
+    "danger": "#E5484D",
+    "success": "#30A46C"
+  },
+  "dark": {
+    "background": "#000000",
+    "surface": "#212225",
+    "surfaceSelected": "#2E3135",
+    "border": "#3A3F42",
+    "text": "#EDEEF0",
+    "textSecondary": "#B0B4BA",
+    "textOnPrimary": "#FFFFFF",
+    "primary": "#3B9EFF",
+    "danger": "#FF6369",
+    "success": "#3DD68C"
+  }
+}
