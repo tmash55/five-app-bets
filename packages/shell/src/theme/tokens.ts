@@ -1,72 +1,79 @@
-import { Platform } from 'react-native';
+import { Platform, type TextStyle } from 'react-native';
 
-import palette from './palette.json';
+import {
+  defaultTheme,
+  resolveThemeFile,
+  type ColorPalette,
+  type FontRole,
+  type ThemeDefinition,
+  type ThemeFile,
+  type TypographyVariant,
+} from './resolve';
+
+export * from './resolve';
 
 /**
- * Base design tokens for every shell app. Raw colors live in palette.json so
- * app.config.ts can read them at build time. Screens must read colors, fonts and
- * spacing from these tokens (through `useTheme`) and never hard-code values.
- * Per-app overrides are passed to `ThemeProvider` (see UNJ-1420).
+ * Design tokens for shell apps. Each app's look comes from one file,
+ * apps/<app>/theme.json, merged over the shell defaults in defaultTheme.json.
+ * Screens read colors, fonts, spacing, radius, border widths and opacity from
+ * `useTheme()` and never hard-code them.
  */
-export const baseColors = palette;
+export const baseColors = defaultTheme.colors;
 
-export type ColorName = keyof (typeof palette)['light'];
-export type ColorPalette = Record<ColorName, string>;
-
-export const spacing = {
-  xxs: 2,
-  xs: 4,
-  sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 32,
-  xxl: 64,
-} as const;
-
-export const radius = {
-  sm: 6,
-  md: 12,
-  lg: 20,
-  pill: 999,
-} as const;
-
-export const fontFamilies = {
-  body: Platform.select({ ios: 'System', default: 'sans-serif' }),
-  heading: Platform.select({ ios: 'System', default: 'sans-serif-medium' }),
-  mono: Platform.select({ ios: 'Menlo', default: 'monospace' }),
-} as const;
-
-export const typography = {
-  title: { fontSize: 32, lineHeight: 40, fontWeight: '700' },
-  heading: { fontSize: 20, lineHeight: 28, fontWeight: '600' },
-  body: { fontSize: 16, lineHeight: 24, fontWeight: '400' },
-  label: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
-  caption: { fontSize: 13, lineHeight: 18, fontWeight: '400' },
-} as const;
-
-export type TypographyVariant = keyof typeof typography;
+export type Scheme = 'light' | 'dark';
 
 export type Theme = {
-  scheme: 'light' | 'dark';
+  scheme: Scheme;
   colors: ColorPalette;
-  spacing: typeof spacing;
-  radius: typeof radius;
-  fonts: typeof fontFamilies;
-  typography: typeof typography;
+  /** Resolved font family per role, with "system" mapped to the platform font. */
+  fonts: Record<FontRole, string | undefined>;
+  /** Ready-to-use text styles, including fontFamily. */
+  typography: Record<TypographyVariant, TextStyle>;
+  spacing: ThemeDefinition['spacing'];
+  radius: ThemeDefinition['radius'];
+  borderWidth: ThemeDefinition['borderWidth'];
+  opacity: ThemeDefinition['opacity'];
 };
 
-export type ThemeOverrides = {
-  light?: Partial<ColorPalette>;
-  dark?: Partial<ColorPalette>;
+const SYSTEM_FONTS: Record<FontRole, string | undefined> = {
+  body: Platform.select({ ios: 'System', android: 'sans-serif', default: undefined }),
+  heading: Platform.select({ ios: 'System', android: 'sans-serif-medium', default: undefined }),
+  mono: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
 };
 
-export function buildTheme(scheme: 'light' | 'dark', overrides?: ThemeOverrides): Theme {
+function fontFamily(role: FontRole, name: string): string | undefined {
+  return name === 'system' ? SYSTEM_FONTS[role] : name;
+}
+
+/** Which scheme to render, given the theme's appearance setting and the device setting. */
+export function schemeFor(definition: ThemeDefinition, deviceScheme: string | null | undefined): Scheme {
+  if (definition.appearance !== 'system') return definition.appearance;
+  return deviceScheme === 'dark' ? 'dark' : 'light';
+}
+
+/** Builds the theme screens read for one scheme from a theme file or a resolved definition. */
+export function buildTheme(scheme: Scheme, source: ThemeFile | ThemeDefinition = defaultTheme): Theme {
+  const definition = resolveThemeFile(source as ThemeFile);
+  const fonts = {
+    body: fontFamily('body', definition.fonts.body),
+    heading: fontFamily('heading', definition.fonts.heading),
+    mono: fontFamily('mono', definition.fonts.mono),
+  };
+  const typography = Object.fromEntries(
+    Object.entries(definition.typography).map(([variant, { font, ...style }]) => [
+      variant,
+      { ...style, fontFamily: fonts[font] },
+    ]),
+  ) as Record<TypographyVariant, TextStyle>;
+
   return {
     scheme,
-    colors: { ...baseColors[scheme], ...overrides?.[scheme] },
-    spacing,
-    radius,
-    fonts: fontFamilies,
+    colors: definition.colors[scheme],
+    fonts,
     typography,
+    spacing: definition.spacing,
+    radius: definition.radius,
+    borderWidth: definition.borderWidth,
+    opacity: definition.opacity,
   };
 }

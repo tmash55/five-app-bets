@@ -12,7 +12,7 @@ export function Notice({ title, body, tone = 'info' }: { title: string; body?: s
       style={{
         backgroundColor: theme.colors.surface,
         borderColor: tone === 'error' ? theme.colors.danger : theme.colors.border,
-        borderWidth: 1,
+        borderWidth: theme.borderWidth.thin,
         borderRadius: theme.radius.md,
         padding: theme.spacing.md,
         gap: theme.spacing.xs,

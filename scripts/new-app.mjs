@@ -59,7 +59,8 @@ Next steps:
      apps/${identity.slug}/.env.local (skip if you passed --supabase-url).
   3. cd apps/${identity.slug} && npx supabase link --project-ref <ref>
      && npx supabase functions deploy delete-account
-  4. npm run ios / npm run android    (from apps/${identity.slug})`);
+  4. npm run ios / npm run android    (from apps/${identity.slug})
+  5. Set the app's colors and fonts in apps/${identity.slug}/theme.json.`);
 }
 
 main();
