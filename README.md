@@ -7,7 +7,7 @@ app (Called It, Keen, QuizForge, Little Hoppers) starts from the shared shell.
 
 | Path | What it is |
 | --- | --- |
-| `packages/shell` | Shared code: theme tokens, Supabase accounts, RevenueCat restore, sign-in and settings screens. |
+| `packages/shell` | Shared code: theme tokens, Supabase accounts, RevenueCat restore, sign-in and settings screens, onboarding quiz. |
 | `packages/game` | Shared game framework: timer, scoring, adaptive difficulty, start/pause/results screens. See its README. |
 | `apps/template` | A blank Expo app built on the shell. New apps are copied from it. |
 | `scripts/new-app.mjs` | Spins up a new app from the template. |
@@ -46,6 +46,27 @@ cd apps/called-it
 npx supabase link --project-ref <ref>
 npx supabase functions deploy delete-account
 ```
+
+## Onboarding quiz
+
+New users see the onboarding quiz, then the paywall, then sign up. Each app
+defines its quiz in one file, `apps/<app>/src/onboarding/quiz.ts`; the screens
+come from `OnboardingQuiz` in the shell and need no code per app.
+
+- 8 to 15 questions. Types: `single`, `multiple` (optional `minSelections` /
+  `maxSelections`) and `slider` (`min`, `max`, `step`, `unit`).
+- The result screen fills `{{questionId}}` placeholders with the user's
+  answers, and the first matching `variants` entry swaps in its own copy.
+- The config is checked in development and by a test; a bad config throws with
+  a list of what is wrong.
+- Give each app's quiz its own `id`, and bump `version` when questions change.
+- Every step fires an event (`QUIZ_EVENTS` in
+  `packages/shell/src/onboarding/events.ts`) through `useAnalytics()`. Until
+  PostHog is wired in (UNJ-1419), events print to the dev console; pass a
+  `track` function to `ShellProviders` to send them elsewhere.
+- The result button saves the answers (`useOnboarding().answers`) and opens
+  `/paywall`. That screen is a placeholder until the paywall work (UNJ-1417);
+  it calls `markComplete()` to finish onboarding.
 
 ## Rules
 

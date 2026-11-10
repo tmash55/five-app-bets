@@ -20,3 +20,11 @@ export { TextField } from './ui/TextField';
 export { SignInScreen, SignUpScreen } from './screens/AuthForm';
 export { SettingsScreen } from './screens/SettingsScreen';
 export { ShellProviders } from './ShellProviders';
+export {
+  AnalyticsProvider,
+  useAnalytics,
+  type Analytics,
+  type EventProperties,
+  type TrackFn,
+} from './analytics/AnalyticsProvider';
+export * from './onboarding';
