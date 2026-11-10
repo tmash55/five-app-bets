@@ -3,17 +3,20 @@ import { Alert } from 'react-native';
 
 import { useAuth } from '../auth/AuthProvider';
 import { friendlyAuthError } from '../auth/errors';
+import { useNotifications } from '../notifications/NotificationsProvider';
 import { usePurchases } from '../purchases/PurchasesProvider';
 import { Notice } from '../ui/Notice';
 import { Screen } from '../ui/Screen';
 import { SettingsRow, SettingsSection } from '../ui/SettingsRow';
 import { Text } from '../ui/Text';
+import { ReminderSettingsSection } from './ReminderSettingsSection';
 
 type Busy = 'restore' | 'sign-out' | 'delete' | null;
 
 export function SettingsScreen({ appName, appVersion }: { appName: string; appVersion: string }) {
   const auth = useAuth();
   const purchases = usePurchases();
+  const notifications = useNotifications();
   const [busy, setBusy] = useState<Busy>(null);
   const [message, setMessage] = useState<{ tone: 'info' | 'error'; text: string } | null>(null);
 
@@ -63,11 +66,19 @@ export function SettingsScreen({ appName, appVersion }: { appName: string; appVe
         <SettingsRow label="Signed in as" detail={auth.session?.user.email ?? 'Not signed in'} />
         <SettingsRow
           label="Sign out"
-          onPress={() => run('sign-out', () => auth.signOut())}
+          onPress={() =>
+            run('sign-out', async () => {
+              // Stop server pushes for this account reaching this device.
+              await notifications.unregisterDevice();
+              await auth.signOut();
+            })
+          }
           loading={busy === 'sign-out'}
           disabled={!auth.session}
         />
       </SettingsSection>
+
+      <ReminderSettingsSection />
 
       <SettingsSection title="Purchases">
         <SettingsRow

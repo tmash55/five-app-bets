@@ -4,3 +4,7 @@ project_id = "shell-template"
 
 [functions.delete-account]
 verify_jwt = true
+
+# Checks the service role key itself, so it also accepts non-JWT secret keys.
+[functions.send-push]
+verify_jwt = false
