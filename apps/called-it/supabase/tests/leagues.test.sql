@@ -111,9 +111,9 @@ select * from public.leaderboard('mars', 'all', current_date);
 \echo '--- Ana profile: nba graded 2 correct 1 (10 pts), nfl voided 1; 1 slate played; no perfect slate'
 select set_config('request.jwt.claim.sub', :ana, false);
 select jsonb_pretty(public.profile_stats());
-\echo '--- Cal profile: 1 slate played, 1 perfect slate? no (needs 3 graded picks) -> 0'
+\echo '--- Cal profile: perfect 0 (needs 3 graded picks), played 1, best streak 1'
 select set_config('request.jwt.claim.sub', :cal, false);
-select public.profile_stats() -> 'perfect_slates' as perfect, public.profile_stats() -> 'slates_played' as played;
+select public.profile_stats() -> 'perfect_slates' as perfect, public.profile_stats() -> 'slates_played' as played, public.profile_stats() -> 'best_streak' as best;
 \echo '--- Cal this week, limit 1: the three tied at rank 1, then Cal''s own row at rank 4 with 0'
 select rank, display_name, points, is_me from public.leaderboard('global', 'week', current_date, 1);
 \echo '--- Friends board for a player with no leagues: just themselves'

@@ -625,8 +625,26 @@ as $$
     having count(p.question_id) = count(*)
        and count(p.correct) >= 3
        and bool_and(coalesce(p.correct, true))
+  ),
+  -- Longest run of published slates in a row the player picked on (the same
+  -- rule as play_streak), for the streak badge, which is kept once earned.
+  slate_days as (
+    select s.slate_date,
+           exists (
+             select 1 from public.picks p
+             join public.questions q on q.id = p.question_id
+             where q.slate_id = s.id and q.included and p.user_id = (select uid from me)
+           ) as played
+    from public.slates s
+    where s.status = 'published'
+  ),
+  runs as (
+    select played,
+           row_number() over (order by slate_date) - row_number() over (partition by played order by slate_date) as run
+    from slate_days
   )
   select jsonb_build_object(
+    'best_streak', coalesce((select max(n) from (select count(*) as n from runs where played group by run) r), 0),
     'by_sport', coalesce((select jsonb_agg(to_jsonb(b) order by b.sport) from by_sport b), '[]'::jsonb),
     'slates_played', (select count(distinct slate_id) from mine),
     'perfect_slates', (select count(*) from perfect),
