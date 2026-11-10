@@ -26,7 +26,7 @@ export async function readSkillHistory(): Promise<SkillHistory> {
   }
 }
 
-async function writeSkillHistory(history: SkillHistory) {
+export async function writeSkillHistory(history: SkillHistory) {
   await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-MAX_SNAPSHOTS)));
 }
 

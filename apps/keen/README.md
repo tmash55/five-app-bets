@@ -45,6 +45,30 @@ draws a chart per skill.
   the entitlement check. In a development build, `EXPO_PUBLIC_KEEN_DEV_PREMIUM=1`
   unlocks everything for testing.
 
+## Onboarding and the baseline test
+
+New players go through the `(onboarding)` routes before signing up:
+
+1. **Quiz** (`src/onboarding/quiz.ts`, rendered by the shell's
+   `OnboardingQuiz`): twelve questions on goals, time available and
+   self-rated strengths. Its `focus_skills` answer becomes the workout's focus
+   skills (`saveFocusSkills`).
+2. **Baseline test** (`src/baseline`): the first two games in `KEEN_GAMES`
+   (Pairs, then Quick Sum), 30 seconds each, with no start or results screen
+   between. `scoreBaseline` rates each round with the same `rateRound` the
+   workout uses; speed is the average of both games. The scores are saved to
+   `keen.baseline` and become today's skill snapshot, so the Today and
+   Progress tabs start from them.
+3. **Plan** (`src/onboarding/plan.ts`): starting scores, a share card
+   (captured with `react-native-view-shot` and shared with `expo-sharing`,
+   falling back to a text share), and a plan built from the answers and
+   scores.
+4. **Paywall**: a placeholder until UNJ-1417. It calls `markComplete()`,
+   which ends onboarding and sends the player to sign up.
+
+The share card needs a development build: `react-native-view-shot` and
+`expo-sharing` are native modules.
+
 To add a game, write a `GameModule` in `src/games` and add it to `KEEN_GAMES`
 in `src/games/index.ts`. Wrapping it in `withAnswerFeedback` gives it the right
 and wrong sounds and haptics.
