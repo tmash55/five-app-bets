@@ -1,0 +1,7 @@
+{
+  "name": "Called It",
+  "slug": "called-it",
+  "scheme": "calledit",
+  "iosBundleIdentifier": "bet.unjuiced.calledit",
+  "androidPackage": "bet.unjuiced.calledit"
+}
