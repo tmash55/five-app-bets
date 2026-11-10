@@ -1,0 +1,7 @@
+{
+  "name": "Keen",
+  "slug": "keen",
+  "scheme": "keen",
+  "iosBundleIdentifier": "bet.unjuiced.keen",
+  "androidPackage": "bet.unjuiced.keen"
+}

@@ -1,0 +1,6 @@
+# Minimal Supabase CLI config so `supabase functions deploy` works from here.
+# Run `npx supabase link --project-ref <ref>` once the app has a project.
+project_id = "keen"
+
+[functions.delete-account]
+verify_jwt = true
