@@ -46,6 +46,16 @@ npx supabase link --project-ref <ref>
 npx supabase functions deploy delete-account
 ```
 
+## Streaks, reminders and push
+
+Every app gets the habit loop from the shell (UNJ-1418):
+
+- `useStreak()` gives the current streak, today's status and `recordActivity()`. Call it when the user finishes the app's daily action. Streak freezes are off unless `apps/<app>/src/habits/config.ts` sets `maxFreezes`; the app decides when to call `grantFreezes()`.
+- `<PushPermissionPrompt />` is a soft prompt before the system dialog. Render it at the moment the app chooses.
+- The daily reminder is scheduled on the device at the time the user picks in Settings. Today's reminder is skipped once the user has played.
+- Server pushes: apply `supabase/migrations`, deploy `send-push`, then POST `{ user_ids, title, body, data: { url } }` to it with the service role key. Tapping a push opens `data.url`.
+- Device pushes need `EAS_PROJECT_ID` (and `GOOGLE_SERVICES_JSON` for Android) in `.env.local` or EAS, plus APNs and FCM credentials in the Expo account. Push tokens cannot be fetched on simulators.
+
 ## Rules
 
 - Colors, fonts and spacing come from `useTheme()`; raw colors live only in

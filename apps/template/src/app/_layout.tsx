@@ -5,6 +5,10 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
 import { shellConfig } from '@/env';
+import { habits } from '@/habits/config';
+import { navigatorGone, navigatorReady, openNotification } from '@/habits/openNotification';
+
+const habitsWithRouting = { ...habits, onNotificationOpened: openNotification };
 
 SplashScreen.preventAutoHideAsync();
 
@@ -14,6 +18,13 @@ function RootNavigator() {
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
+  }, [ready]);
+
+  // Open a notification tap that arrived while the app was starting.
+  useEffect(() => {
+    if (!ready) return;
+    navigatorReady();
+    return navigatorGone;
   }, [ready]);
 
   if (!ready) return null;
@@ -39,7 +50,7 @@ function RootNavigator() {
 
 export default function RootLayout() {
   return (
-    <ShellProviders config={shellConfig}>
+    <ShellProviders config={shellConfig} habits={habitsWithRouting}>
       <RootNavigator />
     </ShellProviders>
   );

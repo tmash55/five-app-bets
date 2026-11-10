@@ -11,7 +11,11 @@
   },
   "peerDependencies": {
     "@react-native-async-storage/async-storage": "*",
+    "@react-native-community/datetimepicker": "*",
     "@supabase/supabase-js": "*",
+    "expo-constants": "*",
+    "expo-device": "*",
+    "expo-notifications": "*",
     "react": "*",
     "react-native": "*",
     "react-native-purchases": "*",
