@@ -22,13 +22,15 @@ jest.mock('expo-router', () => {
   };
 });
 
-it('lists both games with their best score and opens one', async () => {
+it('lists all six games with their best score and opens one', async () => {
   await AsyncStorage.setItem('keen.best.pairs', '1234');
   await renderThemed(<Home />);
   await waitFor(() => expect(screen.getByText('Best 1234')).toBeOnTheScreen());
   expect(screen.getByText('Pairs')).toBeOnTheScreen();
-  expect(screen.getByText('Quick Sum')).toBeOnTheScreen();
-  expect(screen.getByText('Not played yet')).toBeOnTheScreen();
+  for (const title of ['Quick Sum', 'Odd One Out', 'Missing Letter', 'Sequence', 'Price Check']) {
+    expect(screen.getByText(title)).toBeOnTheScreen();
+  }
+  expect(screen.getAllByText('Not played yet')).toHaveLength(5);
 
   await fireEvent.press(screen.getByRole('button', { name: 'Play Quick Sum' }));
   expect(mockPush).toHaveBeenCalledWith({ pathname: '/play/[game]', params: { game: 'quick-sum' } });

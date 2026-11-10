@@ -7,6 +7,10 @@ game framework (`@five/game`).
 | --- | --- | --- | --- |
 | Pairs | `src/games/pairs.tsx` | Memory | Grid grows from 2×2 to 4×6. One cleared grid is one answer; too many misses loses it. |
 | Quick Sum | `src/games/quickSum.tsx` | Math | More numbers, bigger numbers, subtraction from level 4, faster flashes. Pick the total from four. |
+| Odd One Out | `src/games/oddOneOut.tsx` | Focus | Grid grows from 3×3 to 6×6. The odd tile changes shape early on, then only its color, fill or direction. |
+| Missing Letter | `src/games/missingLetter.tsx` | Words | Longer words (3 letters up to 10) and more letters to choose from (3 up to 6). Word list in `src/games/words.ts` is a draft awaiting review. |
+| Sequence | `src/games/sequence.tsx` | Memory | Four lights. Each pattern you repeat right adds a light (3 up to 12) and plays a little faster; a mistake takes one away. |
+| Price Check | `src/games/priceCheck.tsx` | Math | Tips, sale prices and totals. Amounts go from round dollars to any cents, and the four choices move closer together. |
 
 Each round is 60 seconds. The framework owns the timer, scoring, adaptive
 difficulty and the start, pause and results screens; it reports the round
