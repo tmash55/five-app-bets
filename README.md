@@ -8,6 +8,7 @@ app (Called It, Keen, QuizForge, Little Hoppers) starts from the shared shell.
 | Path | What it is |
 | --- | --- |
 | `packages/shell` | Shared code: theme tokens, Supabase accounts, RevenueCat restore, sign-in and settings screens. |
+| `packages/game` | Shared game framework: timer, scoring, adaptive difficulty, start/pause/results screens. See its README. |
 | `apps/template` | A blank Expo app built on the shell. New apps are copied from it. |
 | `scripts/new-app.mjs` | Spins up a new app from the template. |
 
