@@ -17,6 +17,34 @@ difficulty and the start, pause and results screens; it reports the round
 summary to `onFinish` in `src/app/play/[game].tsx`, which keeps the best score
 per game on the device.
 
+## Daily workout, skill scores and progress
+
+The app opens on **Today** (`src/app/(tabs)/index.tsx`): three games for the
+player's skills, about five minutes, then the skill scores with their change
+against last week. **Games** lists every game for free play and **Progress**
+draws a chart per skill.
+
+- **Skills** (`src/skills/skills.ts`): memory, math, focus, words and speed,
+  each scored 0 to 1000. A round is rated 70% on how high the adaptive level
+  climbed and 30% on accuracy, for the game's skill; speed is the average speed
+  bonus share of the right answers, from every game. Each round moves a score
+  30% of the way toward that round's rating; the first round sets it.
+- **History** (`src/skills/history.ts`): one snapshot of the scores per day on
+  the device (`keen.skills.history`), about a year. "vs. last week" compares
+  with the latest snapshot at least seven days old, and shows "New" until there
+  is one. Every finished round counts, in the workout or not.
+- **Focus skills** (`src/skills/focusSkills.ts`): the skills the player wants
+  to train. Onboarding (UNJ-1435) sets them; until then every skill counts.
+- **Workout** (`src/workout/workout.ts`): picks one game per focus skill before
+  any skill gets a second, rotating daily, and saves the day's picks
+  (`keen.workout.YYYY-MM-DD`) so they hold all day. Games opened from Today are
+  ticked off when the round finishes.
+- **Free tier**: free players get one game a day, the first game of the
+  workout; everything else shows as Premium. `usePremium()` in
+  `src/workout/premium.ts` is always false until the paywall (UNJ-1417) adds
+  the entitlement check. In a development build, `EXPO_PUBLIC_KEEN_DEV_PREMIUM=1`
+  unlocks everything for testing.
+
 To add a game, write a `GameModule` in `src/games` and add it to `KEEN_GAMES`
 in `src/games/index.ts`. Wrapping it in `withAnswerFeedback` gives it the right
 and wrong sounds and haptics.
