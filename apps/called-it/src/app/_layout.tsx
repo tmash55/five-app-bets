@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef } from 'react';
 
 import { shellConfig } from '@/env';
+import { captureInstallReferrer, shouldOfferClipboardInvite } from '@/invite/deferredInvite';
 import { takePendingInvite } from '@/invite/pendingInvite';
 
 SplashScreen.preventAutoHideAsync();
@@ -16,6 +17,11 @@ function RootNavigator() {
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
   }, [ready]);
+
+  // Android: an invite carried through the Play Store install (UNJ-1425) is saved like a signed-out link.
+  useEffect(() => {
+    captureInstallReferrer();
+  }, []);
 
   // An invite link opened while signed out is saved by +native-intent; open it
   // once the player signs in or up. (Signed in already, the link opens the join screen directly.)
@@ -29,8 +35,13 @@ function RootNavigator() {
     }
     if (!wasSignedOut.current) return;
     wasSignedOut.current = false;
-    takePendingInvite().then((code) => {
-      if (code) router.push({ pathname: '/join/[code]', params: { code } });
+    takePendingInvite().then(async (code) => {
+      if (code) {
+        router.push({ pathname: '/join/[code]', params: { code } });
+        return;
+      }
+      // iOS: the invite page copied the link before sending the player to the App Store (UNJ-1425).
+      if (await shouldOfferClipboardInvite()) router.push('/invited');
     });
   }, [ready, signedIn]);
 
@@ -50,6 +61,8 @@ function RootNavigator() {
           <Stack.Screen name="results" options={{ headerShown: true, title: 'Results' }} />
           <Stack.Screen name="league/[id]" options={{ headerShown: true, title: 'League' }} />
           <Stack.Screen name="join/[code]" options={{ headerShown: true, title: 'Join league' }} />
+          <Stack.Screen name="share-results" options={{ headerShown: true, title: 'Share results' }} />
+          <Stack.Screen name="invited" options={{ headerShown: true, title: 'Invited?' }} />
         </Stack.Protected>
         <Stack.Protected guard={!session}>
           <Stack.Screen name="(auth)" />

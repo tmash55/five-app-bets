@@ -2,6 +2,11 @@ import type { ExpoConfig } from 'expo/config';
 
 import baseColors from '../../packages/shell/src/theme/palette.json';
 import identity from './app.identity.json';
+import { readShareConfig } from './src/share/shareConfig.ts';
+
+// Invite links (UNJ-1425): with a host set, https://<host>/join/<code> opens the
+// app (universal links on iOS, verified app links on Android). See invite-site/.
+const { inviteHost } = readShareConfig(process.env);
 
 /**
  * Per-app identity (name, slug, bundle IDs) lives in app.identity.json so
@@ -18,6 +23,7 @@ const config: ExpoConfig = {
   ios: {
     bundleIdentifier: identity.iosBundleIdentifier,
     supportsTablet: false,
+    ...(inviteHost ? { associatedDomains: [`applinks:${inviteHost}`] } : {}),
   },
   android: {
     package: identity.androidPackage,
@@ -28,6 +34,18 @@ const config: ExpoConfig = {
       monochromeImage: './assets/images/android-icon-monochrome.png',
     },
     predictiveBackGestureEnabled: false,
+    ...(inviteHost
+      ? {
+          intentFilters: [
+            {
+              action: 'VIEW',
+              autoVerify: true,
+              data: [{ scheme: 'https', host: inviteHost, pathPrefix: '/join/' }],
+              category: ['BROWSABLE', 'DEFAULT'],
+            },
+          ],
+        }
+      : {}),
   },
   plugins: [
     'expo-router',
@@ -37,6 +55,14 @@ const config: ExpoConfig = {
         backgroundColor: baseColors.light.primary,
         image: './assets/images/splash-icon.png',
         imageWidth: 76,
+      },
+    ],
+    // Share cards (UNJ-1425): let the app check for and open Instagram Stories and X.
+    [
+      'react-native-share',
+      {
+        ios: ['instagram-stories', 'instagram', 'twitter'],
+        android: ['com.instagram.android', 'com.twitter.android'],
       },
     ],
   ],

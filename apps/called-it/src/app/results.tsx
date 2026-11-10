@@ -6,6 +6,7 @@ import { View } from 'react-native';
 import { ResultRow } from '@/components/ResultRow';
 import { fetchResults, type ResultsData } from '@/results/api';
 import { slateDateLabel, streakLabel, summarize } from '@/results/resultsState';
+import { canShareResults } from '@/share/resultsCard';
 import { easternDate } from '../../supabase/functions/_shared/slate/time.ts';
 
 /** Graded picks, points earned and the streak for one slate (UNJ-1423). Opened from Today or the results push. */
@@ -78,6 +79,12 @@ export default function ResultsScreen() {
           {streakLabel(data.streak)}
         </Text>
       </View>
+      {canShareResults(data.questions, data.picks) ? (
+        <Button
+          title="Share your results"
+          onPress={() => router.push({ pathname: '/share-results', params: { date: data.slate!.slate_date } })}
+        />
+      ) : null}
       {summary.pending > 0 ? (
         <Notice
           title={`${summary.pending} still to be graded`}

@@ -234,3 +234,67 @@ accounts join by link and see each other ranked after a graded slate):
 Invite links use the app scheme, so they open the app only where it is
 installed. A web link that falls back to the App Store needs a domain with
 universal links / app links set up.
+
+## Share cards and invite links (UNJ-1425)
+
+Once every question on a slate is graded, **Share your results** on the
+Results screen opens a card the player can post: record for the night,
+points, best call (the correct pick that earned most, so a less popular call
+wins; the crowd split is shown), streak, and a line inviting people into their
+league with the link printed on it.
+
+```
+Results ─▶ Share results ─▶ Messages | Instagram Stories | X | More options
+                │
+                └─ link: https://<host>/join/<CODE>   (or calledit://join/<CODE> without a host)
+                          │
+             app installed ─▶ opens the join screen (universal links / app links)
+             no app       ─▶ invite page (invite-site/) ─▶ store ─▶ sign up ─▶ join screen
+```
+
+- **Card** (`src/components/ResultsCardView.tsx`): drawn with theme tokens only,
+  captured at 1080 × 1920 (Stories size) with `react-native-view-shot`. The
+  numbers come from `src/share/resultsCard.ts`, which reuses the results
+  summary from UNJ-1423, so points are never worked out twice.
+- **Which league**: the one the player owns (the biggest, if several), else the
+  biggest they are in. With several, they pick. With none, sharing first creates
+  one named "<display name>'s League" (they can rename it on the share screen),
+  so every shared link carries an invite.
+- **Messages** attaches the card and the text with the link. **Instagram
+  Stories** posts the card (the link is printed on it, since Stories can't take
+  a clickable link from another app); it needs `EXPO_PUBLIC_META_APP_ID` and is
+  hidden until that is set or when Instagram is not installed. **X** opens the
+  composer with text and link; X does not accept an image from another app, so
+  the image goes through **More options** (the system share sheet) instead.
+- **New players** (no app yet): the invite page hands the code to the app after
+  install. Android: the Play link carries `referrer=invite%3D<CODE>`, which the
+  app reads on first launch (`expo-application`), and the join screen opens
+  after sign-up. iOS has no such channel, so tapping **Get Called It** copies the
+  invite link before opening the App Store; after sign-up the app shows
+  "Invited by a friend?" once, with the system paste button (no permission
+  prompt) and a box to type the code.
+
+### Settings
+
+| Where | Name | What |
+| --- | --- | --- |
+| app (EAS env) | `EXPO_PUBLIC_INVITE_LINK_HOST` | Host for invite links, e.g. `calledit.app`. Unset: scheme links that only work with the app installed. Also turns on `associatedDomains` (iOS) and a verified `https://<host>/join/` intent filter (Android) in `app.config.ts`. |
+| app (EAS env) | `EXPO_PUBLIC_META_APP_ID` | Meta app ID, required by Instagram for Stories sharing. Unset: no Instagram button. |
+| invite site build | `INVITE_LINK_HOST`, `IOS_APP_STORE_ID`, `APPLE_TEAM_ID`, `ANDROID_SHA256_CERT_FINGERPRINTS` | See below. |
+
+### Invite page
+
+```bash
+INVITE_LINK_HOST=calledit.app IOS_APP_STORE_ID=<id> APPLE_TEAM_ID=<team> \
+ANDROID_SHA256_CERT_FINGERPRINTS=<Play app signing SHA-256> \
+npm run invite-site      # writes invite-site/dist
+```
+
+It refuses to build while any value is missing. `dist/` is a static site
+(the join page, `.well-known/apple-app-site-association`,
+`.well-known/assetlinks.json`, and rewrites for Netlify `_redirects` or
+`vercel.json`) to deploy at the root of the invite host. Colors come from the
+shell palette.
+
+Check it on a device: share from one account, open the link on a phone without
+the app, install, sign up, and the join screen for the sender's league opens.
