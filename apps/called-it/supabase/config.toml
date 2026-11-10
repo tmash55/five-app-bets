@@ -4,3 +4,6 @@ project_id = "called-it"
 
 [functions.delete-account]
 verify_jwt = true
+
+[functions.generate-slate]
+verify_jwt = true

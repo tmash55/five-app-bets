@@ -14,7 +14,8 @@
     "types": [
       "jest",
       "node"
-    ]
+    ],
+    "allowImportingTsExtensions": true
   },
   "include": [
     "**/*.ts",
@@ -24,6 +25,6 @@
   ],
   "exclude": [
     "node_modules",
-    "supabase/functions"
+    "supabase/functions/*/index.ts"
   ]
 }
