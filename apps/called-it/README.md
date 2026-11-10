@@ -121,3 +121,77 @@ Check the lock rules on a throwaway local Postgres (not a Supabase project):
 ```bash
 supabase/tests/run-local.sh   # drops and recreates the called_it_test database
 ```
+
+## Grading, points and results (UNJ-1423)
+
+```
+Unjuiced (read only)                         Called It
+nba_games, nba_player_box_scores  ─┐
+nfl_games, nfl_player_game_logs   ─┼─▶ grade-slates ─▶ settle_question ─▶ questions.result, picks.points
+                                   │   (every 15 min)          │
+                                   │                           └─▶ slates.graded_at ─▶ send-push "Your results are in"
+```
+
+- **Grading** (`supabase/functions/_shared/grading/`, plain TypeScript shared
+  with Jest): each started question with no result is graded from its stored
+  `grading_rule`. Sum the rule's `stats` for the player; "Yes" when the sum is
+  at least `threshold`.
+- **Void** instead of a result when the game is postponed, cancelled or
+  suspended; when the player did not play (no box score row, no minutes, or
+  `played = false`), checked only 6 hours after the start so a half-written box
+  score is not read as a DNP; or when there is still no final result 36 hours
+  after the start. Void picks score nothing either way. Timings are in
+  `GRADING_CONFIG`.
+- **Unknown rules** are never guessed: they are listed under `errors` in the
+  function's response and stay open for a person.
+- **Points** (`settle_question`, in `migrations/20261111000000_grading.sql`):
+  a correct pick earns `questions.points` (10 for now) plus a bonus when fewer
+  players picked that answer: +10 under 25% of the picks, +5 under 50%, and no
+  bonus on a question with fewer than 10 picks. Those numbers live in the
+  one-row `scoring_settings` table, so they can be tuned in the SQL editor.
+  The pick split is saved on the question (`yes_picks`, `no_picks`).
+  A wrong result can be corrected with
+  `select settle_question('<question id>', 'no', 24, null, true);`, which
+  rescores every pick on it.
+- **Results push**: when a slate's last question is settled, `grade-slates`
+  calls `send-push` (from the shared template, UNJ-1418) for everyone who
+  picked on it, opening `/results?date=<slate date>`. A slate that finishes
+  overnight waits until 9 am Eastern (no pushes 11 pm to 9 am). If the push
+  fails, the next run tries again.
+- **Results screen** (`src/app/results.tsx`, "See your results" on Today):
+  points, record, bonus points and streak, then each question with Called it,
+  Missed, Void or Pending, the final stat and how the crowd picked. Without a
+  date it shows today's slate once anything on it is graded, else the latest
+  earlier one.
+- **Streak**: `play_streak(today)` counts published slates in a row the player
+  picked on. Days without a slate do not break it, and not having picked yet
+  today does not either.
+
+Set up (after the slate setup above):
+
+```bash
+npx supabase db push
+npx supabase secrets set UNJUICED_SUPABASE_READ_KEY=<key that can also read nba_games, nba_player_box_scores, nfl_player_game_logs>
+npx supabase functions deploy grade-slates
+```
+
+Schedule it (SQL editor, same Vault secret as the slate job):
+
+```sql
+select cron.schedule(
+  'grade-called-it-slates',
+  '*/15 * * * *',
+  $$
+  select net.http_post(
+    url := 'https://<called-it-ref>.supabase.co/functions/v1/grade-slates',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key')
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);
+```
+
+The local check script also covers grading: `supabase/tests/run-local.sh`.

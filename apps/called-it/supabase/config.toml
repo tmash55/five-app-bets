@@ -7,3 +7,7 @@ verify_jwt = true
 
 [functions.generate-slate]
 verify_jwt = true
+
+# Checks the service role key itself, so it also accepts non-JWT secret keys.
+[functions.grade-slates]
+verify_jwt = false
