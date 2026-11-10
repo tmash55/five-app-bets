@@ -28,6 +28,7 @@ function RootNavigator() {
         }}>
         <Stack.Protected guard={Boolean(session)}>
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="review" options={{ headerShown: true, title: 'Review slate' }} />
         </Stack.Protected>
         <Stack.Protected guard={!session}>
           <Stack.Screen name="(auth)" />
