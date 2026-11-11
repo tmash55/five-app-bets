@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Applies every migration to a fresh local Postgres database and runs the picks and grading checks.
+# Applies every migration to a fresh local Postgres database and runs the picks, grading and leagues checks.
 # Usage: supabase/tests/run-local.sh [database name]   (needs createdb/psql on PATH; drops that database first)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -13,3 +13,5 @@ fresh
 psql -q -d "$db" -f tests/picks.test.sql
 fresh
 psql -q -d "$db" -f tests/grading.test.sql
+fresh
+psql -q -d "$db" -f tests/leagues.test.sql

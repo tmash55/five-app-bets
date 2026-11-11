@@ -195,3 +195,42 @@ select cron.schedule(
 ```
 
 The local check script also covers grading: `supabase/tests/run-local.sh`.
+
+## Leaderboards, private leagues and profile (UNJ-1424)
+
+New tabs: **Leaderboard**, **Leagues** and **Profile** (Today and Settings stay).
+Everything is read from the points grading writes on picks (`points_earned`,
+`correct`), so the scoring rules stay in `scoring_settings` and
+`settle_question`. Nothing here hard-codes points.
+
+- **Leaderboards** (`leaderboard(scope, period, today)`): Global or Friends,
+  This week or All time. "This week" is Monday to Sunday, US Eastern, by slate
+  date. Friends are everyone who shares a league with you. Ties share a rank.
+  The top 100 show, plus your own row wherever you are.
+- **Private leagues**: create one (name 3 to 30 characters), share the invite
+  link (`calledit://join/<CODE>`; codes are 8 characters with no 0/O/1/I/L), and
+  see a season table (`league_table`) of every member ranked by points since
+  the day the league was created. Joining twice does nothing. When the owner
+  leaves, the member who joined first after them becomes owner; an empty league
+  is deleted. A link opened while signed out is remembered and opens after sign-in.
+- **Limits**: free players can create 1 league and join any number. Pro has no
+  limit. Both numbers are in the one-row `league_settings` table
+  (`free_max_owned`, `free_max_joined`, null = no limit). Pro is read from
+  `pro_members`, which only the service role writes; the RevenueCat webhook
+  that fills it is part of the paywall work (UNJ-1417 / UNJ-1426). Until then
+  everyone gets the free limit.
+- **Profile** (`profile_stats()`): display name (2 to 20 characters, shown on
+  boards; "Player 3F9A" until set), record, points, current and best streak,
+  accuracy by sport, and badges. Badges are worked out in the app from those
+  stats (`src/profile/badges.ts`), so they can change without a migration.
+- **Privacy**: players still cannot read anyone else's picks. Boards, tables
+  and stats come from security definer functions that return totals only.
+
+Set up: `npx supabase db push` (migration `20261111010000_leaderboards_and_leagues.sql`).
+The local check script covers it, including the issue's done check (two
+accounts join by link and see each other ranked after a graded slate):
+`supabase/tests/run-local.sh`.
+
+Invite links use the app scheme, so they open the app only where it is
+installed. A web link that falls back to the App Store needs a domain with
+universal links / app links set up.
