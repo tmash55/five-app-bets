@@ -84,6 +84,8 @@ export function envFileFor(args) {
     `EXPO_PUBLIC_SUPABASE_ANON_KEY=${args['supabase-anon-key'] ?? ''}`,
     `EXPO_PUBLIC_REVENUECAT_IOS_KEY=${args['revenuecat-ios-key'] ?? ''}`,
     `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY=${args['revenuecat-android-key'] ?? ''}`,
+    `EXPO_PUBLIC_POSTHOG_KEY=${args['posthog-key'] ?? ''}`,
+    `EXPO_PUBLIC_POSTHOG_HOST=${args['posthog-host'] ?? ''}`,
   ];
   return `${lines.join('\n')}\n`;
 }

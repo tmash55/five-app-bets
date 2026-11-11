@@ -42,8 +42,10 @@ test('shouldCopy skips build output and local env files but keeps the example', 
   assert.equal(shouldCopy('src'), true);
 });
 
-test('envFileFor writes all four keys, blank when not given', () => {
-  const env = envFileFor({ 'supabase-url': 'https://x.supabase.co' });
+test('envFileFor writes every key, blank when not given', () => {
+  const env = envFileFor({ 'supabase-url': 'https://x.supabase.co', 'posthog-key': 'phc_x' });
   assert.match(env, /^EXPO_PUBLIC_SUPABASE_URL=https:\/\/x\.supabase\.co$/m);
   assert.match(env, /^EXPO_PUBLIC_SUPABASE_ANON_KEY=$/m);
+  assert.match(env, /^EXPO_PUBLIC_POSTHOG_KEY=phc_x$/m);
+  assert.match(env, /^EXPO_PUBLIC_POSTHOG_HOST=$/m);
 });

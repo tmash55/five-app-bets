@@ -60,12 +60,41 @@ come from `OnboardingQuiz` in the shell and need no code per app.
   a list of what is wrong.
 - Give each app's quiz its own `id`, and bump `version` when questions change.
 - Every step fires an event (`QUIZ_EVENTS` in
-  `packages/shell/src/onboarding/events.ts`) through `useAnalytics()`. Until
-  PostHog is wired in (UNJ-1419), events print to the dev console; pass a
-  `track` function to `ShellProviders` to send them elsewhere.
+  `packages/shell/src/onboarding/events.ts`) through `useAnalytics()`, which
+  sends them to PostHog (see Event tracking below).
 - The result button saves the answers (`useOnboarding().answers`) and opens
   `/paywall`. That screen is a placeholder until the paywall work (UNJ-1417);
   it calls `markComplete()` to finish onboarding.
+
+## Event tracking
+
+Every app reports the same funnel to PostHog so one dashboard layout reads the
+launch gates for any app.
+
+- Set `EXPO_PUBLIC_POSTHOG_KEY` (and `EXPO_PUBLIC_POSTHOG_HOST` for EU cloud)
+  in `apps/<app>/.env.local`. Without a key, events print to the dev console
+  and nothing is sent.
+- `ShellProviders analytics={{ appId }}` tags every event with `app` (the slug
+  from `app.identity.json`). Fire your own events with `useAnalytics().track`.
+- Funnel events (`FUNNEL_EVENTS` in `packages/shell/src/analytics/events.ts`):
+  `app_first_opened`, `app_opened` (first foreground each local day),
+  `paywall_viewed`, `trial_started`, `purchase_completed`, plus the onboarding
+  quiz events. The paywall calls `trackPurchase(track, { productId,
+  periodType })` after a purchase.
+- Trial conversions come from RevenueCat's PostHog integration
+  (`rc_trial_converted_event`), because they happen while the app is closed.
+  The shell sets RevenueCat's `$posthogUserId` attribute so they land on the
+  same person. Turn the integration on in RevenueCat for each app.
+- Signing in calls `identify(userId)` with the Supabase user id; signing out
+  resets to a new anonymous id.
+- Kids' areas: wrap them in `<TrackingOff>`. While one is on screen nothing
+  goes to PostHog and the SDK is opted out. For a kids-only app pass
+  `analytics={{ thirdPartyTracking: false }}`; the PostHog SDK is then never
+  loaded.
+- Dashboard: `POSTHOG_PERSONAL_API_KEY=... POSTHOG_PROJECT_ID=...
+  node scripts/posthog-dashboard.mjs --app <slug>` creates or updates
+  "Launch gates: <slug>" with the four gates (60% finish onboarding, 8% start
+  a trial, 30% of trials convert, 35% return next day). Safe to run again.
 
 ## Rules
 

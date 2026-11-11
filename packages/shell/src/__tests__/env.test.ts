@@ -5,7 +5,8 @@ describe('readShellConfig', () => {
     const config = readShellConfig({});
     expect(config.supabase).toBeNull();
     expect(config.revenueCat).toBeNull();
-    expect(config.missing).toHaveLength(4);
+    expect(config.missing).toHaveLength(5);
+    expect(config.posthog).toBeNull();
   });
 
   it('treats blank values as missing', () => {
@@ -25,6 +26,6 @@ describe('readShellConfig', () => {
     });
     expect(config.supabase).toEqual({ url: 'https://abc.supabase.co', anonKey: 'anon' });
     expect(config.revenueCat).toEqual({ iosKey: 'appl_123', androidKey: undefined });
-    expect(config.missing).toEqual(['EXPO_PUBLIC_REVENUECAT_ANDROID_KEY']);
+    expect(config.missing).toEqual(['EXPO_PUBLIC_REVENUECAT_ANDROID_KEY', 'EXPO_PUBLIC_POSTHOG_KEY']);
   });
 });
