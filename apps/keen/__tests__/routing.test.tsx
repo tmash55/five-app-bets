@@ -14,6 +14,8 @@ jest.mock('@five/shell', () => {
     SettingsScreen: () => <RNText>settings screen</RNText>,
     Screen: ({ children }: { children: React.ReactNode }) => children,
     Text: RNText,
+    Button: ({ title }: { title: string }) => <RNText>{title}</RNText>,
+    Notice: ({ title }: { title: string }) => <RNText>{title}</RNText>,
   };
 });
 
@@ -42,12 +44,12 @@ describe('root routing', () => {
     expect(screen).toHavePathname('/sign-in');
   });
 
-  it('shows the home tab on a signed-in cold launch at /', async () => {
+  it('shows the Today tab on a signed-in cold launch at /', async () => {
     mockAuth.session = { user: { email: 'fan@example.com' } };
     await renderRouter('./src/app', { initialUrl: '/' });
     expect(screen.queryByText('sign-in screen')).toBeNull();
     expect(screen).toHavePathname('/');
-    expect(screen.getByText('Games')).toBeTruthy();
+    expect(screen.getByText('Your daily workout')).toBeTruthy();
   });
 
   it('sends a signed-out link to a game to sign-in', async () => {
