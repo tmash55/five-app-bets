@@ -540,10 +540,10 @@ export class FigureAnimator {
         } else {
           key += 1;
           const rt = this.sinceRelease;
-          this.hand(s, s * 0.12, 1.74, 0.5);
+          this.hand(s, s * 0.2, 1.52, 0.44);
           this.pole(s, s * 0.3, -0.6, -0.6);
           this.wrist(s, 1);
-          this.hand(-s, -s * 0.3, 1.26 - 0.45 * smooth(rt / 0.32), 0.3);
+          this.hand(-s, -s * 0.32, 1.2 - 0.42 * smooth(rt / 0.32), 0.28);
           this.pole(-s, -s, -0.6, -0.2);
         }
         c[LOOK] = 1;
@@ -568,7 +568,7 @@ export class FigureAnimator {
           this.wrist(s, -0.6);
         } else {
           key += 1;
-          this.hand(s, s * 0.14, 1.72, 0.4);
+          this.hand(s, s * 0.18, 1.52, 0.36);
           this.pole(s, s * 0.4, -0.6, -0.6);
           this.wrist(s, 0.9);
         }
@@ -625,7 +625,7 @@ export class FigureAnimator {
           const d = Math.hypot(b[0], b[1] - 1.3, b[2]);
           const k = clamp01(1 - (d - 0.4) / 2);
           const tx = lerp(0, b[0], k);
-          const ty = lerp(1.72, b[1], k);
+          const ty = lerp(1.55, b[1], k);
           const tz = lerp(0.3, b[2], k);
           this.hand(1, tx + 0.15, ty, tz - 0.05);
           this.hand(-1, tx - 0.15, ty, tz - 0.05);
@@ -724,11 +724,12 @@ export class FigureAnimator {
               const dy = b[1] - 0.85;
               const dz = b[2];
               const dl = Math.hypot(dx, dy, dz) || 1;
-              const r = Math.min(dl, 1.02) / dl;
+              const r = Math.min(dl, 0.84) / dl;
               this.hand(side, sx + dx * r, 0.85 + dy * r, dz * r);
               this.wrist(side, 0.5);
             } else {
-              this.hand(side, side * 0.19, 1.8, 0.14);
+              // arms up in a V, clear of the big head
+              this.hand(side, side * 0.42, 1.52, 0.12);
               this.wrist(side, -0.15);
             }
             this.pole(side, side * 0.7, -0.2, -0.7);
@@ -802,15 +803,15 @@ export class FigureAnimator {
         if (kind === 0) {
           // fist pump
           c[RY] += 0.05 * hop;
-          this.hand(-1, -0.3, 1.3 + 0.3 * hop, 0.12);
+          this.hand(-1, -0.4, 1.22 + 0.28 * hop, 0.12);
           this.pole(-1, -1, -0.4, -0.3);
           this.hand(1, 0.33, 0.52, 0.06);
           c[TROLL] += 0.08;
         } else if (kind === 1) {
           // both arms up, bouncing
           c[RY] += 0.07 * hop;
-          this.hand(1, 0.36, 1.6 + 0.06 * hop, 0.05);
-          this.hand(-1, -0.36, 1.6 + 0.06 * hop, 0.05);
+          this.hand(1, 0.46, 1.48 + 0.06 * hop, 0.05);
+          this.hand(-1, -0.46, 1.48 + 0.06 * hop, 0.05);
           this.pole(1, 1, -0.3, -0.4);
           this.pole(-1, -1, -0.3, -0.4);
           c[TPITCH] -= 0.1;
@@ -1067,16 +1068,19 @@ export class FigureAnimator {
       const l2 = FORE * ARM_BASE + PALM;
       solveLimb(sx, sy, sz, tx, ty, tz, l1, l2, c[po], c[po + 1], c[po + 2], 1, ARM_MAX_STRETCH, limb);
       const st = limb.stretch;
+      // a stretched arm thickens too, so a long reach reads as a strong arm and not a noodle
+      const thick = Math.sqrt(st);
+      const palm = PALM * thick;
       segmentFrame(fSeg, sx, sy, sz, limb.mx, limb.my, limb.mz, limb.nx, limb.ny, limb.nz);
-      frameToM4(fSeg, bones, bo[0], 1, (l1 * st) / UPPER, 1);
+      frameToM4(fSeg, bones, bo[0], thick, (l1 * st) / UPPER, thick);
       // the forearm stops at the wrist; the palm carries on from there
-      const foreLen = l2 * st - PALM;
+      const foreLen = l2 * st - palm;
       const k = foreLen / (l2 * st);
       const wx = limb.mx + (limb.ex - limb.mx) * k;
       const wy = limb.my + (limb.ey - limb.my) * k;
       const wz = limb.mz + (limb.ez - limb.mz) * k;
       segmentFrame(fSeg, limb.mx, limb.my, limb.mz, wx, wy, wz, limb.nx, limb.ny, limb.nz);
-      frameToM4(fSeg, bones, bo[1], 1, foreLen / FORE, 1);
+      frameToM4(fSeg, bones, bo[1], thick, foreLen / FORE, thick);
       // hand: along the forearm, bent toward where the wrist channel points it
       let ax = limb.ex - limb.mx;
       let ay = limb.ey - limb.my;
@@ -1098,7 +1102,7 @@ export class FigureAnimator {
         az = az * (1 - q) - 0.95 * q;
       }
       segmentFrame(fSeg, wx, wy, wz, wx + ax, wy + ay, wz + az, limb.nx, limb.ny, limb.nz);
-      frameToM4(fSeg, bones, bo[2]);
+      frameToM4(fSeg, bones, bo[2], thick, thick, thick);
     }
 
     // legs
