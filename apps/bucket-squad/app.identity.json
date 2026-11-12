@@ -1,0 +1,7 @@
+{
+  "name": "Bucket Squad",
+  "slug": "bucket-squad",
+  "scheme": "bucketsquad",
+  "iosBundleIdentifier": "bet.unjuiced.bucketsquad",
+  "androidPackage": "bet.unjuiced.bucketsquad"
+}
