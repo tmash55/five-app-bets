@@ -70,7 +70,9 @@ export interface Intent {
   mx: number;
   mz: number;
   turbo: boolean;
-  /** held: starts a shot, releasing it lets the ball go */
+  /** edge: begin a shot, dunk or layup */
+  shootPress: boolean;
+  /** held: letting go releases the jump shot */
   shoot: boolean;
   /** edge: pass now */
   pass: boolean;
@@ -91,7 +93,7 @@ export interface AiMemory {
   relocT: number;
   cutT: number;
   /** wants to shoot / drive */
-  plan: 'none' | 'shoot' | 'drive' | 'hold';
+  plan: 'none' | 'shoot' | 'finish' | 'drive' | 'probe';
   planT: number;
   releaseAt: number;
   stealT: number;
@@ -156,13 +158,12 @@ export interface PlayerSim {
   catchT: number;
   /** stumble flavour for the animator */
   stumbleKind: 'ankle' | 'poster' | 'stuffed' | 'bump';
-  /** buttons last tick (edge detection for the person's pad) */
-  prevA: boolean;
-  prevB: boolean;
-  prevSw: boolean;
-  /** was holding shoot when the state began */
-  shootHeld: boolean;
+  /** a quick tap started this shot: release it automatically at the top */
+  autoRelease: boolean;
+  /** result of the last steal swipe, for recovery time */
+  stealHit: boolean;
   celebrate: number;
+  handSwitchT: number;
   ai: AiMemory;
 }
 
@@ -283,4 +284,11 @@ export interface MatchState {
   lastScoreT: [number, number];
   lastScoreBy: number;
   perTeam: number;
+  /** pad buttons last tick, for edge detection */
+  padA: boolean;
+  padB: boolean;
+  padSw: boolean;
+  /** changes whenever the ball changes hands or state, drives defender auto switch */
+  ctrlKey: string;
+  time: number;
 }
