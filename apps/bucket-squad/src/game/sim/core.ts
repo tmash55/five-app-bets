@@ -1,6 +1,6 @@
 /** Helpers shared by the simulation and the computer players. */
 
-import { BALL_R, COURT, DUNK, G_JUMP, HYPE, SHOT } from './constants';
+import { BALL_R, COURT, DRIBBLE_H, DUNK, G_JUMP, HYPE, SHOT } from './constants';
 import { clamp, clamp01, distToSegment, hypot2, lerp, smooth } from './math';
 import type { Intent, MatchState, PlayerSim, ShotGrade, TeamId } from './types';
 
@@ -182,7 +182,7 @@ export function heldBallPos(m: MatchState, p: PlayerSim, out: { x: number; y: nu
   const dSide = 0.31 * p.hand;
   const dribX = p.x + fx * dFwd + rx * dSide;
   const dribZ = p.z + fz * dFwd + rz * dSide;
-  const dribY = BALL_R + 0.62 * bounce;
+  const dribY = BALL_R + DRIBBLE_H * bounce;
   switch (p.state) {
     case 'shoot': {
       const k = smooth(p.t / 0.16);

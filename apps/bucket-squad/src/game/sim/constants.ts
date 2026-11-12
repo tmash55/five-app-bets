@@ -32,6 +32,8 @@ export const COURT = {
 } as const;
 
 export const BALL_R = 0.17;
+/** how high the ball comes back up on a dribble (centre of the ball above its resting height) */
+export const DRIBBLE_H = 0.4;
 export const PLAYER_R = 0.4;
 
 export const G_BALL = 18;

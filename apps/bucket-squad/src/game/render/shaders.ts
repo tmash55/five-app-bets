@@ -33,9 +33,10 @@ uniform mat4 modelMatrix;
 uniform mat4 viewMatrix;
 uniform mat4 projectionMatrix;
 uniform mat4 uBones[${BONE_COUNT}];
+uniform float uDecalBias;
 in vec3 position;
 in vec3 normal;
-in vec3 color;
+in vec4 color;      // rgb + decal layer (0 = solid surface)
 in float bone;
 out vec3 vNormal;
 out vec3 vColor;
@@ -44,9 +45,11 @@ void main() {
   mat4 b = uBones[int(bone + 0.5)];
   vec4 world = modelMatrix * (b * vec4(position, 1.0));
   vNormal = mat3(modelMatrix) * (mat3(b) * normal);
-  vColor = color;
+  vColor = color.rgb;
   vWorld = world.xyz;
   gl_Position = projectionMatrix * viewMatrix * world;
+  // painted details (eyes, mouth, numbers) win the depth test against the skin under them
+  gl_Position.z -= color.a * uDecalBias * gl_Position.w;
 }
 `;
 
@@ -81,14 +84,21 @@ precision highp float;
 uniform mat4 modelMatrix;
 uniform mat4 viewMatrix;
 uniform mat4 projectionMatrix;
+uniform float uTime;
+uniform float uCheer;
 in vec3 position;
 in vec3 normal;
 in vec3 color;
+in vec3 anim;       // phase, bounce height (crowd), sway (leaves)
 out vec3 vNormal;
 out vec3 vColor;
 out vec3 vWorld;
 void main() {
-  vec4 world = modelMatrix * vec4(position, 1.0);
+  vec3 p = position;
+  // the crowd bobs all the time and jumps when something happens
+  p.y += anim.y * (0.2 + 0.8 * uCheer) * abs(sin(uTime * (2.6 + 4.4 * uCheer) + anim.x));
+  p.x += anim.z * sin(uTime * 1.3 + anim.x) * (0.4 + 0.1 * p.y);
+  vec4 world = modelMatrix * vec4(p, 1.0);
   vNormal = mat3(modelMatrix) * normal;
   vColor = color;
   vWorld = world.xyz;
@@ -128,10 +138,13 @@ uniform mat4 modelMatrix;
 uniform mat4 viewMatrix;
 uniform mat4 projectionMatrix;
 in vec3 position;
+in float shade;
 out vec3 vWorld;
+out float vShade;
 void main() {
   vec4 world = modelMatrix * vec4(position, 1.0);
   vWorld = world.xyz;
+  vShade = shade;
   gl_Position = projectionMatrix * viewMatrix * world;
 }
 `;
@@ -139,7 +152,7 @@ void main() {
 export const FLOOR_FRAG = /* glsl */ `
 precision highp float;
 #define SHADOWS 10
-#define RINGS 6
+#define RINGS 8
 uniform vec3 cameraPosition;
 uniform vec3 uCourtCol;
 uniform vec3 uCourtCol2;
@@ -160,6 +173,7 @@ uniform vec4 uRings[RINGS];      // x, z, radius, alpha
 uniform vec3 uRingCol[RINGS];
 uniform float uTime;
 in vec3 vWorld;
+in float vShade;
 out vec4 fragColor;
 
 float hash(vec2 p) {
@@ -257,12 +271,14 @@ void main() {
     vec4 s = uShadows[i];
     if (s.w <= 0.0) continue;
     vec2 d = p - s.xy;
-    // stretched a little away from the sun
-    d.x *= 0.82;
-    float k = 1.0 - smoothstep(s.z * 0.25, s.z, length(d));
+    // a wide, flat blob: the camera looks along the court
+    d.y *= 1.35;
+    float k = 1.0 - smoothstep(s.z * 0.62, s.z, length(d));
     sh = max(sh, k * s.w);
   }
-  c *= mix(vec3(1.0), vec3(0.50, 0.53, 0.66), sh);
+  // shadows of players and the ball, on top of the ones baked under the scenery
+  sh = 1.0 - (1.0 - sh) * vShade;
+  c *= mix(vec3(1.0), vec3(0.44, 0.47, 0.62), sh);
 
   float fog = smoothstep(uFogNear, uFogFar, length(cameraPosition - vWorld));
   fragColor = vec4(mix(c, uFogCol, fog), 1.0);
@@ -354,13 +370,15 @@ uniform mat4 projectionMatrix;
 in vec3 position;   // particle centre (world)
 in vec4 color;
 in vec3 corner;     // xy = corner in -1..1, z = size
-in float spin;
+in vec2 spin;       // angle, shape (0 soft disc, 1 square, 2 sparkle)
 out vec4 vColor;
 out vec2 vCorner;
+out float vShape;
 void main() {
   vec4 mv = viewMatrix * vec4(position, 1.0);
-  float c = cos(spin);
-  float s = sin(spin);
+  float c = cos(spin.x);
+  float s = sin(spin.x);
+  vShape = spin.y;
   vec2 o = vec2(corner.x * c - corner.y * s, corner.x * s + corner.y * c) * corner.z;
   mv.xy += o;
   vColor = color;
@@ -371,14 +389,23 @@ void main() {
 
 export const PARTICLE_FRAG = /* glsl */ `
 precision highp float;
-uniform float uSquare;
 in vec4 vColor;
 in vec2 vCorner;
+in float vShape;
 out vec4 fragColor;
 void main() {
   float r = length(vCorner);
-  float disc = 1.0 - smoothstep(0.55, 1.0, r);
-  float a = mix(disc, 1.0, uSquare);
+  float a;
+  if (vShape < 0.5) {
+    a = 1.0 - smoothstep(0.45, 1.0, r);
+  } else if (vShape < 1.5) {
+    a = 1.0;
+  } else {
+    // four-point sparkle
+    float arms = 1.0 - smoothstep(0.015, 0.07, abs(vCorner.x * vCorner.y));
+    float core = 1.0 - smoothstep(0.1, 0.34, r);
+    a = max(arms * (1.0 - smoothstep(0.55, 1.0, r)), core);
+  }
   if (a * vColor.a < 0.01) discard;
   fragColor = vec4(vColor.rgb, vColor.a * a);
 }
@@ -456,5 +483,39 @@ void main() {
   if (a < 0.01) discard;
   float inner = 1.0 - smoothstep(-aa, aa, d + 0.09);
   fragColor = vec4(mix(uInk, uColor, inner), a);
+}
+`;
+
+/** Full-screen wipe between plays: chunky diagonal bars that close and open. */
+export const WIPE_VERT = /* glsl */ `
+precision highp float;
+in vec3 position;
+out vec2 vUv;
+void main() {
+  vUv = position.xy * 0.5 + 0.5;
+  gl_Position = vec4(position.xy, 0.0, 1.0);
+}
+`;
+
+export const WIPE_FRAG = /* glsl */ `
+precision highp float;
+uniform float uCover;   // 0 = clear, 1 = fully covered
+uniform float uDir;     // +1 closing from the left, -1 opening toward the right
+uniform float uAspect;
+uniform vec3 uColA;
+uniform vec3 uColB;
+in vec2 vUv;
+out vec4 fragColor;
+void main() {
+  // skewed coordinate so the edge is a slanted line
+  float x = vUv.x + (vUv.y - 0.5) * 0.35 / uAspect * 1.6;
+  float band = floor(vUv.y * 5.0);
+  float lag = fract(band * 0.37) * 0.22;
+  float edge = uCover * 1.6 - lag;
+  float t = uDir > 0.0 ? x : 1.0 - x;
+  float a = 1.0 - smoothstep(edge - 0.012, edge, t);
+  if (a < 0.01) discard;
+  vec3 c = mix(uColA, uColB, mod(band, 2.0));
+  fragColor = vec4(c, a);
 }
 `;

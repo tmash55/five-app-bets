@@ -462,11 +462,12 @@ def text_geo(body: str, font_path: str | None, height: float, depth: float, slot
     cx = 0.5 * (max(xs) + min(xs))
     cy = 0.5 * (max(ys) + min(ys))
     g = Geo()
-    # front faces at y = -depth (facing -Y), back faces omitted (they sit on the body)
+    # front faces at y = -depth (facing -Y), back faces omitted (they sit on the body).
+    # Text is built facing +Z; laying it into the XZ plane turns that into -Y, so the winding stays.
     for v in me.vertices:
         g.verts.append(((v.co.x - cx) * s, -depth, (v.co.y - cy) * s))
     for p in me.polygons:
-        g.faces.append(tuple(reversed(tuple(p.vertices))))
+        g.faces.append(tuple(p.vertices))
         g.slots.append(slot)
         g.smooth.append(False)
     bpy.data.objects.remove(ob)

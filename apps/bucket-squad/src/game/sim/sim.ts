@@ -262,6 +262,8 @@ function setupInbound(m: MatchState, team: TeamId): void {
   b.passer = -1;
   b.vx = b.vy = b.vz = 0;
   handler.hasBall = true;
+  // held at the chest until play starts
+  handler.catchT = 0;
   heldBallPos(m, handler, tmp);
   b.x = tmp.x;
   b.y = tmp.y;
