@@ -75,3 +75,45 @@ export function countOwned(owned: Owned, ids: readonly string[]): number {
   for (const id of ids) if ((owned[id] ?? 0) > 0) n++;
   return n;
 }
+
+const RARITY_RANK: Record<Rarity, number> = { common: 0, rare: 1, epic: 2, legend: 3 };
+
+/** The ways the collection page can line its players up. */
+export type ShelfSort = 'new' | 'rare' | 'best' | 'team';
+
+export const SHELF_SORTS: readonly { id: ShelfSort; label: string; say: string }[] = [
+  { id: 'new', label: 'NEW', say: 'Newest found first' },
+  { id: 'rare', label: 'RARE', say: 'Rarest first' },
+  { id: 'best', label: 'BEST', say: 'Best overall first' },
+  { id: 'team', label: 'TEAM', say: 'By team' },
+];
+
+/**
+ * The players in the order a sort shows them. Players found come before players still to find, so a sort opens on
+ * what you have, except by team, which keeps each team together. NEW goes by when each player was first found, newest first: `owned` keeps its
+ * players in the order they were first found (an object keeps the order its keys were added in, and so does the
+ * saved JSON), so the order costs nothing to keep.
+ */
+export function sortShelf<P extends { id: string; team: string; rarity: Rarity; name: string }>(
+  players: readonly P[],
+  sort: ShelfSort,
+  owned: Owned,
+  value: (a: P, b: P) => number,
+  overall: (p: P, level: number) => number,
+  teamOrder: readonly string[] = [],
+): P[] {
+  const foundAt = new Map(Object.keys(owned).map((id, i) => [id, (owned[id] ?? 0) > 0 ? i : -1]));
+  const found = (p: P) => (foundAt.get(p.id) ?? -1) >= 0;
+  const foundFirst = (a: P, b: P) => Number(found(b)) - Number(found(a));
+  const team = (p: P) => {
+    const i = teamOrder.indexOf(p.team);
+    return i < 0 ? teamOrder.length : i;
+  };
+  const order: Record<ShelfSort, (a: P, b: P) => number> = {
+    new: (a, b) => foundFirst(a, b) || (foundAt.get(b.id) ?? -1) - (foundAt.get(a.id) ?? -1) || value(a, b),
+    rare: (a, b) => foundFirst(a, b) || RARITY_RANK[b.rarity] - RARITY_RANK[a.rarity] || value(a, b),
+    best: (a, b) => foundFirst(a, b) || overall(b, levelOf(owned[b.id] ?? 0)) - overall(a, levelOf(owned[a.id] ?? 0)) || value(a, b),
+    team: (a, b) => team(a) - team(b) || value(a, b),
+  };
+  return [...players].sort(order[sort]);
+}

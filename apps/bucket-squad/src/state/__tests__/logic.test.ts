@@ -9,7 +9,7 @@ import { summary, totals } from '@/testing/summary';
 
 import { teamUniformId, uniformById, type UniformDef } from '@/data/uniforms';
 
-import { DEFAULT_SETTINGS, SQUAD_SIZE, STARTING_COINS, buyPack, buyUniform, claimFreePack, claimMission, claimMissionBonus, finishMatch, hasUniform, homeTeamChoices, markSeen, newSave, openOwnedPack, repairSave, setSquad, squadLevels, squadUniform, startCareer, starterIds, uniformProgress, wearUniform, type SaveData } from '../logic';
+import { DEFAULT_SETTINGS, SQUAD_SIZE, STARTING_COINS, addCard, buyPack, buyUniform, claimFreePack, claimMission, claimMissionBonus, finishMatch, hasUniform, homeTeamChoices, markSeen, newSave, openOwnedPack, repairSave, setSquad, squadLevels, squadUniform, startCareer, starterIds, uniformProgress, wearUniform, type SaveData } from '../logic';
 
 const DAY = '2026-03-09';
 const NEXT_DAY = '2026-03-10';
@@ -520,5 +520,15 @@ describe('uniforms', () => {
     expect(away.uniform).toBe(teamUniformId('a-pack-team'));
     expect(squadUniform(away).def).toBeNull();
     expect(squadUniform(away).wear.team).toBe('comets');
+  });
+});
+
+describe('the order players were found in', () => {
+  it('survives saving and loading, so the collection can show the newest first', () => {
+    const ids = PLAYERS.slice(0, 5).map((p) => p.id).reverse();
+    let d = newSave();
+    for (const id of ids) d = addCard(d, id)!.data;
+    d = addCard(d, ids[0])!.data;
+    expect(Object.keys(repairSave(JSON.parse(JSON.stringify(d))).owned)).toEqual(ids);
   });
 });

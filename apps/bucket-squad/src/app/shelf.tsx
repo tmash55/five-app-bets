@@ -1,25 +1,28 @@
 /**
- * The collection: every player there is in one grid, a column to a team, lit when found and a dark outline
- * when not. Beside it the player picked in the grid, up close, with what they are good at and where to put them.
+ * The collection: every player of a league in one grid, lit when found and a dark outline when not, sorted the
+ * way the tabs over it say (newest found, rarest, best or by team) and scrolling down for the rest. Beside it the
+ * player picked in the grid, up close, with what they are good at and where to put them.
  */
 
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Fragment, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 
-import { LEAGUES, MAX_LEVEL, PLAYERS, boosted, byValue, leagueOf, leagueTeams, levelBonus, teamById, teamPlayers } from '@/data/roster';
+import { LEAGUES, MAX_LEVEL, PLAYERS, boosted, byValue, leagueOf, leagueTeams, levelBonus, playerOverall, teamById } from '@/data/roster';
 import type { PlayerDef, TeamDef } from '@/data/types';
 import { RATING_KEYS } from '@/game/sim/ratings';
-import { countOwned, levelOf, levelProgress, type Owned } from '@/meta/collection';
+import { SHELF_SORTS, countOwned, levelOf, levelProgress, sortShelf, type Owned, type ShelfSort } from '@/meta/collection';
 import { useSave } from '@/state/save';
 import { arcade, halo, neonText, night, rarityPaint, track, tube } from '@/theme/arcade';
 import { px } from '@/theme/tokens';
 import { ArcadeScreen, useArcadeBody } from '@/ui/arcade/ArcadeScreen';
 import { GhostButton, GoldButton } from '@/ui/arcade/Buttons';
 import { HeadCell } from '@/ui/arcade/Card';
+import { FadeScroll } from '@/ui/arcade/FadeScroll';
 import { LeagueTabs } from '@/ui/arcade/LeagueTabs';
 import { LineIcon } from '@/ui/arcade/LineIcon';
-import { SPARE, firstThatFits, fitText } from '@/ui/arcade/fitText';
+import { LitTabs } from '@/ui/arcade/LitTabs';
+import { firstThatFits, fitText } from '@/ui/arcade/fitText';
 import { MIN_FIT_LABEL, fitPerson, widthOf } from '@/ui/arcade/measure';
 import { Portrait } from '@/ui/arcade/Portrait';
 import { Meter, Pips, StatRow } from '@/ui/arcade/SegBar';
@@ -32,40 +35,44 @@ import { tourStop } from '@/ui/arcade/whereToFind';
 const ALL_IDS = PLAYERS.map((p) => p.id);
 
 /** the gaps in the grid, between columns and between rows */
-const GAP = px(5);
-/** a team's name and count over its column, and the lit line under them */
-const HEAD_H = px(22);
+const GAP = px(6);
 /** the gaps in the level line, and between its lamps (the kit's `Pips` spacing) */
 const LEVEL_GAP = px(8);
 const PIP_GAP = px(5);
-/** the room the grid keeps above its column heads and below its last row, inside the panel's height beside it */
-const GRID_INSET = px(9);
-/** a column head's padding, left and right, and the size of its count */
-const HEAD_PAD = px(7);
-const HEAD_COUNT = px(11);
 /** the space kept above and below the grid and the panel */
 const EDGE_Y = px(6);
 /** between the grid and the panel */
 const SPLIT = px(15);
-/** a cell no narrower than this: below it the grid scrolls sideways instead */
-const CELL_LEAST = px(44);
-/** a cell is at most this much wider than tall, and at most this much taller than wide */
-const CELL_WIDEST = 1.6;
-const CELL_TALLEST = 1;
+/** the grid's panel: its inside edge, and the room its cells' glow needs at the scroll's edges */
+const GRID_PAD = px(10);
+const GLOW_ROOM = px(6);
+/** about how wide a cell is: as many columns as fit, never fewer than this */
+const CELL_W = px(76);
+const COLS_LEAST = 4;
+/** a cell's height for its width */
+const CELL_SHAPE = 0.74;
 /** the panel's inside edge */
 const PANEL_PAD = px(10);
 /** a rating's row: as tall as its lamps' label, so six of them leave the picture room */
 const ROW_SMALL = px(13);
 const ROW = px(16);
 
-/** A team's players in the order the grid shows them: the best first. */
-function column(team: TeamDef): PlayerDef[] {
-  return teamPlayers(team.id).sort(byValue);
+/** The players of a league in the order a sort shows them. */
+function lineUp(league: string, sort: ShelfSort, owned: Owned): PlayerDef[] {
+  const teams = leagueTeams(league).map((t) => t.id);
+  return sortShelf(
+    PLAYERS.filter((p) => teams.includes(p.team)),
+    sort,
+    owned,
+    byValue,
+    (p, level) => playerOverall(p, Math.max(1, level)),
+    teams,
+  );
 }
 
-/** The player to show when the page opens on a league: one just found, then a squad player, then anyone found, then the first. */
-function firstPick(league: string, owned: Owned, fresh: readonly string[], squad: readonly string[]): string {
-  const ids = leagueTeams(league).flatMap((t) => column(t).map((p) => p.id));
+/** The player to show when the page opens or the league changes: one just found, then a squad player, then anyone found, then the first. */
+function firstPick(order: readonly PlayerDef[], owned: Owned, fresh: readonly string[], squad: readonly string[]): string {
+  const ids = order.map((p) => p.id);
   return ids.find((id) => fresh.includes(id) && (owned[id] ?? 0) > 0) ?? ids.find((id) => squad.includes(id)) ?? ids.find((id) => (owned[id] ?? 0) > 0) ?? ids[0];
 }
 
@@ -83,38 +90,33 @@ function Found({ have, of, meter }: { have: number; of: number; meter: boolean }
   );
 }
 
-function TeamColumn({ team, owned, fresh, picked, cellW, cellH, onPick }: { team: TeamDef; owned: Owned; fresh: readonly string[]; picked: string; cellW: number; cellH: number; onPick: (id: string) => void }) {
-  const players = column(team);
-  const have = countOwned(
-    owned,
-    players.map((p) => p.id),
-  );
+/** Over each team's players when the grid is sorted by team: its name, how many are found, and its colour as a lit line. */
+function TeamHead({ team, have, of }: { team: TeamDef; have: number; of: number }) {
   const line = teamLine(team);
-  const full = have === players.length;
-  const count = `${have}/${players.length}`;
-  // the letters and the count share the column's width: on the narrowest columns both get a little smaller
-  const wide = widthOf(team.short, 'bold', neonText.tiny, track.normal) + widthOf(count, 'bold', HEAD_COUNT) + px(4);
-  const k = Math.max(MIN_FIT_LABEL, Math.min(1, ((cellW - HEAD_PAD) * SPARE) / wide));
   return (
-    <View style={[styles.column, { width: cellW }]}>
-      <View accessible accessibilityLabel={`${team.name}: ${have} of ${players.length} found`} style={styles.head}>
-        <View style={styles.headWords}>
-          <Print face="bold" size={neonText.tiny * k} track="normal">
-            {team.short}
-          </Print>
-          <Print face="bold" size={HEAD_COUNT * k} color={full ? tube.green.glass : 'textDim'}>
-            {count}
-          </Print>
-        </View>
-        {/* the team's colour as a lit line, throwing a little light down onto its players */}
-        <View style={[styles.headLine, { backgroundColor: line, boxShadow: [halo(line, 6, 0.7)] }]} />
+    <View accessible accessibilityRole="header" accessibilityLabel={`${team.name}: ${have} of ${of} found`} style={styles.teamHead}>
+      <View style={styles.teamWords}>
+        <Print face="bold" size="small" track="wide" upper>
+          {team.name}
+        </Print>
+        <Print face="bold" size="tiny" color={have === of ? tube.green.glass : 'textDim'} track="wider">
+          {`${have} OF ${of}`}
+        </Print>
       </View>
-      {players.map((p) => {
-        const copies = owned[p.id] ?? 0;
-        return <HeadCell key={p.id} player={p} level={levelOf(copies)} selected={p.id === picked} fresh={fresh.includes(p.id)} width={cellW} height={cellH} onPress={() => onPick(p.id)} />;
-      })}
+      <View style={[styles.teamLine, { backgroundColor: line, boxShadow: [halo(line, 6, 0.7)] }]} />
     </View>
   );
+}
+
+/** The players in runs of one team each, in the order given. */
+function byTeam(order: readonly PlayerDef[]): { team: TeamDef; players: PlayerDef[] }[] {
+  const runs: { team: TeamDef; players: PlayerDef[] }[] = [];
+  for (const p of order) {
+    const last = runs[runs.length - 1];
+    if (last && last.team.id === p.team) last.players.push(p);
+    else runs.push({ team: teamById(p.team), players: [p] });
+  }
+  return runs;
 }
 
 /** The level as lamps, and the copies still to find for the next one. */
@@ -210,36 +212,41 @@ export default function Collection() {
   const homeTeam = useSave((s) => s.homeTeam);
   const body = useArcadeBody();
   const [league, setLeague] = useState(() => leagueOf(homeTeam));
+  const [sort, setSort] = useState<ShelfSort>('new');
+  // the order is set when the page opens and when the sort or the league changes, so a player found or looked at
+  // meanwhile does not make the grid jump under a finger
+  const [order, setOrder] = useState(() => lineUp(leagueOf(homeTeam), 'new', owned));
   // picked once when the page opens (and again for a new league), so the panel does not jump when a new player is looked at elsewhere
-  const [picked, setPicked] = useState(() => firstPick(leagueOf(homeTeam), owned, fresh, squad));
-  const teams = leagueTeams(league);
-  const columns = teams.map(column);
-  const rows = Math.max(1, ...columns.map((c) => c.length));
-  const shown = columns.some((c) => c.some((p) => p.id === picked)) ? picked : firstPick(league, owned, fresh, squad);
+  const [picked, setPicked] = useState(() => firstPick(order, owned, fresh, squad));
+  const shown = order.some((p) => p.id === picked) ? picked : firstPick(order, owned, fresh, squad);
   const player = PLAYERS.find((p) => p.id === shown) ?? PLAYERS[0];
 
   // the panel takes about a third of the page, the grid the rest; on a narrow phone the panel gives a little first
   const panelW = Math.round(Math.min(px(340), Math.max(px(196), body.width * 0.29)));
   const roomW = body.width - panelW - SPLIT;
-  const roomH = body.height - EDGE_Y * 2;
-  const gridRoom = roomH - GRID_INSET * 2;
-  const fromW = (roomW - GAP * (teams.length - 1)) / teams.length;
-  const fromH = (gridRoom - HEAD_H - GAP * rows) / rows;
-  const cellW = Math.floor(Math.max(CELL_LEAST, Math.min(fromW, fromH * CELL_WIDEST)));
-  const cellH = Math.floor(Math.min(fromH, cellW * CELL_TALLEST));
-  const gridH = HEAD_H + (cellH + GAP) * rows;
-  const gridW = cellW * teams.length + GAP * (teams.length - 1);
-  // the panel stands as tall as the grid and the room above and below it, with a floor so its button always has room
-  const panelH = Math.min(roomH, Math.max(gridH + GRID_INSET * 2, px(300)));
+  const height = body.height - EDGE_Y * 2;
+  // as many columns of about one size as fit across; the grid scrolls down for the rest
+  const inside = roomW - GRID_PAD * 2 - GLOW_ROOM * 2 - arcade.outline * 2;
+  const cols = Math.max(COLS_LEAST, Math.floor((inside + GAP) / (CELL_W + GAP)));
+  const cellW = Math.floor((inside - GAP * (cols - 1)) / cols);
+  const cellH = Math.round(cellW * CELL_SHAPE);
 
   const pick = (id: string) => {
     setPicked(id);
     markSeen(id);
   };
   const changeLeague = (id: string) => {
+    const next = lineUp(id, sort, owned);
     setLeague(id);
-    setPicked(firstPick(id, owned, fresh, squad));
+    setOrder(next);
+    setPicked(firstPick(next, owned, fresh, squad));
   };
+  const changeSort = (to: ShelfSort) => {
+    setSort(to);
+    setOrder(lineUp(league, to, owned));
+  };
+
+  const cell = (p: PlayerDef) => <HeadCell key={p.id} player={p} level={levelOf(owned[p.id] ?? 0)} selected={p.id === shown} fresh={fresh.includes(p.id)} width={cellW} height={cellH} onPress={() => pick(p.id)} />;
 
   const have = countOwned(owned, ALL_IDS);
   return (
@@ -255,14 +262,25 @@ export default function Collection() {
         </>
       }>
       <View style={styles.page}>
-        <ScrollView key={league} horizontal showsHorizontalScrollIndicator={false} style={styles.grow} contentContainerStyle={[styles.scroll, { minWidth: roomW }]}>
-          <View style={[styles.grid, { width: gridW, height: gridH }]}>
-            {teams.map((t) => (
-              <TeamColumn key={t.id} team={t} owned={owned} fresh={fresh} picked={shown} cellW={cellW} cellH={cellH} onPick={pick} />
-            ))}
+        <NeonPanel tube="cyan" lit={false} style={[styles.gridPanel, { width: roomW, height }]}>
+          <View style={styles.sortRow}>
+            <Print face="bold" size="tiny" color="textFaint" track="wider">
+              SORT
+            </Print>
+            <LitTabs tabs={SHELF_SORTS} value={sort} onChange={changeSort} />
           </View>
-        </ScrollView>
-        <Detail player={player} width={panelW} height={panelH} />
+          <FadeScroll key={`${league}:${sort}`} reach={px(30)} style={styles.grow} contentContainerStyle={styles.grid} showsVerticalScrollIndicator={false}>
+            {sort === 'team'
+              ? byTeam(order).map((run) => (
+                  <Fragment key={run.team.id}>
+                    <TeamHead team={run.team} have={countOwned(owned, run.players.map((p) => p.id))} of={run.players.length} />
+                    {run.players.map(cell)}
+                  </Fragment>
+                ))
+              : order.map(cell)}
+          </FadeScroll>
+        </NeonPanel>
+        <Detail player={player} width={panelW} height={height} />
       </View>
     </ArcadeScreen>
   );
@@ -278,30 +296,36 @@ const styles = StyleSheet.create({
   grow: {
     flex: 1,
   },
-  scroll: {
-    flexGrow: 1,
+  gridPanel: {
+    paddingTop: px(8),
+    paddingHorizontal: GRID_PAD,
+    gap: px(4),
+  },
+  sortRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: px(8),
+    paddingHorizontal: GLOW_ROOM,
   },
   grid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: GAP,
+    padding: GLOW_ROOM,
+    paddingBottom: px(14),
   },
-  column: {
-    gap: GAP,
+  teamHead: {
+    width: '100%',
+    gap: px(4),
+    marginTop: px(4),
   },
-  head: {
-    height: HEAD_H,
-    justifyContent: 'flex-end',
-  },
-  headWords: {
-    flex: 1,
+  teamWords: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
     justifyContent: 'space-between',
-    paddingLeft: HEAD_PAD - px(3),
-    paddingRight: px(3),
+    paddingHorizontal: px(2),
   },
-  headLine: {
+  teamLine: {
     height: px(2.5),
     borderRadius: px(1.25),
   },
