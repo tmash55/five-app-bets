@@ -11,7 +11,7 @@ import { night, tube } from '@/theme/arcade';
 import { px } from '@/theme/tokens';
 import { CardBack } from '@/ui/arcade/Card';
 import { Bloom } from '@/ui/arcade/Room';
-import { backOut, easeIn, easeInOut, easeOut, flipWidth, lerp, restTilt, span, wobble } from './motion';
+import { backOut, easeInOut, easeOut, flipWidth, lerp, restTilt, span, wobble } from './motion';
 import { Beam, Confetti, Pool, Ring, Sides, Starburst, around } from './pieces';
 import { REVEAL_TIMES } from './times';
 import type { CardProps, Reveal, StageProps } from './types';
@@ -66,7 +66,9 @@ function Lamp({ clock, start, from, to, x, y, width, length }: { clock: SharedVa
   const style = useAnimatedStyle(() => {
     const t = clock.value;
     const angle = lerp(from, to, easeInOut(span(t, start, start + SWEEP)));
-    const on = easeOut(span(t, start, start + 220)) * (1 - easeIn(span(t, T.flipAt, T.flipAt + 500)));
+    // the beams cut out under the flash of the flip, as stage lights do when the show hits
+    const on = easeOut(span(t, start, start + 220)) * (1 - span(t, T.flipAt - 20, T.flipAt + 110));
+    if (on <= 0) return { opacity: 0, transform: [{ translateY: 0 }, { rotate: '0deg' }, { translateY: 0 }] };
     // turned about the lamp, at the top of the beam: move the lamp to the middle, turn, move it back
     return { opacity: on * (0.9 + 0.1 * wobble(t, 0.02, start)), transform: [{ translateY: -length / 2 }, { rotate: `${angle}deg` }, { translateY: length / 2 }] };
   });
