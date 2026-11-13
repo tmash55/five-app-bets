@@ -1,6 +1,6 @@
 /** Helpers shared by the simulation and the computer players. */
 
-import { BALL_R, COURT, DRIBBLE_H, DUNK, G_JUMP, HYPE, SHOT } from './constants';
+import { BALL_R, COURT, DEEP, DRIBBLE_H, DUNK, G_JUMP, HYPE, SHOT } from './constants';
 import { clamp, clamp01, distToSegment, hypot2, lerp, smooth } from './math';
 import type { Intent, MatchState, PlayerSim, ShotGrade, TeamId } from './types';
 
@@ -111,6 +111,22 @@ export function shotContest(m: MatchState, p: PlayerSim): number {
   return Math.min(1, c);
 }
 
+/**
+ * How far from the hoop a shooter is still comfortable: a step behind the arc for a poor shooter, about two for
+ * the best. Past it, shots fall off fast, and faster for a poor shooter.
+ */
+export function shootingRange(shot: number): number {
+  return COURT.threeR + DEEP.grace + DEEP.reach * shot;
+}
+
+/**
+ * Beyond this, a shot is a heave: the timing of the release no longer helps and the chance is capped, at a few
+ * in a hundred for the best shooter. From the far half of the court it is always a heave.
+ */
+export function isHeave(d: number, shot: number): boolean {
+  return d >= COURT.hoopX || d > shootingRange(shot) + DEEP.heavePast;
+}
+
 /** Chance that a shot goes in. Shared with the computer players' shot selection. */
 export function makeProb(
   m: MatchState,
@@ -120,23 +136,26 @@ export function makeProb(
   moving: number,
 ): number {
   const d = distToHoop(p);
+  const s = p.attrs.shot;
   const three = isThree(p.x, p.z, p.team);
+  // how far past the shooter's own range, and how much the timing of the release can still do from there
+  const past = three ? Math.max(0, d - shootingRange(s)) : 0;
+  const timing = clamp01(1 - past / DEEP.timingFade);
   let base: number;
   if (d < 2.3) {
-    base = 0.62 + 0.2 * (0.5 * p.attrs.shot + 0.5 * p.attrs.dunk);
+    base = 0.62 + 0.2 * (0.5 * s + 0.5 * p.attrs.dunk);
   } else if (!three) {
-    base = 0.41 + 0.26 * p.attrs.shot - 0.012 * (d - 2.3);
+    base = 0.41 + 0.26 * s - 0.012 * (d - 2.3);
   } else {
-    base = 0.2 + 0.27 * p.attrs.shot;
-    const extra = d - COURT.threeR - 0.8;
-    if (extra > 0) base -= extra * 0.055;
+    base = 0.1 + 0.34 * s - past * (DEEP.falloff + DEEP.falloffPoor * (1 - s));
   }
   let c = contest;
   if (grade === 'perfect') {
-    base += 0.24;
+    // a perfect release counts most for the shooters who can shoot
+    base += (three ? 0.06 + 0.18 * s : 0.24) * timing;
     c *= 0.55;
   } else if (grade === 'good') {
-    base += 0.07;
+    base += 0.07 * timing;
   } else if (grade === 'ok') {
     base -= 0.04;
   } else {
@@ -147,7 +166,8 @@ export function makeProb(
   const diff = clamp(m.score[p.team] - m.score[1 - p.team], -12, 12) / 12;
   base -= diff * 0.07 * m.cfg.rubberBand;
   base -= Math.min(0.07, moving * 0.011);
-  return clamp(base, 0.02, 0.96);
+  const chance = clamp(base, 0.02, 0.96);
+  return three && isHeave(d, s) ? Math.min(chance, DEEP.heaveMin + DEEP.heaveBest * s) : chance;
 }
 
 /** True when no defender stands in the corridor between (ax, az) and (bx, bz). */
@@ -170,6 +190,15 @@ export function laneClear(
 
 /** Where a held ball sits. Hands are posed to reach it, so this owns the look of every hold. */
 export function heldBallPos(m: MatchState, p: PlayerSim, out: { x: number; y: number; z: number }): void {
+  heldBallSpot(m, p, out);
+  // a player dribbling along the edge holds it out past them: it stays inside the same walls a loose ball does
+  const lx = COURT.halfL + COURT.apron;
+  const lz = COURT.halfW + COURT.apron;
+  out.x = clamp(out.x, -lx, lx);
+  out.z = clamp(out.z, -lz, lz);
+}
+
+function heldBallSpot(m: MatchState, p: PlayerSim, out: { x: number; y: number; z: number }): void {
   const fx = Math.cos(p.facing);
   const fz = Math.sin(p.facing);
   // the player's right-hand side

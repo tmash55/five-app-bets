@@ -110,6 +110,24 @@ export const JUMP = {
   land: 0.1,
 } as const;
 
+/** Shots from far out (see makeProb): distances in court units, chances as fractions. */
+export const DEEP = {
+  /** past the arc, every shooter keeps this much range... */
+  grace: 0.3,
+  /** ...and the best shooter this much more */
+  reach: 1.5,
+  /** how much the chance drops for each unit past a shooter's range, and how much more for a poor shooter */
+  falloff: 0.16,
+  falloffPoor: 0.08,
+  /** this far past their range, the timing of the release no longer adds anything */
+  timingFade: 2,
+  /** further than this past their range a shot is a heave */
+  heavePast: 2.5,
+  /** a heave goes in at most this often, plus this much more for the best shooter */
+  heaveMin: 0.01,
+  heaveBest: 0.02,
+} as const;
+
 export const HYPE = {
   max: 100,
   duration: 12,

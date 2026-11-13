@@ -6,6 +6,7 @@
 
 import { StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import type { PackDef } from '@/meta/packs';
 import { halo, night, type Tube } from '@/theme/arcade';
@@ -105,7 +106,8 @@ export function Tear({ clock, def, lay, light }: TearProps) {
   });
   const quiet = useAnimatedStyle(() => ({ opacity: 1 - span(clock.value, TEAR.rip, TEAR.flash) }));
   const calm = useAnimatedStyle(() => ({ opacity: 1 - span(clock.value, 0, TEAR.rip * 0.6) }));
-  const flash = useAnimatedStyle(() => ({ opacity: 0.9 * flashAt(clock.value, TEAR.flash, 520) }));
+  const flash = useAnimatedStyle(() => ({ opacity: flashAt(clock.value, TEAR.flash, 520) }));
+  const flashReach = Math.hypot(lay.screen.width, lay.screen.height) * 0.8;
   const ringW = pack.width * 1.75;
   const ringH = px(56);
   const bloomSize = px(360);
@@ -162,7 +164,21 @@ export function Tear({ clock, def, lay, light }: TearProps) {
       {lay.slots.map((to, i) => (
         <Flyer key={i} clock={clock} i={i} from={mouth} to={to} width={lay.slot.width} />
       ))}
-      <Animated.View style={[StyleSheet.absoluteFill, styles.flash, flash]} />
+      {/* the burst as the pack gives: white-hot at its mouth, the colour of the best card further out, fading to
+          the room at the edges, so it reads as light pouring out and not as the screen going grey */}
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, flash]}>
+        <Svg width={lay.screen.width} height={lay.screen.height}>
+          <Defs>
+            <RadialGradient id="tearBurst" cx={mouth.x} cy={mouth.y} r={flashReach} gradientUnits="userSpaceOnUse">
+              <Stop offset="0" stopColor={night.white} stopOpacity={1} />
+              <Stop offset="0.18" stopColor={night.white} stopOpacity={0.95} />
+              <Stop offset="0.45" stopColor={light.glass} stopOpacity={0.75} />
+              <Stop offset="1" stopColor={light.glass} stopOpacity={0.15} />
+            </RadialGradient>
+          </Defs>
+          <Rect x={0} y={0} width={lay.screen.width} height={lay.screen.height} fill="url(#tearBurst)" />
+        </Svg>
+      </Animated.View>
     </View>
   );
 }
@@ -189,9 +205,6 @@ const styles = StyleSheet.create({
   slit: {
     position: 'absolute',
     borderRadius: px(2),
-  },
-  flash: {
-    backgroundColor: night.white,
   },
 });
 

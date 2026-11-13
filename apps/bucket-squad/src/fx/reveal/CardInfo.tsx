@@ -147,7 +147,8 @@ export interface CardInfoProps {
 export const CardInfo = memo(function CardInfo({ plan, clock, lamps, pips, counting, last, onNext, width }: CardInfoProps) {
   const { player, rarity, gain } = plan;
   const tb = rarityPaint[rarity].tube;
-  const room = width - OVR_W - GAP;
+  // a little air between the name and the rating box, so a long name never seems to touch it
+  const room = width - OVR_W - GAP - px(8);
   const name = fitPerson(player.name.toUpperCase(), 'display', px(37), room, track.close, player.short?.toUpperCase());
   const shownOvr = useCountUp(counting ? plan.overall : 0, 700);
   const lp = lampPlan(plan);
