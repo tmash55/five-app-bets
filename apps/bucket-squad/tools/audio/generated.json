@@ -25,7 +25,7 @@
     "ambStreet": { "group": "ambience", "seconds": 20, "variants": 1, "loop": true, "influence": 0.4, "text": "Quiet suburban street ambience on a summer afternoon: a lawn mower far away, a dog barking in the distance, a light breeze, a few birds, no music, no close voices" },
     "ambBeach": { "group": "ambience", "seconds": 20, "variants": 1, "loop": true, "influence": 0.4, "text": "Beach ambience at sunset: gentle ocean waves rolling onto sand, a few seagulls in the distance, a light sea breeze, no music, no voices" },
     "ambSnow": { "group": "ambience", "seconds": 20, "variants": 1, "loop": true, "influence": 0.4, "text": "High mountain ambience in winter: cold wind blowing over snow in soft gusts, quiet and airy, no music, no voices" },
-    "ambCanyon": { "group": "ambience", "seconds": 20, "variants": 1, "loop": true, "influence": 0.4, "text": "Desert canyon ambience: a dry warm wind, cicadas buzzing, a hawk calling far away, no music, no voices" },
+    "ambCanyon": { "group": "ambience", "seconds": 20, "variants": 2, "loop": true, "influence": 0.4, "text": "Hot desert canyon ambience in the afternoon: a steady dry wind blowing between red rocks, cicadas buzzing in the heat, now and then a hawk crying far away, no music, no voices" },
 
     "packRip": { "group": "pack", "seconds": 1.2, "variants": 3, "text": "Tearing open a foil trading card pack, a crisp foil rip, close up, dry, one-shot" },
     "cardFlip": { "group": "pack", "seconds": 0.5, "variants": 3, "text": "A trading card is flipped over onto a table, a quick snappy card flick, close up, dry, one-shot" }
