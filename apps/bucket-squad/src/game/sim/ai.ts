@@ -19,7 +19,7 @@ import {
   resetIntent,
   shotContest,
 } from './core';
-import { clamp, clamp01, hypot2, lerp, rngBell, rngNext } from './math';
+import { clamp, clamp01, hypot2, lerp, rngNext } from './math';
 import type { AiMemory, Intent, MatchState, PlayerSim, TeamId } from './types';
 
 /** Places to stand on offense: [distance out from the hoop along the court, across]. */

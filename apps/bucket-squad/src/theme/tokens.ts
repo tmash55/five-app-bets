@@ -107,6 +107,9 @@ export const duration = {
   quick: 120,
   normal: 220,
   slow: 420,
+  pop: 650,
+  callout: 1300,
+  reveal: 900,
 } as const;
 
 /** sizes of the on-screen game pad */
@@ -114,7 +117,57 @@ export const pad = {
   stick: 132,
   knob: 62,
   button: 92,
-  buttonSmall: 68,
+  buttonMid: 78,
+  buttonSmall: 62,
+  /** gap between the pad and the screen edge */
+  inset: 22,
+} as const;
+
+/** fixed sizes of common pieces */
+export const size = {
+  iconTiny: 14,
+  iconSmall: 18,
+  icon: 24,
+  iconLarge: 32,
+  iconHuge: 48,
+  /** shortest side of anything you can tap */
+  tap: 44,
+  buttonSmall: 40,
+  button: 52,
+  buttonLarge: 68,
+  avatarSmall: 36,
+  avatar: 48,
+  avatarLarge: 72,
+  badge: 44,
+  badgeLarge: 64,
+  cardSmall: 96,
+  card: 128,
+  cardLarge: 190,
+  /** a card's height for a width of 1 */
+  cardRatio: 1.36,
+  bar: 10,
+  barThick: 16,
+  panelMax: 560,
+  scoreboard: 300,
+} as const;
+
+export const opacity = {
+  ghost: 0.35,
+  dim: 0.55,
+  soft: 0.8,
+  pattern: 0.1,
+} as const;
+
+/** stacking order inside a screen */
+export const layer = {
+  base: 0,
+  hud: 10,
+  pad: 20,
+  /** buttons that must stay tappable above the game pad */
+  menu: 25,
+  callout: 30,
+  overlay: 40,
+  modal: 50,
 } as const;
 
 /** palette used for confetti and sparkles in a match */

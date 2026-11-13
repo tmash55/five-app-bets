@@ -46,7 +46,7 @@ export interface MatchVisuals {
 
 const FOV = 22;
 const PITCH = (15 * Math.PI) / 180;
-const VIEW_H = 8.0;
+const VIEW_H = 7.4;
 const MIN_VIEW_W = 13.6;
 const SHADOWS = 10;
 const RINGS = 8;

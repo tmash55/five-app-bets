@@ -7,23 +7,39 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { setMusicEnabled, setSoundEnabled } from '@/audio/sound';
+import { exposeForTooling } from '@/dev/expose';
+import { setHapticsEnabled } from '@/fx/feedback';
+import { useSave, useSaveReady } from '@/state/save';
 import { color } from '@/theme/tokens';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+if (__DEV__) exposeForTooling();
+
 export default function RootLayout() {
   const [loaded, error] = useFonts({ LilitaOne_400Regular, Fredoka_500Medium, Fredoka_700Bold });
+  const saveReady = useSaveReady();
+  const sound = useSave((s) => s.settings.sound);
+  const music = useSave((s) => s.settings.music);
+  const haptics = useSave((s) => s.settings.haptics);
+  const ready = (loaded || !!error) && saveReady;
+
+  useEffect(() => setSoundEnabled(sound), [sound]);
+  useEffect(() => setMusicEnabled(music), [music]);
+  useEffect(() => setHapticsEnabled(haptics), [haptics]);
 
   useEffect(() => {
-    if (loaded || error) SplashScreen.hideAsync().catch(() => {});
-  }, [loaded, error]);
+    if (ready) SplashScreen.hideAsync().catch(() => {});
+  }, [ready]);
 
-  if (!loaded && !error) return null;
+  if (!ready) return null;
 
   return (
     <SafeAreaProvider>
       <StatusBar hidden />
-      <Stack screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: color.sky } }} />
+      {/* no swipe-back: in landscape it would fight the game pad's stick */}
+      <Stack screenOptions={{ headerShown: false, animation: 'fade', gestureEnabled: false, contentStyle: { backgroundColor: color.sky } }} />
     </SafeAreaProvider>
   );
 }

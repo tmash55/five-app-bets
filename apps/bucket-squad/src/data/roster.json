@@ -1,0 +1,1881 @@
+{
+ "id": "neighborhood",
+ "name": "Neighborhood League",
+ "teams": [
+  {
+   "id": "rockets",
+   "name": "Rockets",
+   "place": "Pinecone Park",
+   "short": "RKT",
+   "color": "#2F6BDE",
+   "color2": "#FFD23F",
+   "kit": {
+    "jersey": "#2F6BDE",
+    "trim": "#FFD23F",
+    "number": "#FFFFFF",
+    "shorts": "#2F6BDE",
+    "shortsTrim": "#FFD23F",
+    "shoe": "#FFFFFF",
+    "shoeAccent": "#2F6BDE",
+    "sole": "#F4F1EA",
+    "sock": "#FFFFFF",
+    "band": "#FFD23F"
+   },
+   "court": "park",
+   "league": "neighborhood",
+   "motto": "First ones at the park, last ones to leave."
+  },
+  {
+   "id": "thunder",
+   "name": "Thunder",
+   "place": "Maple Street",
+   "short": "THU",
+   "color": "#7A4CE0",
+   "color2": "#FFD23F",
+   "kit": {
+    "jersey": "#7A4CE0",
+    "trim": "#FFD23F",
+    "number": "#FFD23F",
+    "shorts": "#3A2A7A",
+    "shortsTrim": "#FFD23F",
+    "shoe": "#2B2440",
+    "shoeAccent": "#FFD23F",
+    "sole": "#F4F1EA",
+    "sock": "#FFFFFF",
+    "band": "#FFD23F"
+   },
+   "court": "street",
+   "league": "neighborhood",
+   "motto": "You hear them before you see them."
+  },
+  {
+   "id": "waves",
+   "name": "Waves",
+   "place": "Sunset Beach",
+   "short": "WAV",
+   "color": "#19B7B2",
+   "color2": "#FF7A59",
+   "kit": {
+    "jersey": "#19B7B2",
+    "trim": "#FFFFFF",
+    "number": "#FFFFFF",
+    "shorts": "#FF7A59",
+    "shortsTrim": "#FFFFFF",
+    "shoe": "#FFFFFF",
+    "shoeAccent": "#FF7A59",
+    "sole": "#F4F1EA",
+    "sock": "#FFFFFF",
+    "band": "#FF7A59"
+   },
+   "court": "beach",
+   "league": "neighborhood",
+   "motto": "Sand in their shoes, nothing but net."
+  },
+  {
+   "id": "skyhawks",
+   "name": "Skyhawks",
+   "place": "Downtown",
+   "short": "SKY",
+   "color": "#FF8A3D",
+   "color2": "#2A2D45",
+   "kit": {
+    "jersey": "#2A2D45",
+    "trim": "#FF8A3D",
+    "number": "#FF8A3D",
+    "shorts": "#2A2D45",
+    "shortsTrim": "#FF8A3D",
+    "shoe": "#FF8A3D",
+    "shoeAccent": "#FFFFFF",
+    "sole": "#F4F1EA",
+    "sock": "#FFFFFF",
+    "band": "#FF8A3D"
+   },
+   "court": "rooftop",
+   "league": "neighborhood",
+   "motto": "Twelve floors up and still climbing."
+  },
+  {
+   "id": "yetis",
+   "name": "Yetis",
+   "place": "Snowy Peak",
+   "short": "YET",
+   "color": "#58C4FF",
+   "color2": "#1B56D6",
+   "kit": {
+    "jersey": "#F2F7FF",
+    "trim": "#58C4FF",
+    "number": "#1B56D6",
+    "shorts": "#58C4FF",
+    "shortsTrim": "#FFFFFF",
+    "shoe": "#1B56D6",
+    "shoeAccent": "#FFFFFF",
+    "sole": "#F4F1EA",
+    "sock": "#FFFFFF",
+    "band": "#58C4FF"
+   },
+   "court": "snow",
+   "league": "neighborhood",
+   "motto": "Cold hands, hot shooting."
+  },
+  {
+   "id": "coyotes",
+   "name": "Coyotes",
+   "place": "Cactus Canyon",
+   "short": "COY",
+   "color": "#E0632D",
+   "color2": "#F6E3B4",
+   "kit": {
+    "jersey": "#E0632D",
+    "trim": "#F6E3B4",
+    "number": "#F6E3B4",
+    "shorts": "#5B3420",
+    "shortsTrim": "#F6E3B4",
+    "shoe": "#F6E3B4",
+    "shoeAccent": "#E0632D",
+    "sole": "#F4F1EA",
+    "sock": "#F6E3B4",
+    "band": "#F6E3B4"
+   },
+   "court": "canyon",
+   "league": "neighborhood",
+   "motto": "They howl after every bucket."
+  },
+  {
+   "id": "throwbacks",
+   "name": "Throwbacks",
+   "place": "Old School",
+   "short": "OLD",
+   "color": "#1FA872",
+   "color2": "#FFF3D6",
+   "kit": {
+    "jersey": "#1FA872",
+    "trim": "#FFF3D6",
+    "number": "#FFF3D6",
+    "shorts": "#1FA872",
+    "shortsTrim": "#FFF3D6",
+    "shoe": "#FFF3D6",
+    "shoeAccent": "#1FA872",
+    "sole": "#F4F1EA",
+    "sock": "#FFF3D6",
+    "band": "#D9502E"
+   },
+   "court": "street",
+   "league": "neighborhood",
+   "motto": "Short shorts, tall socks, fundamentals."
+  },
+  {
+   "id": "legends",
+   "name": "Legends",
+   "place": "Midnight",
+   "short": "LEG",
+   "color": "#FFB800",
+   "color2": "#16182B",
+   "kit": {
+    "jersey": "#16182B",
+    "trim": "#FFB800",
+    "number": "#FFB800",
+    "shorts": "#16182B",
+    "shortsTrim": "#FFB800",
+    "shoe": "#FFB800",
+    "shoeAccent": "#16182B",
+    "sole": "#F4F1EA",
+    "sock": "#16182B",
+    "band": "#FFB800"
+   },
+   "court": "rooftop",
+   "league": "neighborhood",
+   "motto": "They only play when the city is asleep."
+  }
+ ],
+ "players": [
+  {
+   "id": "dash-bennett",
+   "name": "Dash Bennett",
+   "nickname": "Zoom",
+   "team": "rockets",
+   "number": 3,
+   "rarity": "rare",
+   "era": "now",
+   "role": "Speedster",
+   "ratings": {
+    "speed": 92,
+    "shot": 68,
+    "dunk": 72,
+    "handle": 84,
+    "steal": 76,
+    "block": 48
+   },
+   "look": {
+    "skin": "#8D5A3B",
+    "hair": {
+     "style": "hightop",
+     "color": "#1C1310"
+    },
+    "eyes": "oval",
+    "brows": "fierce",
+    "mouth": "smirk",
+    "accessories": [
+     "wristbandR"
+    ],
+    "build": {
+     "height": 0.97
+    },
+    "kit": {
+     "shoe": "#FFD23F",
+     "shoeAccent": "#2F6BDE"
+    }
+   },
+   "blurb": "So fast his shadow needs a head start."
+  },
+  {
+   "id": "pippa-quinn",
+   "name": "Pippa Quinn",
+   "nickname": "Pip",
+   "team": "rockets",
+   "number": 12,
+   "rarity": "common",
+   "era": "now",
+   "role": "Sharpshooter",
+   "ratings": {
+    "speed": 66,
+    "shot": 84,
+    "dunk": 44,
+    "handle": 68,
+    "steal": 58,
+    "block": 42
+   },
+   "look": {
+    "skin": "#F3C9A8",
+    "hair": {
+     "style": "pigtails",
+     "color": "#C4532D"
+    },
+    "eyes": "round",
+    "brows": "raised",
+    "mouth": "grin",
+    "nose": "small",
+    "accessories": [
+     "freckles",
+     "lashes"
+    ],
+    "build": {
+     "height": 0.93
+    }
+   },
+   "blurb": "Practices swishes on her garage hoop until the streetlights come on."
+  },
+  {
+   "id": "gus-moretti",
+   "name": "Gus Moretti",
+   "nickname": "Big Gus",
+   "team": "rockets",
+   "number": 44,
+   "rarity": "common",
+   "era": "now",
+   "role": "Big",
+   "ratings": {
+    "speed": 50,
+    "shot": 56,
+    "dunk": 80,
+    "handle": 50,
+    "steal": 48,
+    "block": 84
+   },
+   "look": {
+    "skin": "#F1C7A5",
+    "hair": {
+     "style": "curly",
+     "color": "#D9A441"
+    },
+    "eyes": "wide",
+    "brows": "thick",
+    "mouth": "bigsmile",
+    "nose": "wide",
+    "accessories": [
+     "sweatband"
+    ],
+    "build": {
+     "height": 1.08,
+     "bulk": 1.12
+    }
+   },
+   "blurb": "Blocks your shot, then shares his orange slices."
+  },
+  {
+   "id": "nia-brooks",
+   "name": "Nia Brooks",
+   "nickname": "Hops",
+   "team": "rockets",
+   "number": 21,
+   "rarity": "rare",
+   "era": "now",
+   "role": "High Flyer",
+   "ratings": {
+    "speed": 80,
+    "shot": 64,
+    "dunk": 92,
+    "handle": 70,
+    "steal": 66,
+    "block": 78
+   },
+   "look": {
+    "skin": "#5C3A26",
+    "hair": {
+     "style": "puffs",
+     "color": "#19100C"
+    },
+    "eyes": "tall",
+    "brows": "raised",
+    "mouth": "grin",
+    "accessories": [
+     "lashes",
+     "wristbandL"
+    ],
+    "highSocks": true
+   },
+   "blurb": "Jumped clean over the monkey bars once. Okay, twice."
+  },
+  {
+   "id": "teo-ramirez",
+   "name": "Teo Ramirez",
+   "nickname": "Captain",
+   "team": "rockets",
+   "number": 8,
+   "rarity": "epic",
+   "era": "now",
+   "role": "All-Around",
+   "ratings": {
+    "speed": 82,
+    "shot": 84,
+    "dunk": 80,
+    "handle": 84,
+    "steal": 78,
+    "block": 70
+   },
+   "look": {
+    "skin": "#C68642",
+    "hair": {
+     "style": "short",
+     "color": "#2A1B12"
+    },
+    "eyes": "oval",
+    "brows": "calm",
+    "mouth": "bigsmile",
+    "accessories": [
+     "capBack"
+    ],
+    "hatColor": "#E5483B"
+   },
+   "blurb": "Picks the teams, keeps the peace and hits the game winner."
+  },
+  {
+   "id": "wren-kowalski",
+   "name": "Wren Kowalski",
+   "nickname": "Hawk Eye",
+   "team": "rockets",
+   "number": 5,
+   "rarity": "common",
+   "era": "now",
+   "role": "Lockdown",
+   "ratings": {
+    "speed": 72,
+    "shot": 60,
+    "dunk": 46,
+    "handle": 62,
+    "steal": 86,
+    "block": 70
+   },
+   "look": {
+    "skin": "#F8D9C0",
+    "hair": {
+     "style": "bob",
+     "color": "#4A2F1D"
+    },
+    "eyes": "round",
+    "brows": "calm",
+    "mouth": "smile",
+    "accessories": [
+     "glasses",
+     "lashes"
+    ],
+    "frameColor": "#E5483B",
+    "build": {
+     "height": 0.95
+    }
+   },
+   "blurb": "Reads every pass like it is her favorite book."
+  },
+  {
+   "id": "jax-monroe",
+   "name": "Jax Monroe",
+   "nickname": "Boom",
+   "team": "thunder",
+   "number": 1,
+   "rarity": "epic",
+   "era": "now",
+   "role": "High Flyer",
+   "ratings": {
+    "speed": 84,
+    "shot": 70,
+    "dunk": 96,
+    "handle": 76,
+    "steal": 68,
+    "block": 82
+   },
+   "look": {
+    "skin": "#A86E44",
+    "hair": {
+     "style": "mohawk",
+     "color": "#3FA9F5"
+    },
+    "eyes": "wide",
+    "brows": "fierce",
+    "mouth": "tooth",
+    "accessories": [
+     "bandaid",
+     "wristbandL",
+     "wristbandR"
+    ]
+   },
+   "blurb": "Every dunk gets a sound effect. He does them himself."
+  },
+  {
+   "id": "lulu-park",
+   "name": "Lulu Park",
+   "nickname": "Lightning Lu",
+   "team": "thunder",
+   "number": 7,
+   "rarity": "rare",
+   "era": "now",
+   "role": "Speedster",
+   "ratings": {
+    "speed": 94,
+    "shot": 72,
+    "dunk": 50,
+    "handle": 86,
+    "steal": 80,
+    "block": 40
+   },
+   "look": {
+    "skin": "#F0C8A0",
+    "hair": {
+     "style": "highpony",
+     "color": "#1C1310"
+    },
+    "eyes": "tall",
+    "brows": "raised",
+    "mouth": "grin",
+    "nose": "small",
+    "accessories": [
+     "lashes",
+     "headband"
+    ],
+    "build": {
+     "height": 0.92
+    }
+   },
+   "blurb": "Blink and she already has the ball. And your snack."
+  },
+  {
+   "id": "otis-washington",
+   "name": "Otis Washington",
+   "nickname": "The Wall",
+   "team": "thunder",
+   "number": 50,
+   "rarity": "common",
+   "era": "now",
+   "role": "Big",
+   "ratings": {
+    "speed": 48,
+    "shot": 52,
+    "dunk": 82,
+    "handle": 48,
+    "steal": 50,
+    "block": 90
+   },
+   "look": {
+    "skin": "#6F4529",
+    "hair": {
+     "style": "flattop",
+     "color": "#1C1310"
+    },
+    "eyes": "oval",
+    "brows": "thick",
+    "mouth": "smile",
+    "nose": "wide",
+    "accessories": [
+     "kneepadL",
+     "kneepadR"
+    ],
+    "build": {
+     "height": 1.1,
+     "bulk": 1.15
+    }
+   },
+   "blurb": "Nothing gets past him. Not even the ice cream truck."
+  },
+  {
+   "id": "maya-okafor",
+   "name": "Maya Okafor",
+   "nickname": "Splash",
+   "team": "thunder",
+   "number": 30,
+   "rarity": "rare",
+   "era": "now",
+   "role": "Sharpshooter",
+   "ratings": {
+    "speed": 74,
+    "shot": 94,
+    "dunk": 56,
+    "handle": 76,
+    "steal": 62,
+    "block": 50
+   },
+   "look": {
+    "skin": "#6F4529",
+    "hair": {
+     "style": "braids",
+     "color": "#1C1310"
+    },
+    "eyes": "tall",
+    "brows": "calm",
+    "mouth": "smirk",
+    "accessories": [
+     "lashes",
+     "sleeveR"
+    ],
+    "sleeveColor": "#FFD23F"
+   },
+   "blurb": "Calls \"splash\" before the ball leaves her hands."
+  },
+  {
+   "id": "finn-omalley",
+   "name": "Finn O'Malley",
+   "nickname": "Gizmo",
+   "team": "thunder",
+   "number": 13,
+   "rarity": "common",
+   "era": "now",
+   "role": "Playmaker",
+   "ratings": {
+    "speed": 70,
+    "shot": 66,
+    "dunk": 42,
+    "handle": 86,
+    "steal": 66,
+    "block": 40
+   },
+   "look": {
+    "skin": "#F8D9C0",
+    "hair": {
+     "style": "spiky",
+     "color": "#C4532D"
+    },
+    "eyes": "wide",
+    "brows": "raised",
+    "mouth": "tooth",
+    "accessories": [
+     "goggles",
+     "freckles"
+    ],
+    "build": {
+     "height": 0.94
+    }
+   },
+   "blurb": "Invented eleven new passes. Four of them work."
+  },
+  {
+   "id": "bea-castillo",
+   "name": "Bea Castillo",
+   "nickname": "Bumble",
+   "team": "thunder",
+   "number": 22,
+   "rarity": "common",
+   "era": "now",
+   "role": "Lockdown",
+   "ratings": {
+    "speed": 76,
+    "shot": 58,
+    "dunk": 48,
+    "handle": 64,
+    "steal": 84,
+    "block": 66
+   },
+   "look": {
+    "skin": "#D9A066",
+    "hair": {
+     "style": "bun",
+     "color": "#2A1B12"
+    },
+    "eyes": "round",
+    "brows": "fierce",
+    "mouth": "smile",
+    "accessories": [
+     "bow",
+     "lashes"
+    ]
+   },
+   "blurb": "Buzzes around the ball handler until they give up."
+  },
+  {
+   "id": "kai-nakoa",
+   "name": "Kai Nakoa",
+   "nickname": "Big Wave",
+   "team": "waves",
+   "number": 11,
+   "rarity": "epic",
+   "era": "now",
+   "role": "All-Around",
+   "ratings": {
+    "speed": 84,
+    "shot": 80,
+    "dunk": 88,
+    "handle": 80,
+    "steal": 74,
+    "block": 76
+   },
+   "look": {
+    "skin": "#C68642",
+    "hair": {
+     "style": "long",
+     "color": "#3B2616"
+    },
+    "eyes": "oval",
+    "brows": "calm",
+    "mouth": "bigsmile",
+    "accessories": [
+     "headband"
+    ],
+    "build": {
+     "height": 1.04
+    }
+   },
+   "blurb": "Surfs at sunrise, dunks by lunch."
+  },
+  {
+   "id": "sunny-delgado",
+   "name": "Sunny Delgado",
+   "nickname": "Sunshine",
+   "team": "waves",
+   "number": 2,
+   "rarity": "rare",
+   "era": "now",
+   "role": "Sharpshooter",
+   "ratings": {
+    "speed": 76,
+    "shot": 92,
+    "dunk": 52,
+    "handle": 78,
+    "steal": 64,
+    "block": 48
+   },
+   "look": {
+    "skin": "#D9A066",
+    "hair": {
+     "style": "ponytail",
+     "color": "#E3B453"
+    },
+    "eyes": "round",
+    "brows": "raised",
+    "mouth": "bigsmile",
+    "accessories": [
+     "lashes",
+     "freckles"
+    ]
+   },
+   "blurb": "Her jump shot is as warm as her name."
+  },
+  {
+   "id": "moose-larsen",
+   "name": "Moose Larsen",
+   "nickname": "Moose",
+   "team": "waves",
+   "number": 55,
+   "rarity": "common",
+   "era": "now",
+   "role": "Big",
+   "ratings": {
+    "speed": 46,
+    "shot": 58,
+    "dunk": 78,
+    "handle": 46,
+    "steal": 46,
+    "block": 88
+   },
+   "look": {
+    "skin": "#F8D9C0",
+    "hair": {
+     "style": "bowl",
+     "color": "#F0D27A"
+    },
+    "eyes": "wide",
+    "brows": "calm",
+    "mouth": "open",
+    "nose": "wide",
+    "accessories": [
+     "bucket"
+    ],
+    "hatColor": "#FF7A59",
+    "build": {
+     "height": 1.12,
+     "bulk": 1.14
+    }
+   },
+   "blurb": "Wears sunscreen like frosting. Swats shots like flies."
+  },
+  {
+   "id": "zuri-thompson",
+   "name": "Zuri Thompson",
+   "nickname": "Flip",
+   "team": "waves",
+   "number": 9,
+   "rarity": "rare",
+   "era": "now",
+   "role": "High Flyer",
+   "ratings": {
+    "speed": 86,
+    "shot": 62,
+    "dunk": 90,
+    "handle": 74,
+    "steal": 70,
+    "block": 72
+   },
+   "look": {
+    "skin": "#4A2E1F",
+    "hair": {
+     "style": "frohawk",
+     "color": "#19100C"
+    },
+    "eyes": "tall",
+    "brows": "fierce",
+    "mouth": "grin",
+    "accessories": [
+     "lashes",
+     "wristbandR"
+    ],
+    "highSocks": true
+   },
+   "blurb": "A gymnastics champ who found out the rim is just a higher beam."
+  },
+  {
+   "id": "rio-santos",
+   "name": "Rio Santos",
+   "nickname": "Slick",
+   "team": "waves",
+   "number": 14,
+   "rarity": "common",
+   "era": "now",
+   "role": "Playmaker",
+   "ratings": {
+    "speed": 74,
+    "shot": 68,
+    "dunk": 58,
+    "handle": 84,
+    "steal": 62,
+    "block": 44
+   },
+   "look": {
+    "skin": "#C68642",
+    "hair": {
+     "style": "slick",
+     "color": "#1C1310"
+    },
+    "eyes": "oval",
+    "brows": "raised",
+    "mouth": "smirk"
+   },
+   "blurb": "Never met a behind-the-back pass he did not like."
+  },
+  {
+   "id": "coco-fairbanks",
+   "name": "Coco Fairbanks",
+   "nickname": "Coconut",
+   "team": "waves",
+   "number": 4,
+   "rarity": "common",
+   "era": "now",
+   "role": "Speedster",
+   "ratings": {
+    "speed": 88,
+    "shot": 60,
+    "dunk": 44,
+    "handle": 76,
+    "steal": 72,
+    "block": 40
+   },
+   "look": {
+    "skin": "#A86E44",
+    "hair": {
+     "style": "curly",
+     "color": "#4A2F1D"
+    },
+    "eyes": "round",
+    "brows": "raised",
+    "mouth": "tooth",
+    "accessories": [
+     "bandana",
+     "lashes"
+    ],
+    "build": {
+     "height": 0.9
+    }
+   },
+   "blurb": "The smallest Wave makes the biggest splash."
+  },
+  {
+   "id": "ace-carter",
+   "name": "Ace Carter",
+   "nickname": "Airmail",
+   "team": "skyhawks",
+   "number": 17,
+   "rarity": "epic",
+   "era": "now",
+   "role": "High Flyer",
+   "ratings": {
+    "speed": 88,
+    "shot": 76,
+    "dunk": 97,
+    "handle": 80,
+    "steal": 70,
+    "block": 74
+   },
+   "look": {
+    "skin": "#6F4529",
+    "hair": {
+     "style": "fade",
+     "color": "#1C1310"
+    },
+    "eyes": "oval",
+    "brows": "fierce",
+    "mouth": "smirk",
+    "accessories": [
+     "headband",
+     "sleeveL",
+     "wristbandR"
+    ],
+    "kit": {
+     "shoe": "#FFFFFF",
+     "shoeAccent": "#FF8A3D"
+    }
+   },
+   "blurb": "Delivers dunks from the top floor."
+  },
+  {
+   "id": "roxy-vance",
+   "name": "Roxy Vance",
+   "nickname": "Riot",
+   "team": "skyhawks",
+   "number": 6,
+   "rarity": "rare",
+   "era": "now",
+   "role": "Lockdown",
+   "ratings": {
+    "speed": 82,
+    "shot": 64,
+    "dunk": 66,
+    "handle": 72,
+    "steal": 92,
+    "block": 76
+   },
+   "look": {
+    "skin": "#F3C9A8",
+    "hair": {
+     "style": "bob",
+     "color": "#FF7AB8"
+    },
+    "eyes": "wide",
+    "brows": "fierce",
+    "mouth": "tooth",
+    "accessories": [
+     "bandaid",
+     "lashes",
+     "kneepadL"
+    ]
+   },
+   "blurb": "If you are dribbling near her, it is already her ball."
+  },
+  {
+   "id": "arjun-mehta",
+   "name": "Arjun Mehta",
+   "nickname": "Chess Club",
+   "team": "skyhawks",
+   "number": 10,
+   "rarity": "rare",
+   "era": "now",
+   "role": "Playmaker",
+   "ratings": {
+    "speed": 76,
+    "shot": 80,
+    "dunk": 48,
+    "handle": 94,
+    "steal": 70,
+    "block": 44
+   },
+   "look": {
+    "skin": "#A86E44",
+    "hair": {
+     "style": "sidepart",
+     "color": "#1C1310"
+    },
+    "eyes": "round",
+    "brows": "calm",
+    "mouth": "smile",
+    "accessories": [
+     "glasses"
+    ]
+   },
+   "blurb": "Thinks three passes ahead. Sometimes four."
+  },
+  {
+   "id": "tank-novak",
+   "name": "Tank Novak",
+   "nickname": "Tank",
+   "team": "skyhawks",
+   "number": 52,
+   "rarity": "common",
+   "era": "now",
+   "role": "Big",
+   "ratings": {
+    "speed": 44,
+    "shot": 50,
+    "dunk": 84,
+    "handle": 44,
+    "steal": 52,
+    "block": 86
+   },
+   "look": {
+    "skin": "#E7B48A",
+    "hair": {
+     "style": "buzz",
+     "color": "#4A2F1D"
+    },
+    "eyes": "oval",
+    "brows": "thick",
+    "mouth": "flat",
+    "nose": "wide",
+    "accessories": [
+     "sweatband"
+    ],
+    "build": {
+     "height": 1.1,
+     "bulk": 1.2
+    }
+   },
+   "blurb": "Takes the stairs to the roof to warm up. All twelve floors."
+  },
+  {
+   "id": "mimi-tran",
+   "name": "Mimi Tran",
+   "nickname": "Mini",
+   "team": "skyhawks",
+   "number": 0,
+   "rarity": "common",
+   "era": "now",
+   "role": "Speedster",
+   "ratings": {
+    "speed": 90,
+    "shot": 70,
+    "dunk": 40,
+    "handle": 78,
+    "steal": 74,
+    "block": 40
+   },
+   "look": {
+    "skin": "#F0C8A0",
+    "hair": {
+     "style": "pigtails",
+     "color": "#1C1310"
+    },
+    "eyes": "tall",
+    "brows": "raised",
+    "mouth": "open",
+    "nose": "small",
+    "accessories": [
+     "bow",
+     "lashes"
+    ],
+    "build": {
+     "height": 0.88
+    }
+   },
+   "blurb": "Too quick to guard, too small to see coming."
+  },
+  {
+   "id": "ziggy-flores",
+   "name": "Ziggy Flores",
+   "nickname": "Zigzag",
+   "team": "skyhawks",
+   "number": 15,
+   "rarity": "common",
+   "era": "now",
+   "role": "Sharpshooter",
+   "ratings": {
+    "speed": 68,
+    "shot": 86,
+    "dunk": 54,
+    "handle": 70,
+    "steal": 56,
+    "block": 46
+   },
+   "look": {
+    "skin": "#D9A066",
+    "hair": {
+     "style": "curly",
+     "color": "#2A1B12"
+    },
+    "eyes": "oval",
+    "brows": "calm",
+    "mouth": "smirk",
+    "accessories": [
+     "beanie"
+    ],
+    "hatColor": "#FF8A3D"
+   },
+   "blurb": "Never takes the beanie off. Never misses from the corner."
+  },
+  {
+   "id": "bjorn-iversen",
+   "name": "Bjorn Iversen",
+   "nickname": "Avalanche",
+   "team": "yetis",
+   "number": 45,
+   "rarity": "epic",
+   "era": "now",
+   "role": "Big",
+   "ratings": {
+    "speed": 68,
+    "shot": 74,
+    "dunk": 94,
+    "handle": 68,
+    "steal": 66,
+    "block": 98
+   },
+   "look": {
+    "skin": "#F8D9C0",
+    "hair": {
+     "style": "spiky",
+     "color": "#F4F0E0"
+    },
+    "eyes": "oval",
+    "brows": "thick",
+    "mouth": "grin",
+    "nose": "wide",
+    "browColor": "#C9B98A",
+    "build": {
+     "height": 1.14,
+     "bulk": 1.16
+    }
+   },
+   "blurb": "When he rolls downhill, clear the lane."
+  },
+  {
+   "id": "suki-aoki",
+   "name": "Suki Aoki",
+   "nickname": "Snowflake",
+   "team": "yetis",
+   "number": 18,
+   "rarity": "rare",
+   "era": "now",
+   "role": "Sharpshooter",
+   "ratings": {
+    "speed": 78,
+    "shot": 93,
+    "dunk": 50,
+    "handle": 80,
+    "steal": 66,
+    "block": 46
+   },
+   "look": {
+    "skin": "#F8D9C0",
+    "hair": {
+     "style": "long",
+     "color": "#1C1310"
+    },
+    "eyes": "tall",
+    "brows": "calm",
+    "mouth": "smile",
+    "nose": "small",
+    "accessories": [
+     "beanie",
+     "lashes"
+    ],
+    "hatColor": "#58C4FF"
+   },
+   "blurb": "No two of her shots are alike. All of them go in."
+  },
+  {
+   "id": "tuck-whitlock",
+   "name": "Tuck Whitlock",
+   "nickname": "Mittens",
+   "team": "yetis",
+   "number": 31,
+   "rarity": "common",
+   "era": "now",
+   "role": "Lockdown",
+   "ratings": {
+    "speed": 70,
+    "shot": 58,
+    "dunk": 60,
+    "handle": 60,
+    "steal": 82,
+    "block": 78
+   },
+   "look": {
+    "skin": "#F3C9A8",
+    "hair": {
+     "style": "bowl",
+     "color": "#C4532D"
+    },
+    "eyes": "round",
+    "brows": "raised",
+    "mouth": "tooth",
+    "accessories": [
+     "freckles",
+     "sweatband"
+    ]
+   },
+   "blurb": "Plays in mittens all winter. Still gets the steal."
+  },
+  {
+   "id": "ana-petrova",
+   "name": "Ana Petrova",
+   "nickname": "Ice",
+   "team": "yetis",
+   "number": 19,
+   "rarity": "rare",
+   "era": "now",
+   "role": "All-Around",
+   "ratings": {
+    "speed": 80,
+    "shot": 82,
+    "dunk": 70,
+    "handle": 80,
+    "steal": 76,
+    "block": 70
+   },
+   "look": {
+    "skin": "#F8D9C0",
+    "hair": {
+     "style": "braids",
+     "color": "#F0D27A"
+    },
+    "eyes": "oval",
+    "brows": "calm",
+    "mouth": "flat",
+    "nose": "small",
+    "accessories": [
+     "lashes"
+    ]
+   },
+   "blurb": "Never smiles before the buzzer. Always smiles after."
+  },
+  {
+   "id": "nuka-olsen",
+   "name": "Nuka Olsen",
+   "nickname": "Sled Dog",
+   "team": "yetis",
+   "number": 27,
+   "rarity": "common",
+   "era": "now",
+   "role": "Speedster",
+   "ratings": {
+    "speed": 88,
+    "shot": 62,
+    "dunk": 60,
+    "handle": 74,
+    "steal": 70,
+    "block": 48
+   },
+   "look": {
+    "skin": "#D9A066",
+    "hair": {
+     "style": "short",
+     "color": "#1C1310"
+    },
+    "eyes": "oval",
+    "brows": "raised",
+    "mouth": "bigsmile",
+    "accessories": [
+     "headband"
+    ]
+   },
+   "blurb": "Outruns the snowplow on the way to school."
+  },
+  {
+   "id": "pearl-jackson",
+   "name": "Pearl Jackson",
+   "nickname": "Frosty",
+   "team": "yetis",
+   "number": 33,
+   "rarity": "common",
+   "era": "now",
+   "role": "High Flyer",
+   "ratings": {
+    "speed": 72,
+    "shot": 56,
+    "dunk": 86,
+    "handle": 60,
+    "steal": 58,
+    "block": 74
+   },
+   "look": {
+    "skin": "#5C3A26",
+    "hair": {
+     "style": "afro",
+     "color": "#19100C"
+    },
+    "eyes": "round",
+    "brows": "raised",
+    "mouth": "bigsmile",
+    "accessories": [
+     "headband",
+     "lashes"
+    ],
+    "highSocks": true
+   },
+   "blurb": "Jumps so high she comes down with snow in her hair."
+  },
+  {
+   "id": "sage-yazzie",
+   "name": "Sage Yazzie",
+   "nickname": "Compass",
+   "team": "coyotes",
+   "number": 20,
+   "rarity": "epic",
+   "era": "now",
+   "role": "Playmaker",
+   "ratings": {
+    "speed": 84,
+    "shot": 82,
+    "dunk": 62,
+    "handle": 97,
+    "steal": 84,
+    "block": 58
+   },
+   "look": {
+    "skin": "#B5754A",
+    "hair": {
+     "style": "braids",
+     "color": "#1C1310"
+    },
+    "eyes": "tall",
+    "brows": "calm",
+    "mouth": "smile",
+    "accessories": [
+     "headband",
+     "lashes"
+    ]
+   },
+   "blurb": "Always knows where everyone is. Even you."
+  },
+  {
+   "id": "colt-mcgraw",
+   "name": "Colt McGraw",
+   "nickname": "Dusty",
+   "team": "coyotes",
+   "number": 35,
+   "rarity": "rare",
+   "era": "now",
+   "role": "Sharpshooter",
+   "ratings": {
+    "speed": 72,
+    "shot": 95,
+    "dunk": 60,
+    "handle": 72,
+    "steal": 60,
+    "block": 54
+   },
+   "look": {
+    "skin": "#F1C7A5",
+    "hair": {
+     "style": "short",
+     "color": "#B8823C"
+    },
+    "eyes": "oval",
+    "brows": "calm",
+    "mouth": "smirk",
+    "accessories": [
+     "capFwd",
+     "freckles"
+    ],
+    "hatColor": "#5B3420"
+   },
+   "blurb": "Quick draw, quicker release."
+  },
+  {
+   "id": "rosa-jimenez",
+   "name": "Rosa Jimenez",
+   "nickname": "La Flecha",
+   "team": "coyotes",
+   "number": 16,
+   "rarity": "rare",
+   "era": "now",
+   "role": "Speedster",
+   "ratings": {
+    "speed": 95,
+    "shot": 70,
+    "dunk": 58,
+    "handle": 84,
+    "steal": 78,
+    "block": 44
+   },
+   "look": {
+    "skin": "#C68642",
+    "hair": {
+     "style": "highpony",
+     "color": "#2A1B12"
+    },
+    "eyes": "round",
+    "brows": "fierce",
+    "mouth": "grin",
+    "accessories": [
+     "lashes",
+     "wristbandL",
+     "wristbandR"
+    ]
+   },
+   "blurb": "La Flecha means The Arrow. She only flies one way: straight to the hoop."
+  },
+  {
+   "id": "hank-dooley",
+   "name": "Hank Dooley",
+   "nickname": "Tumbleweed",
+   "team": "coyotes",
+   "number": 40,
+   "rarity": "common",
+   "era": "now",
+   "role": "Big",
+   "ratings": {
+    "speed": 52,
+    "shot": 54,
+    "dunk": 80,
+    "handle": 52,
+    "steal": 50,
+    "block": 86
+   },
+   "look": {
+    "skin": "#E7B48A",
+    "hair": {
+     "style": "bigafro",
+     "color": "#7A5230"
+    },
+    "eyes": "wide",
+    "brows": "thick",
+    "mouth": "bigsmile",
+    "nose": "wide",
+    "build": {
+     "height": 1.08,
+     "bulk": 1.1
+    }
+   },
+   "blurb": "His hair has its own rebounding stats."
+  },
+  {
+   "id": "ike-onyango",
+   "name": "Ike Onyango",
+   "nickname": "Spike",
+   "team": "coyotes",
+   "number": 29,
+   "rarity": "common",
+   "era": "now",
+   "role": "Lockdown",
+   "ratings": {
+    "speed": 74,
+    "shot": 56,
+    "dunk": 70,
+    "handle": 60,
+    "steal": 80,
+    "block": 84
+   },
+   "look": {
+    "skin": "#4A2E1F",
+    "hair": {
+     "style": "toplocs",
+     "color": "#19100C"
+    },
+    "eyes": "oval",
+    "brows": "fierce",
+    "mouth": "flat",
+    "accessories": [
+     "sleeveR",
+     "wristbandL"
+    ]
+   },
+   "blurb": "Prickly on defense, just like a cactus."
+  },
+  {
+   "id": "dot-finnegan",
+   "name": "Dot Finnegan",
+   "nickname": "Rattler",
+   "team": "coyotes",
+   "number": 28,
+   "rarity": "common",
+   "era": "now",
+   "role": "High Flyer",
+   "ratings": {
+    "speed": 76,
+    "shot": 58,
+    "dunk": 84,
+    "handle": 64,
+    "steal": 66,
+    "block": 62
+   },
+   "look": {
+    "skin": "#F3C9A8",
+    "hair": {
+     "style": "bob",
+     "color": "#C4532D"
+    },
+    "eyes": "wide",
+    "brows": "fierce",
+    "mouth": "grin",
+    "accessories": [
+     "bandana",
+     "freckles",
+     "lashes"
+    ]
+   },
+   "blurb": "You hear the rim rattle before you see her."
+  },
+  {
+   "id": "earl-dupree",
+   "name": "Earl Dupree",
+   "nickname": "Sky",
+   "team": "throwbacks",
+   "number": 41,
+   "rarity": "legend",
+   "era": "classic",
+   "role": "High Flyer",
+   "ratings": {
+    "speed": 88,
+    "shot": 84,
+    "dunk": 99,
+    "handle": 86,
+    "steal": 78,
+    "block": 86
+   },
+   "look": {
+    "skin": "#6F4529",
+    "hair": {
+     "style": "bigafro",
+     "color": "#19100C"
+    },
+    "eyes": "oval",
+    "brows": "calm",
+    "mouth": "smile",
+    "facial": "mustache",
+    "accessories": [
+     "headband",
+     "wristbandL",
+     "wristbandR"
+    ],
+    "build": {
+     "height": 1.1
+    },
+    "shortShorts": true,
+    "highSocks": true
+   },
+   "blurb": "They say he took off from the foul line in 1976 and landed last week."
+  },
+  {
+   "id": "bud-higgins",
+   "name": "Bud Higgins",
+   "nickname": "Hook",
+   "team": "throwbacks",
+   "number": 54,
+   "rarity": "epic",
+   "era": "classic",
+   "role": "Big",
+   "ratings": {
+    "speed": 64,
+    "shot": 80,
+    "dunk": 86,
+    "handle": 66,
+    "steal": 62,
+    "block": 96
+   },
+   "look": {
+    "skin": "#F1C7A5",
+    "hair": {
+     "style": "flattop",
+     "color": "#7A5230"
+    },
+    "eyes": "oval",
+    "brows": "thick",
+    "mouth": "flat",
+    "facial": "mustache",
+    "accessories": [
+     "glasses",
+     "kneepadL",
+     "kneepadR"
+    ],
+    "build": {
+     "height": 1.16,
+     "bulk": 1.1
+    },
+    "shortShorts": true,
+    "highSocks": true
+   },
+   "blurb": "Nobody has blocked his hook shot since TV was black and white."
+  },
+  {
+   "id": "ginny-malone",
+   "name": "Ginny Malone",
+   "nickname": "Set Shot",
+   "team": "throwbacks",
+   "number": 14,
+   "rarity": "epic",
+   "era": "classic",
+   "role": "Sharpshooter",
+   "ratings": {
+    "speed": 80,
+    "shot": 98,
+    "dunk": 60,
+    "handle": 86,
+    "steal": 72,
+    "block": 56
+   },
+   "look": {
+    "skin": "#F3C9A8",
+    "hair": {
+     "style": "sidepart",
+     "color": "#8C3B22"
+    },
+    "eyes": "round",
+    "brows": "calm",
+    "mouth": "smile",
+    "accessories": [
+     "headband",
+     "lashes"
+    ],
+    "shortShorts": true,
+    "highSocks": true
+   },
+   "blurb": "Two feet on the floor, nothing but net, since way back when."
+  },
+  {
+   "id": "leroy-banks",
+   "name": "Leroy Banks",
+   "nickname": "Smooth",
+   "team": "throwbacks",
+   "number": 25,
+   "rarity": "epic",
+   "era": "classic",
+   "role": "Playmaker",
+   "ratings": {
+    "speed": 84,
+    "shot": 84,
+    "dunk": 78,
+    "handle": 96,
+    "steal": 82,
+    "block": 60
+   },
+   "look": {
+    "skin": "#8D5A3B",
+    "hair": {
+     "style": "minifro",
+     "color": "#19100C"
+    },
+    "eyes": "oval",
+    "brows": "raised",
+    "mouth": "smirk",
+    "facial": "goatee",
+    "accessories": [
+     "sweatband",
+     "wristbandR"
+    ],
+    "shortShorts": true,
+    "highSocks": true
+   },
+   "blurb": "So smooth the ball forgets it is being dribbled."
+  },
+  {
+   "id": "winnie-chow",
+   "name": "Winnie Chow",
+   "nickname": "Whirlwind",
+   "team": "throwbacks",
+   "number": 7,
+   "rarity": "rare",
+   "era": "classic",
+   "role": "Speedster",
+   "ratings": {
+    "speed": 93,
+    "shot": 74,
+    "dunk": 54,
+    "handle": 84,
+    "steal": 82,
+    "block": 46
+   },
+   "look": {
+    "skin": "#F0C8A0",
+    "hair": {
+     "style": "bun",
+     "color": "#1C1310"
+    },
+    "eyes": "tall",
+    "brows": "raised",
+    "mouth": "grin",
+    "accessories": [
+     "sweatband",
+     "lashes"
+    ],
+    "build": {
+     "height": 0.95
+    },
+    "shortShorts": true,
+    "highSocks": true
+   },
+   "blurb": "Ran the fast break before it had a name."
+  },
+  {
+   "id": "walt-pickett",
+   "name": "Walt Pickett",
+   "nickname": "Gramps",
+   "team": "throwbacks",
+   "number": 1,
+   "rarity": "rare",
+   "era": "classic",
+   "role": "All-Around",
+   "ratings": {
+    "speed": 66,
+    "shot": 88,
+    "dunk": 58,
+    "handle": 84,
+    "steal": 76,
+    "block": 66
+   },
+   "look": {
+    "skin": "#F1C7A5",
+    "hair": {
+     "style": "horseshoe",
+     "color": "#C9C9CF"
+    },
+    "eyes": "oval",
+    "brows": "thick",
+    "mouth": "bigsmile",
+    "facial": "bigbeard",
+    "accessories": [
+     "glasses"
+    ],
+    "browColor": "#9A9AA2",
+    "shortShorts": true,
+    "highSocks": true
+   },
+   "blurb": "Walked to the court uphill both ways. Still has the best bank shot in town."
+  },
+  {
+   "id": "stella-starr",
+   "name": "Stella Starr",
+   "nickname": "Comet",
+   "team": "legends",
+   "number": 99,
+   "rarity": "legend",
+   "era": "now",
+   "role": "Sharpshooter",
+   "ratings": {
+    "speed": 88,
+    "shot": 99,
+    "dunk": 82,
+    "handle": 90,
+    "steal": 80,
+    "block": 66
+   },
+   "look": {
+    "skin": "#E7B48A",
+    "hair": {
+     "style": "long",
+     "color": "#9B6BFF"
+    },
+    "eyes": "tall",
+    "brows": "fierce",
+    "mouth": "smirk",
+    "accessories": [
+     "lashes",
+     "headband",
+     "sleeveR"
+    ],
+    "sleeveColor": "#FFB800"
+   },
+   "blurb": "Shoots from so far away the ball needs a map."
+  },
+  {
+   "id": "titan-okoye",
+   "name": "Titan Okoye",
+   "nickname": "Tiny",
+   "team": "legends",
+   "number": 88,
+   "rarity": "legend",
+   "era": "now",
+   "role": "Big",
+   "ratings": {
+    "speed": 80,
+    "shot": 84,
+    "dunk": 99,
+    "handle": 78,
+    "steal": 76,
+    "block": 99
+   },
+   "look": {
+    "skin": "#4A2E1F",
+    "hair": {
+     "style": "bald",
+     "color": "#19100C"
+    },
+    "eyes": "oval",
+    "brows": "thick",
+    "mouth": "flat",
+    "nose": "wide",
+    "facial": "bigbeard",
+    "accessories": [
+     "headband"
+    ],
+    "build": {
+     "height": 1.2,
+     "bulk": 1.22
+    }
+   },
+   "blurb": "They call him Tiny. Nobody knows why. Nobody asks."
+  },
+  {
+   "id": "zeke-zamora",
+   "name": "Zeke Zamora",
+   "nickname": "Volt",
+   "team": "legends",
+   "number": 77,
+   "rarity": "legend",
+   "era": "now",
+   "role": "Speedster",
+   "ratings": {
+    "speed": 99,
+    "shot": 86,
+    "dunk": 86,
+    "handle": 96,
+    "steal": 90,
+    "block": 56
+   },
+   "look": {
+    "skin": "#D9A066",
+    "hair": {
+     "style": "spiky",
+     "color": "#FFD23F"
+    },
+    "eyes": "wide",
+    "brows": "fierce",
+    "mouth": "tooth",
+    "accessories": [
+     "wristbandL",
+     "wristbandR",
+     "legSleeveL"
+    ],
+    "sleeveColor": "#FFB800",
+    "browColor": "#3B2616"
+   },
+   "blurb": "Plugs his sneakers in at night."
+  },
+  {
+   "id": "imani-royce",
+   "name": "Imani Royce",
+   "nickname": "Queen",
+   "team": "legends",
+   "number": 10,
+   "rarity": "legend",
+   "era": "now",
+   "role": "All-Around",
+   "ratings": {
+    "speed": 90,
+    "shot": 92,
+    "dunk": 90,
+    "handle": 92,
+    "steal": 88,
+    "block": 84
+   },
+   "look": {
+    "skin": "#6F4529",
+    "hair": {
+     "style": "topknot",
+     "color": "#19100C"
+    },
+    "eyes": "tall",
+    "brows": "fierce",
+    "mouth": "smirk",
+    "accessories": [
+     "headband",
+     "lashes",
+     "wristbandL",
+     "sleeveL"
+    ],
+    "sleeveColor": "#FFB800"
+   },
+   "blurb": "The court is her castle. Everyone else is just visiting."
+  },
+  {
+   "id": "shay-knox",
+   "name": "Shay Knox",
+   "nickname": "Shadow",
+   "team": "legends",
+   "number": 13,
+   "rarity": "epic",
+   "era": "now",
+   "role": "Lockdown",
+   "ratings": {
+    "speed": 88,
+    "shot": 74,
+    "dunk": 78,
+    "handle": 78,
+    "steal": 98,
+    "block": 90
+   },
+   "look": {
+    "skin": "#A86E44",
+    "hair": {
+     "style": "cornrows",
+     "color": "#19100C"
+    },
+    "eyes": "oval",
+    "brows": "fierce",
+    "mouth": "flat",
+    "accessories": [
+     "lashes",
+     "sleeveL",
+     "sleeveR"
+    ],
+    "sleeveColor": "#16182B"
+   },
+   "blurb": "You never see the steal. You just notice the ball is gone."
+  },
+  {
+   "id": "jett-okoro",
+   "name": "Jett Okoro",
+   "nickname": "Jetpack",
+   "team": "legends",
+   "number": 44,
+   "rarity": "epic",
+   "era": "now",
+   "role": "High Flyer",
+   "ratings": {
+    "speed": 90,
+    "shot": 72,
+    "dunk": 98,
+    "handle": 80,
+    "steal": 72,
+    "block": 84
+   },
+   "look": {
+    "skin": "#5C3A26",
+    "hair": {
+     "style": "hightop",
+     "color": "#E8E8EC"
+    },
+    "eyes": "oval",
+    "brows": "raised",
+    "mouth": "bigsmile",
+    "accessories": [
+     "wristbandR",
+     "kneepadL"
+    ],
+    "browColor": "#19100C"
+   },
+   "blurb": "Hang time so long he packs a lunch."
+  }
+ ]
+}

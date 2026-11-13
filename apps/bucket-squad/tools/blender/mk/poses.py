@@ -27,10 +27,10 @@ POSES = {
         "torso": (0, 0, -8), "head": (0, 0, 10),
         "legL_up": (0, -6, 0), "legR_up": (0, 6, 0),
     },
-    "cheer": {  # jump with both arms up
+    "cheer": {  # jump with both arms thrown up in a wide V (stretched, cartoon style, to clear the big head)
         "root_offset": (0, 0, 0.22),
-        "armL_up": (-10, -150, 0), "armL_lo": (0, -18, 0),
-        "armR_up": (-10, 150, 0), "armR_lo": (0, 18, 0),
+        "armL_up": (-12, -142, 0), "armL_lo": (0, -10, 0), "armL_up_scale": (1.16, 1.16, 1.5),
+        "armR_up": (-12, 142, 0), "armR_lo": (0, 10, 0), "armR_up_scale": (1.16, 1.16, 1.5),
         "legL_up": (-38, -8, 0), "legL_lo": (72, 0, 0),
         "legR_up": (14, 8, 0), "legR_lo": (46, 0, 0),
         "head": (-8, 0, 0), "torso": (-6, 0, 0),
