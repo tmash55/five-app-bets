@@ -10,6 +10,7 @@ import {
   COURT,
   DT,
   DUNK,
+  FIRE,
   G_BALL,
   G_JUMP,
   HYPE,
@@ -40,10 +41,13 @@ import {
   shotContest,
   shotJumpV0,
 } from './core';
+import { handling, handlingAt, pushShare } from './feel';
+import { cool, defenseBoost, fireOut, heatUp, onFire, speedBoost, stack, stepFire } from './fire';
 import { approach, approachAngle, clamp, clamp01, hypot2, lerp, rngNext, smooth } from './math';
 import type {
   BallSim,
   DunkStyle,
+  Handling,
   Intent,
   MatchConfig,
   MatchState,
@@ -154,6 +158,11 @@ export function createMatch(cfg: MatchConfig): MatchState {
         celebrate: 0,
         handSwitchT: 0,
         ai: newAiMemory(),
+        feel: handling(setup.attrs, setup.weight),
+        heat: 0,
+        fireT: 0,
+        streak: 0,
+        streakT: 0,
       });
     }
     if (team === 1) break;
@@ -401,6 +410,13 @@ function scoreBasket(m: MatchState, team: TeamId, hoop: number): void {
   if (perfect) gain += HYPE.perfect;
   addHype(m, team, gain);
   emit(m, { type: 'score', by: scorer, team, points, kind, perfect, buzzer, assist });
+  // flame meters: the scorer and the passer heat up, the defender who was beaten cools, and the other team's fires go out
+  const sp = m.players[scorer];
+  heatUp(m, sp, kind === 'oop' ? FIRE.oop : kind === 'dunk' ? FIRE.dunk : points === 3 ? FIRE.three : FIRE.two);
+  if (assist >= 0) heatUp(m, m.players[assist], FIRE.assist + (kind === 'oop' ? FIRE.oopAssist : 0));
+  const guard = m.players[sp.mark];
+  if (guard && guard.team !== team) cool(guard, FIRE.scoredOn);
+  fireOut(m, (1 - team) as TeamId);
   m.lastScoreT[hoop > 0 ? 1 : 0] = 0;
   m.lastScoreBy = scorer;
   b.state = 'dead';
@@ -503,7 +519,7 @@ function tryBlock(m: MatchState, p: PlayerSim, ballY: number, base: number): Pla
     if (o.y + JUMP.reachUp < ballY - 0.18) continue;
     if (o.vy < -5.5) continue; // already well on the way down
     let pr = base + 0.5 * o.attrs.block - 0.1 * p.attrs.shot;
-    if (hypeOn(m, o.team)) pr += 0.12;
+    pr += defenseBoost(m, o, 0.12, FIRE.blockBonus);
     if (o.idx === m.control) pr += 0.1;
     pr *= clamp01(1.25 - d / 1.4);
     if (rngNext(m) < clamp(pr, 0.03, 0.85)) return o;
@@ -539,6 +555,8 @@ function blockBall(m: MatchState, shooter: PlayerSim, blocker: PlayerSim, x: num
   shooter.pickupCool = 0.5;
   m.stats[blocker.idx].blocks++;
   addHype(m, blocker.team, HYPE.block);
+  heatUp(m, blocker, FIRE.block);
+  cool(shooter, FIRE.miss);
   emit(m, { type: 'block', by: blocker.idx, on: shooter.idx, stuffed });
 }
 
@@ -637,6 +655,8 @@ function releaseShot(m: MatchState, p: PlayerSim, err: number, forced: ShotGrade
   if (three) st.tpa++;
   if (grade === 'perfect') st.perfects++;
   emit(m, { type: 'shot', by: p.idx, three, grade, contest });
+  // a perfect release warms the meter whatever happens next, but it rides along with the shot rather than counting as a play of its own
+  if (grade === 'perfect') heatUp(m, p, FIRE.perfect, false);
   heldBallPos(m, p, tmp);
   const blocker = tryBlock(m, p, tmp.y, grade === 'perfect' ? 0.08 : 0.2);
   if (blocker) {
@@ -662,7 +682,7 @@ function startShot(m: MatchState, p: PlayerSim): void {
 
 function pickDunkStyle(m: MatchState, p: PlayerSim, d: number): DunkStyle {
   const r = rngNext(m);
-  const fancy = p.attrs.dunk + (hypeOn(m, p.team) ? 0.25 : 0);
+  const fancy = p.attrs.dunk + (hypeOn(m, p.team) || onFire(p) ? 0.25 : 0);
   if (fancy > 0.72 && d > 2.2) {
     if (r < 0.3) return 'windmill';
     if (r < 0.55) return 'spin';
@@ -778,7 +798,7 @@ function releaseLayup(m: MatchState, p: PlayerSim): void {
     return;
   }
   let prob = 0.76 + 0.2 * (0.6 * p.attrs.dunk + 0.4 * p.attrs.shot) - contest * 0.33;
-  if (hypeOn(m, p.team)) prob += 0.08;
+  prob += stack(hypeOn(m, p.team) ? 0.08 : 0, onFire(p) ? FIRE.shotBonus * 0.8 : 0, FIRE.shotCap);
   const diff = clamp(m.score[p.team] - m.score[1 - p.team], -12, 12) / 12;
   prob -= diff * 0.05 * m.cfg.rubberBand;
   const made = rngNext(m) < clamp(prob, 0.08, 0.97);
@@ -802,7 +822,8 @@ function resolveDunk(m: MatchState, p: PlayerSim): void {
     if (hypot2(o.x - hx, o.z) > 1.15) continue;
     if (o.y + JUMP.reachUp < COURT.rimY - 0.05) continue;
     let pr = 0.16 + 0.5 * o.attrs.block - 0.3 * p.attrs.dunk;
-    if (hypeOn(m, p.team)) pr -= 0.1;
+    pr -= stack(hypeOn(m, p.team) ? 0.1 : 0, onFire(p) ? FIRE.blockBonus : 0, FIRE.defenseCap);
+    pr += onFire(o) ? FIRE.blockBonus : 0;
     if (o.idx === m.control) pr += 0.12;
     if (rngNext(m) < clamp(pr, 0.02, 0.5)) {
       m.stats[p.idx].fga++;
@@ -992,7 +1013,7 @@ function stealCheck(m: MatchState, p: PlayerSim): void {
   let pr = 0.1 + 0.42 * p.attrs.steal - 0.28 * h.attrs.handle;
   if (h.state === 'shoot' && h.t < SHOT.crouch + 0.08) pr += 0.12;
   if (h.sprinting) pr += 0.04;
-  if (hypeOn(m, p.team)) pr += 0.1;
+  pr += defenseBoost(m, p, 0.1);
   if (p.idx === m.control) pr += 0.07;
   const diff = clamp(m.score[p.team] - m.score[1 - p.team], -12, 12) / 12;
   pr -= diff * 0.05 * m.cfg.rubberBand;
@@ -1003,6 +1024,8 @@ function stealCheck(m: MatchState, p: PlayerSim): void {
   p.stealHit = true;
   m.stats[p.idx].steals++;
   addHype(m, p.team, HYPE.steal);
+  heatUp(m, p, FIRE.steal);
+  cool(h, FIRE.turnover);
   emit(m, { type: 'steal', by: p.idx, from: h.idx, intercept: false });
   if (rngNext(m) < 0.65) {
     h.hasBall = false;
@@ -1035,7 +1058,17 @@ function clampToCourt(p: PlayerSim): void {
   }
 }
 
-function moveFree(m: MatchState, p: PlayerSim, it: Intent, factor: number): void {
+/** scratch movement numbers for a controlled player lifted to the agility floor */
+const liftedFeel: Handling = handlingAt(0, 0, 0);
+
+/** How this player moves right now: the person's own player is never less agile than `MOVE.controlAgility`. */
+function feelOf(m: MatchState, p: PlayerSim): Handling {
+  const f = p.feel;
+  if (p.idx !== m.control || f.agility >= MOVE.controlAgility) return f;
+  return handlingAt(MOVE.controlAgility, f.weight, p.attrs.handle, liftedFeel);
+}
+
+export function moveFree(m: MatchState, p: PlayerSim, it: Intent, factor: number): void {
   let mx = it.mx;
   let mz = it.mz;
   const l = hypot2(mx, mz);
@@ -1055,16 +1088,31 @@ function moveFree(m: MatchState, p: PlayerSim, it: Intent, factor: number): void
   } else if (!wantSprint) {
     p.turbo = Math.min(1, p.turbo + MOVE.turboFill * DT * (l < 0.1 ? 1.4 : 1));
   }
+  const feel = feelOf(m, p);
   let max = lerp(MOVE.speedMin, MOVE.speedMax, p.attrs.speed) * factor;
   if (p.sprinting) max *= MOVE.turboMult;
-  if (p.hasBall) max *= MOVE.ballMult;
-  if (hot) max *= MOVE.hypeMult;
+  // a good ball handler keeps more of their speed with the ball
+  if (p.hasBall) max *= feel.ballMult;
+  // Hype and fire, capped together
+  max *= speedBoost(m, p);
   const tvx = mx * max;
   const tvz = mz * max;
   const dvx = tvx - p.vx;
   const dvz = tvz - p.vz;
   const dl = hypot2(dvx, dvz);
-  const rate = (l > 0.05 ? MOVE.accel : MOVE.decel) * DT;
+  let rate = feel.decel;
+  if (l > 0.05) {
+    rate = feel.accel;
+    // bending the run round into a new direction goes at the cut rate: sharp for quick feet, wide for a big
+    const sp0 = hypot2(p.vx, p.vz);
+    const tl = max * Math.min(1, l);
+    if (sp0 > 0.5 && tl > 0.5) {
+      const align = (p.vx * tvx + p.vz * tvz) / (sp0 * tl);
+      rate = lerp(feel.accel, feel.cut, clamp01((0.75 - align) / 1.0));
+    }
+    if (onFire(p)) rate *= FIRE.accelMult;
+  }
+  rate *= DT;
   if (dl <= rate) {
     p.vx = tvx;
     p.vz = tvz;
@@ -1089,7 +1137,7 @@ function moveFree(m: MatchState, p: PlayerSim, it: Intent, factor: number): void
   } else if (b.state !== 'dead') {
     want = Math.atan2(b.z - p.z, b.x - p.x);
   }
-  p.facing = approachAngle(p.facing, want, MOVE.turn * DT);
+  p.facing = approachAngle(p.facing, want, feel.turn * DT);
   const bounces = Math.floor(p.dribT);
   p.dribT += DT * (2.1 + sp * 0.2);
   // the ball meets the floor each time the cycle rolls over
@@ -1256,7 +1304,7 @@ function stepPlayer(m: MatchState, p: PlayerSim, it: Intent, live: boolean): voi
       p.vz = (nz - p.z) / DT;
       p.x = nx;
       p.z = nz;
-      const bump = DUNK.bump * (hypeOn(m, p.team) ? 1.6 : 1);
+      const bump = DUNK.bump * (hypeOn(m, p.team) || onFire(p) ? 1.6 : 1);
       p.y = p.ey * smooth(Math.min(1, u * 1.18)) + bump * Math.sin(Math.PI * u);
       const base = Math.atan2(p.ez - p.sz, p.ex - p.sx);
       p.facing = p.style === 'spin' ? base + Math.PI * 2 * smooth(u / 0.86) : base;
@@ -1288,7 +1336,7 @@ function stepPlayer(m: MatchState, p: PlayerSim, it: Intent, live: boolean): voi
       clampToCourt(p);
       if (live && !p.released && p.t >= STEAL.activeFrom && p.t <= STEAL.activeTo) stealCheck(m, p);
       if (p.t >= p.dur) {
-        p.stealCool = STEAL.cooldown;
+        p.stealCool = STEAL.cooldown * (onFire(p) ? FIRE.stealCool : 1);
         enter(p, 'recover', p.stealHit ? 0.05 : 0.2);
       }
       return;
@@ -1341,7 +1389,7 @@ function airborne(p: PlayerSim): boolean {
   return p.y > 0.6 || p.state === 'dunk' || p.state === 'oop' || p.state === 'hang' || p.state === 'layup';
 }
 
-function separatePlayers(m: MatchState): void {
+export function separatePlayers(m: MatchState): void {
   const ps = m.players;
   const min = PLAYER_R * 1.85;
   for (let i = 0; i < ps.length; i++) {
@@ -1362,20 +1410,23 @@ function separatePlayers(m: MatchState): void {
       const nx = dx / d;
       const nz = dz / d;
       const push = min - d;
-      // a set defender is a wall: the dribbler has to go round (turbo leans on them a bit)
-      let wa = 0.5;
+      // the heavier body gives less ground
+      let wa = pushShare(a.feel.weight, b.feel.weight);
+      // a set defender is a wall: the dribbler has to go round (turbo leans on them a bit, and so does a big)
       if (a.team !== b.team) {
         const h = a.hasBall ? a : b.hasBall ? b : null;
         if (h) {
           const o = h === a ? b : a;
           const set = o.state === 'free' || o.state === 'recover';
-          const share = !set ? 0.3 : h.sprinting ? 0.68 : 0.85;
+          const share = clamp(pushShare(h.feel.weight, o.feel.weight, !set ? 0.3 : h.sprinting ? 0.68 : 0.85), 0.15, 0.95);
           wa = h === a ? share : 1 - share;
           if (set) {
             const sgn = h === a ? 1 : -1;
             const into = (h.vx * nx + h.vz * nz) * sgn;
             if (into > 0) {
-              const cut = into * (h.sprinting ? 0.6 : 0.9);
+              // a heavy dribbler keeps more of their momentum into a light defender
+              const keep = clamp(1 + MOVE.weightPush * (h.feel.weight - o.feel.weight), 1, 1.3);
+              const cut = (into * (h.sprinting ? 0.6 : 0.9)) / keep;
               h.vx -= nx * sgn * cut;
               h.vz -= nz * sgn * cut;
             }
@@ -1439,10 +1490,12 @@ function stepPass(m: MatchState): void {
       if (active) pr = 0.5 + 0.42 * o.attrs.steal;
       else if (o.idx === m.control) pr = 0.34 + 0.36 * o.attrs.steal;
       else pr = lerp(0.04, 0.26, m.cfg.difficulty) * (0.5 + o.attrs.steal);
-      if (hypeOn(m, o.team)) pr += 0.1;
+      pr += defenseBoost(m, o, 0.1);
       if (rngNext(m) < clamp(pr, 0, 0.95)) {
         m.stats[o.idx].steals++;
         addHype(m, o.team, HYPE.steal);
+        heatUp(m, o, FIRE.steal);
+        cool(passer, FIRE.turnover);
         emit(m, { type: 'steal', by: o.idx, from: passer.idx, intercept: true });
         give(m, o);
         o.catchT = 0;
@@ -1488,6 +1541,7 @@ function tryPickup(m: MatchState): void {
   if (!best) return;
   const wasShot = b.fromShot;
   const shotTeam = b.shotTeam;
+  const shooter = b.shooter;
   const sameTeam = m.possession === best.team;
   give(m, best);
   best.catchT = 0;
@@ -1496,6 +1550,9 @@ function tryPickup(m: MatchState): void {
     m.stats[best.idx].rebounds++;
     if (offensive && sameTeam) m.shotClock = Math.max(m.shotClock, RULES.shotClockReset);
     addHype(m, best.team, HYPE.rebound);
+    // the shot came back out: a miss for the shooter, then a rebound for whoever grabbed it (the shooter too)
+    if (shooter >= 0) cool(m.players[shooter], FIRE.miss);
+    heatUp(m, best, offensive ? FIRE.reboundOff : FIRE.reboundDef);
     emit(m, { type: 'rebound', by: best.idx, offensive });
   } else {
     emit(m, { type: 'pickup', by: best.idx });
@@ -1742,12 +1799,15 @@ function stepLive(m: MatchState, pad: PadInput): void {
     }
     if (t === 1) break;
   }
+  stepFire(m);
   const b = m.ball;
   // shot clock
   if (b.state === 'held' || b.state === 'pass') {
     m.shotClock -= DT;
     if (m.shotClock <= 0) {
       const team = m.possession;
+      const holder = m.players[b.state === 'held' ? b.holder : b.passer];
+      if (holder) cool(holder, FIRE.turnover);
       emit(m, { type: 'shotClock', team });
       m.inboundTeam = (1 - team) as TeamId;
       m.phase = 'whistle';

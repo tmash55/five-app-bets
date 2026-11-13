@@ -8,9 +8,9 @@ import { buzz } from '@/fx/feedback';
 import type { MatchState, SimEvent } from '@/game/sim/types';
 
 /** every sound a match can play, in the order a match first needs them, so they can be made ready before tip-off */
-export const MATCH_SOUNDS: readonly SfxName[] = ['tick', 'go', 'dribble', 'catch', 'pass', 'shoot', 'swish', 'rim', 'board', 'bounce', 'cheer', 'scuff', 'land', 'swipe', 'steal', 'block', 'ooh', 'aww', 'dunk', 'cheerBig', 'perfect', 'ankle', 'hype', 'hypeEnd', 'whistle', 'buzzer'];
+export const MATCH_SOUNDS: readonly SfxName[] = ['tick', 'go', 'dribble', 'catch', 'pass', 'shoot', 'swish', 'rim', 'board', 'bounce', 'cheer', 'scuff', 'land', 'swipe', 'steal', 'block', 'ooh', 'aww', 'dunk', 'cheerBig', 'perfect', 'ankle', 'hype', 'hypeEnd', 'ignite', 'fireShot', 'whistle', 'buzzer'];
 
-export type CalloutTone = 'home' | 'away' | 'gold' | 'white' | 'perfect' | 'good' | 'okay' | 'bad';
+export type CalloutTone = 'home' | 'away' | 'gold' | 'white' | 'fire' | 'perfect' | 'good' | 'okay' | 'bad';
 
 export interface Callout {
   text: string;
@@ -56,6 +56,9 @@ const OTHERS_CUT_LOSS = 5.5;
 const OTHERS_CUT_REST = 1.6;
 /** seconds between two groans from the kids watching */
 const AWW_REST = 6;
+/** a player who catches fire on a basket gets the basket's callout first, then their own this much later */
+const FIRE_CALL_DELAY = 0.75;
+const FIRE_CALLS = ['ON FIRE!', 'RED HOT!', 'BLAZING!'];
 
 export class MatchDirector {
   /** a shot at the last horn won it or tied it for the person's team (the score in the match is already the one after the shot) */
@@ -71,6 +74,9 @@ export class MatchDirector {
   private trailAt = 0;
   private lastCut = -9;
   private lastOthersCut = -9;
+  /** an ON FIRE callout waiting for the basket's own callout to have its moment */
+  private pendingFire: { callout: Callout; at: number } | null = null;
+  private calledAt = -9;
 
   constructor(private readonly o: DirectorOptions) {}
 
@@ -81,9 +87,17 @@ export class MatchDirector {
 
   private say(text: string, tone: CalloutTone, hold = 1.25, sub?: string, big = false): void {
     this.o.show({ text, tone, lane: 'main', hold, sub, big });
+    this.calledAt = this.now;
   }
 
+  /** time of the step being handled, for callouts that should not step on each other */
+  private now = 0;
+
   handle(e: SimEvent, m: MatchState): void {
+    if (m.time !== this.now) {
+      this.now = m.time;
+      this.calledAt = -9;
+    }
     const user = m.cfg.userTeam;
     const side = (team: number): CalloutTone => (team === 0 ? 'home' : 'away');
     const ours = (team: number) => user < 0 || team === user;
@@ -123,6 +137,7 @@ export class MatchDirector {
       }
       case 'shot': {
         playSfx('shoot');
+        if (m.players[e.by].fireT > 0) playSfx('fireShot');
         this.shot = { team: m.players[e.by].team, rim: false };
         if (e.by === m.control) {
           const err = m.players[e.by].relErr;
@@ -215,6 +230,9 @@ export class MatchDirector {
         this.say(this.pick(ANKLES), side(m.players[e.by].team), 1.1, this.o.names[e.by]);
         break;
       }
+      case 'dunkStart':
+        if (m.players[e.by].fireT > 0) playSfx('fireShot');
+        break;
       case 'poster':
         this.lastPoster = m.time;
         break;
@@ -234,6 +252,17 @@ export class MatchDirector {
         this.shot = null;
         playSfx('catch', 0.6);
         break;
+      case 'fire': {
+        if (!e.on) break;
+        playSfx('ignite');
+        const team = m.players[e.player].team;
+        if (ours(team)) buzz('success');
+        const callout: Callout = { text: this.pick(FIRE_CALLS), tone: 'fire', lane: 'main', hold: 1.7, sub: this.o.names[e.player], big: true };
+        // lit by a basket: let the basket's callout land first
+        if (this.calledAt === m.time) this.pendingFire = { callout, at: m.time + FIRE_CALL_DELAY };
+        else this.o.show(callout);
+        break;
+      }
       case 'hype': {
         if (e.on) {
           playSfx('hype');
@@ -259,6 +288,11 @@ export class MatchDirector {
    * court.
    */
   watch(m: MatchState): void {
+    const pf = this.pendingFire;
+    if (pf && m.time >= pf.at) {
+      this.pendingFire = null;
+      this.o.show(pf.callout);
+    }
     const n = m.players.length;
     if (this.trail.length !== n * CUT_STEPS * 2) {
       this.trail = new Float32Array(n * CUT_STEPS * 2);

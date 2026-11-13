@@ -43,11 +43,28 @@ export const MOVE = {
   speedMin: 5.5,
   speedMax: 7.3,
   turboMult: 1.3,
-  ballMult: 0.95,
+  /** top speed kept with the ball: a poor ball handler keeps the first, a great one the second */
+  ballMultMin: 0.9,
+  ballMultMax: 1.0,
   hypeMult: 1.06,
-  accel: 40,
-  decel: 52,
-  turn: 15,
+  /**
+   * Speeding up, slowing down, changing direction and turning to face, from the heaviest, slowest player (agility 0)
+   * to the quickest (agility 1). A player of middling agility gets about the numbers everyone used to share
+   * (accel 40, decel 52, turn 15), so the spread is around the old feel, not below it.
+   */
+  accelMin: 32,
+  accelMax: 50,
+  decelMin: 44,
+  decelMax: 60,
+  /** how fast the run bends round when the stick points away from where the player is going */
+  cutMin: 27,
+  cutMax: 52,
+  turnMin: 11,
+  turnMax: 19,
+  /** the player in the person's hands never feels less agile than this, so nobody is sluggish to the stick */
+  controlAgility: 0.3,
+  /** how much of a push in contact a heavy player (weight 1) shrugs off against the lightest one */
+  weightPush: 0.3,
   turboDrain: 0.36,
   turboFill: 0.3,
   turboRelock: 0.18,
@@ -141,6 +158,65 @@ export const HYPE = {
   ankle: 8,
   rebound: 2,
   shotBonus: 0.12,
+  /** dunk take-off range multiplier */
+  dunkReach: 1.22,
+} as const;
+
+/**
+ * On fire: each player's own flame meter (0..max). Plays fill it by different amounts, and more for plays in a row
+ * (the streak); a full meter sets that player on fire for `duration` seconds of live play.
+ */
+export const FIRE = {
+  max: 100,
+  /** seconds of live play on fire */
+  duration: 15,
+  // what each play is worth before the streak
+  two: 20,
+  three: 27,
+  dunk: 24,
+  oop: 29,
+  assist: 14,
+  /** extra for the passer when the assist was an alley-oop */
+  oopAssist: 5,
+  steal: 18,
+  block: 21,
+  reboundOff: 12,
+  reboundDef: 7,
+  perfect: 8,
+  /** each play in a row adds this much to the next one's worth (x1, x1.3, x1.6 ...), up to `streakMax` */
+  streakStep: 0.3,
+  streakMax: 2.2,
+  /** a streak is over when this many seconds of live play pass without a good play */
+  streakWindow: 14,
+  // cooling down
+  /** per second of live play */
+  decay: 0.7,
+  /** a missed shot (or one that is blocked) */
+  miss: 6,
+  /** losing the ball: stolen, picked off, or out of time on the shot clock */
+  turnover: 10,
+  /** the player you guard scores */
+  scoredOn: 7,
+  /** a computer opponent's meter fills this much as fast at the easiest level, and fully at All-Star */
+  cpuMin: 0.75,
+  cpuEasy: 0.2,
+  cpuHard: 0.82,
+  // what fire does
+  shotBonus: 0.1,
+  /** a hot shooter's comfortable range stretches this far (a heave from the far half stays a heave) */
+  range: 0.8,
+  speedMult: 1.06,
+  accelMult: 1.15,
+  stealBonus: 0.08,
+  blockBonus: 0.08,
+  dunkReach: 1.15,
+  /** steal swipes come back this much sooner */
+  stealCool: 0.7,
+  // fire and the team's Hype together never go past these
+  shotCap: 0.18,
+  speedCap: 1.1,
+  defenseCap: 0.16,
+  reachCap: 1.3,
 } as const;
 
 export const RULES = {

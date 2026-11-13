@@ -672,6 +672,43 @@ def sfx_sparkle():
     return mix(0.5, *[(s, bell(midi(n), 0.35, 0.1) * 0.6) for s, n in notes], (0.0, shimmer(0.4, 0.12)))
 
 
+@own_noise(114)
+def sfx_ignite():
+    """A player catching fire: a soft gas "fwoomp", a roar of flame that swells up and a rising sting, with crackles."""
+    d = 1.0
+    t = t_axis(d)
+    u = t / d
+    fwoomp = band(noise(0.32), 60, 700) * shape(0.32, 0.05, 0.22) * 1.4
+    thud = thump(110, 55, 0.3, 0.09) * 0.6
+    roar = (band(noise(d), 250, 1600) * (1 - u) + band(noise(d), 1200, 5200) * u) * shape(d, 0.12, 0.45) * 0.55
+    sting = (tone(330, 0.55, 990, 1.6) + 0.45 * tone(495, 0.55, 1485, 1.6)) * shape(0.55, 0.2, 0.18) * 0.22
+    snaps = silence(d)
+    k = 0.12
+    while k < d - 0.05:
+        snap = band(noise(0.01), 1800, 7000) * decay(0.01, 0.002) * RNG.uniform(0.3, 1.0) * (1 - k / d)
+        i = int(k * SR)
+        snaps[i : i + len(snap)] += snap[: len(snaps) - i]
+        k += RNG.uniform(0.015, 0.05)
+    return mix(d, (0, fwoomp), (0, thud), (0.04, roar), (0.18, sting), (0, snaps * 0.9))
+
+
+@own_noise(115)
+def sfx_fire_shot():
+    """A shot from a player on fire: a quick whoosh of flame with a few crackles riding on it."""
+    d = 0.42
+    t = t_axis(d)
+    u = t / d
+    whoosh = (band(noise(d), 2200, 7000) * (1 - u) + band(noise(d), 500, 2400) * u) * shape(d, 0.06, 0.28)
+    snaps = silence(d)
+    k = 0.02
+    while k < d - 0.04:
+        snap = band(noise(0.01), 1600, 6500) * decay(0.01, 0.0025) * RNG.uniform(0.3, 1.0)
+        i = int(k * SR)
+        snaps[i : i + len(snap)] += snap[: len(snaps) - i]
+        k += RNG.uniform(0.02, 0.06)
+    return whoosh * 0.8 + snaps * 0.7
+
+
 # --- music -----------------------------------------------------------------
 
 
@@ -851,6 +888,9 @@ SOUNDS = {
     "lampTick": (sfx_lamp_tick, 0.4),
     "neonOn": (sfx_neon_on, 0.55),
     "sparkle": (sfx_sparkle, 0.65),
+    # a player catching fire, and their shots while it lasts
+    "ignite": (sfx_ignite, 0.85),
+    "fireShot": (sfx_fire_shot, 0.6),
 }
 
 MUSIC = {"musicMenu": (music_menu, 0.8), "musicGame": (music_game, 0.8)}

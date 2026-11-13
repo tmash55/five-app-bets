@@ -1,6 +1,6 @@
 /**
  * One pooled particle system for everything that pops, puffs or sparkles:
- * shoe dust, sparkle bursts, confetti and the ball's trail.
+ * shoe dust, sparkle bursts, confetti, flames and the ball's trail.
  */
 
 import * as THREE from 'three';
@@ -11,6 +11,8 @@ import { PARTICLE_FRAG, PARTICLE_VERT } from './shaders';
 export const SHAPE_SOFT = 0;
 export const SHAPE_SQUARE = 1;
 export const SHAPE_SPARKLE = 2;
+/** a flame tongue: round at the bottom, drawn up to a point, with a pale hot heart; keep `spin` at 0 so it points up */
+export const SHAPE_FLAME = 3;
 
 export interface ParticleSpec {
   x: number;

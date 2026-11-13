@@ -1,6 +1,7 @@
 /** Helpers shared by the simulation and the computer players. */
 
-import { BALL_R, COURT, DEEP, DRIBBLE_H, DUNK, G_JUMP, HYPE, SHOT } from './constants';
+import { BALL_R, COURT, DEEP, DRIBBLE_H, DUNK, G_JUMP, SHOT } from './constants';
+import { rangeBoost, reachBoost, shotBoost } from './fire';
 import { clamp, clamp01, distToSegment, hypot2, lerp, smooth } from './math';
 import type { Intent, MatchState, PlayerSim, ShotGrade, TeamId } from './types';
 
@@ -55,7 +56,7 @@ export function shotJumpV0(): number {
 
 /** How far out this player can take off for a dunk. */
 export function dunkRange(m: MatchState, p: PlayerSim): number {
-  return lerp(DUNK.rangeMin, DUNK.rangeMax, p.attrs.dunk) * (hypeOn(m, p.team) ? 1.22 : 1);
+  return lerp(DUNK.rangeMin, DUNK.rangeMax, p.attrs.dunk) * reachBoost(m, p);
 }
 
 export function canDunk(p: PlayerSim): boolean {
@@ -113,18 +114,19 @@ export function shotContest(m: MatchState, p: PlayerSim): number {
 
 /**
  * How far from the hoop a shooter is still comfortable: a step behind the arc for a poor shooter, about two for
- * the best. Past it, shots fall off fast, and faster for a poor shooter.
+ * the best. Past it, shots fall off fast, and faster for a poor shooter. `extra` stretches it a little for a
+ * shooter on fire.
  */
-export function shootingRange(shot: number): number {
-  return COURT.threeR + DEEP.grace + DEEP.reach * shot;
+export function shootingRange(shot: number, extra = 0): number {
+  return COURT.threeR + DEEP.grace + DEEP.reach * shot + extra;
 }
 
 /**
  * Beyond this, a shot is a heave: the timing of the release no longer helps and the chance is capped, at a few
  * in a hundred for the best shooter. From the far half of the court it is always a heave.
  */
-export function isHeave(d: number, shot: number): boolean {
-  return d >= COURT.hoopX || d > shootingRange(shot) + DEEP.heavePast;
+export function isHeave(d: number, shot: number, extra = 0): boolean {
+  return d >= COURT.hoopX || d > shootingRange(shot, extra) + DEEP.heavePast;
 }
 
 /** Chance that a shot goes in. Shared with the computer players' shot selection. */
@@ -138,8 +140,9 @@ export function makeProb(
   const d = distToHoop(p);
   const s = p.attrs.shot;
   const three = isThree(p.x, p.z, p.team);
+  const extra = rangeBoost(p);
   // how far past the shooter's own range, and how much the timing of the release can still do from there
-  const past = three ? Math.max(0, d - shootingRange(s)) : 0;
+  const past = three ? Math.max(0, d - shootingRange(s, extra)) : 0;
   const timing = clamp01(1 - past / DEEP.timingFade);
   let base: number;
   if (d < 2.3) {
@@ -162,12 +165,13 @@ export function makeProb(
     base -= 0.22;
   }
   base -= c * 0.4;
-  if (hypeOn(m, p.team)) base += HYPE.shotBonus;
+  // Hype and fire, together never more than FIRE.shotCap
+  base += shotBoost(m, p);
   const diff = clamp(m.score[p.team] - m.score[1 - p.team], -12, 12) / 12;
   base -= diff * 0.07 * m.cfg.rubberBand;
   base -= Math.min(0.07, moving * 0.011);
   const chance = clamp(base, 0.02, 0.96);
-  return three && isHeave(d, s) ? Math.min(chance, DEEP.heaveMin + DEEP.heaveBest * s) : chance;
+  return three && isHeave(d, s, extra) ? Math.min(chance, DEEP.heaveMin + DEEP.heaveBest * s) : chance;
 }
 
 /** True when no defender stands in the corridor between (ax, az) and (bx, bz). */

@@ -30,6 +30,7 @@ const WITHOUT_BALL: readonly Line[] = [
 const ALWAYS: readonly Line[] = [
   { fill: 'sunDeep', icon: 'bolt', name: 'TURBO', text: 'Hold to sprint. Watch the ring run down.' },
   { fill: 'sun', icon: 'star', name: 'HYPE', text: 'Big plays fill your bar for Hype Time!' },
+  { fill: 'orange', icon: 'flame', name: 'ON FIRE', text: 'Plays in a row fill a flame. Fill it to catch fire!' },
 ];
 
 function Row({ line }: { line: Line }) {

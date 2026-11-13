@@ -370,7 +370,7 @@ uniform mat4 projectionMatrix;
 in vec3 position;   // particle centre (world)
 in vec4 color;
 in vec3 corner;     // xy = corner in -1..1, z = size
-in vec2 spin;       // angle, shape (0 soft disc, 1 square, 2 sparkle)
+in vec2 spin;       // angle, shape (0 soft disc, 1 square, 2 sparkle, 3 flame)
 out vec4 vColor;
 out vec2 vCorner;
 out float vShape;
@@ -396,18 +396,36 @@ out vec4 fragColor;
 void main() {
   float r = length(vCorner);
   float a;
+  vec3 col = vColor.rgb;
   if (vShape < 0.5) {
     a = 1.0 - smoothstep(0.45, 1.0, r);
   } else if (vShape < 1.5) {
     a = 1.0;
-  } else {
+  } else if (vShape < 2.5) {
     // four-point sparkle
     float arms = 1.0 - smoothstep(0.015, 0.07, abs(vCorner.x * vCorner.y));
     float core = 1.0 - smoothstep(0.1, 0.34, r);
     a = max(arms * (1.0 - smoothstep(0.55, 1.0, r)), core);
+  } else {
+    // flame tongue: a round base low in the quad, narrowing to a point at the top
+    vec2 q = vCorner;
+    const float base = -0.48;
+    const float rad = 0.5;
+    float d;
+    if (q.y < base) {
+      d = length(vec2(q.x, q.y - base)) / rad;
+    } else {
+      float u = clamp((q.y - base) / (1.0 - base), 0.0, 1.0);
+      float hw = rad * pow(1.0 - u, 1.15) + 0.001;
+      d = abs(q.x) / hw;
+    }
+    a = 1.0 - smoothstep(0.82, 1.0, d);
+    // a pale heart low in the tongue
+    float heart = (1.0 - smoothstep(0.25, 0.6, d)) * (1.0 - smoothstep(-0.3, 0.4, q.y));
+    col = mix(col, vec3(1.0), 0.5 * heart);
   }
   if (a * vColor.a < 0.01) discard;
-  fragColor = vec4(vColor.rgb, vColor.a * a);
+  fragColor = vec4(col, vColor.a * a);
 }
 `;
 
