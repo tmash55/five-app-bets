@@ -124,37 +124,39 @@ function Lettering() {
 
 function Cards() {
   return (
-    <View style={styles.columns}>
-      <View style={[styles.row, styles.cards]}>
+    <View style={styles.sheet}>
+      <View style={styles.cardRow}>
         {RARITIES.map((r, i) => (
-          <ArcadeCard key={r} player={best(r)} level={i + 1} width={px(150)} fresh={i === 2} selected={i === 1} shine={i === 3} />
+          <ArcadeCard key={r} player={best(r)} level={i + 1} width={px(138)} fresh={i === 2} shine={i === 3} />
         ))}
-        <View style={styles.column}>
-          <View style={styles.row}>
-            <ArcadeCard player={best('rare')} width={px(96)} level={2} />
-            <ArcadeCard player={best('legend')} width={px(96)} locked level={0} />
-          </View>
-          <View style={styles.row}>
-            <ArcadeCard player={best('epic')} width={px(64)} level={3} />
-            <ArcadeCard player={best('common')} width={px(64)} level={1} />
-            <CardBack width={px(64)} />
-          </View>
-        </View>
+        <CardBack width={px(138)} />
       </View>
-      <View style={styles.rowBottom}>
+      <View style={styles.packRow}>
         {SHOP_PACKS.map((p) => (
-          <FoilPack key={p.id} pack={p} width={px(84)} />
+          <FoilPack key={p.id} pack={p} width={px(78)} />
         ))}
-        <FoilPack pack={packById(teamPackId(TEAMS[0].id))} width={px(84)} />
-        <FoilPack pack={SHOP_PACKS[0]} width={px(36)} />
-        <FoilPack pack={SHOP_PACKS[2]} width={px(36)} />
-        <CardBack width={px(84)} tube={rarityPaint.legend.tube} />
+        <FoilPack pack={packById(teamPackId(TEAMS[0].id))} width={px(78)} />
         <View style={styles.cells}>
-          {PLAYERS.slice(0, 6).map((p, i) => (
-            <HeadCell key={p.id} player={p} level={i % 3 === 0 ? 0 : 1} selected={i === 1} fresh={i === 2} />
+          {PLAYERS.slice(0, 12).map((p, i) => (
+            <HeadCell key={p.id} player={p} level={i % 4 === 3 ? 0 : 1} selected={i === 1} fresh={i === 2} />
           ))}
         </View>
       </View>
+    </View>
+  );
+}
+
+/** the small sizes of a card, and its locked state */
+function SmallCards() {
+  return (
+    <View style={styles.cardRow}>
+      <ArcadeCard player={best('rare')} width={px(96)} level={2} />
+      <ArcadeCard player={best('legend')} width={px(96)} locked level={0} />
+      <ArcadeCard player={best('epic')} width={px(64)} level={3} />
+      <ArcadeCard player={best('common')} width={px(64)} level={1} selected />
+      <CardBack width={px(64)} tube={rarityPaint.legend.tube} />
+      <FoilPack pack={SHOP_PACKS[0]} width={px(36)} />
+      <FoilPack pack={SHOP_PACKS[2]} width={px(36)} />
     </View>
   );
 }
@@ -195,7 +197,7 @@ export default function KitScreen() {
   if (!__DEV__) return <Redirect href="/" />;
   return (
     <ArcadeScreen title="KIT" tube="green" style={styles.body}>
-      {page === '2' ? <Cards /> : page === '3' ? <Room /> : <Lettering />}
+      {page === '2' ? <Cards /> : page === '3' ? <Room /> : page === '4' ? <SmallCards /> : <Lettering />}
     </ArcadeScreen>
   );
 }
@@ -219,24 +221,26 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: space.md,
   },
-  rowBottom: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: space.sm,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+  sheet: {
+    flex: 1,
+    alignItems: 'center',
     gap: space.lg,
   },
-  cards: {
+  cardRow: {
+    flexDirection: 'row',
     alignItems: 'flex-start',
-    flexWrap: 'nowrap',
+    gap: px(20),
+  },
+  packRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: space.lg,
   },
   cells: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    width: px(150),
+    width: px(66) * 6 + px(5) * 5,
+    marginLeft: space.sm,
     gap: px(5),
   },
   stats: {
