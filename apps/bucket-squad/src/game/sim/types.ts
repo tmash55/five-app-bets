@@ -14,6 +14,24 @@ export interface PlayerSetup {
   /** roster id, used by the renderer to pick the look */
   id: string;
   attrs: Attrs;
+  /** 0..1 how heavy this player is (bigger players are slower to start and turn, and harder to push off a spot); worked out from the ratings when left out */
+  weight?: number;
+}
+
+/** How a player moves, worked out once from the ratings (see feel.ts). */
+export interface Handling {
+  /** 0..1 quick feet: speed and handles, less weight */
+  agility: number;
+  /** 0..1 heavy and strong */
+  weight: number;
+  accel: number;
+  decel: number;
+  /** how fast the run bends round into a new direction */
+  cut: number;
+  /** how fast the body turns to face (radians a second) */
+  turn: number;
+  /** share of top speed kept with the ball */
+  ballMult: number;
 }
 
 export interface TeamSetup {
@@ -167,6 +185,16 @@ export interface PlayerSim {
   celebrate: number;
   handSwitchT: number;
   ai: AiMemory;
+  /** how this player moves */
+  feel: Handling;
+  /** flame meter, 0..FIRE.max */
+  heat: number;
+  /** seconds of live play left on fire, 0 when not on fire */
+  fireT: number;
+  /** good plays in a row */
+  streak: number;
+  /** seconds of live play since the last good play */
+  streakT: number;
 }
 
 export type BallState = 'held' | 'pass' | 'shot' | 'loose' | 'dead';
@@ -249,6 +277,8 @@ export type SimEvent =
   | { type: 'land'; by: number; hard: boolean }
   | { type: 'dunkStart'; by: number; style: DunkStyle; oop: boolean }
   | { type: 'hype'; team: TeamId; on: boolean }
+  /** a player catches fire, or the fire goes out (time is up, or the other team scored) */
+  | { type: 'fire'; player: number; on: boolean }
   | { type: 'possession'; team: TeamId }
   | { type: 'shotClock'; team: TeamId }
   | { type: 'inbound'; team: TeamId }
