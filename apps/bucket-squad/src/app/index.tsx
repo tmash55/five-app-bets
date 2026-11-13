@@ -10,7 +10,7 @@ import { PLAYERS, cardArt, leagueOf, mustPlayer, playerOverall } from '@/data/ro
 import { tapFeedback } from '@/fx/feedback';
 import { StageView } from '@/game/StageView';
 import type { StageFocus, StageMarks, StagePaint } from '@/game/render/stage';
-import { STAGE_BASE_R, groupWidth, stageMarks } from '@/game/render/stage';
+import { STAGE_BASE_R, STAGE_FIGURE_H, groupWidth, stageMarks } from '@/game/render/stage';
 import { squadStage } from '@/game/stage/cast';
 import { countOwned, levelOf } from '@/meta/collection';
 import { tierProgress } from '@/meta/ladder';
@@ -18,16 +18,18 @@ import { currentMissions, missionsToClaim } from '@/meta/missions';
 import { dayKey } from '@/meta/rng';
 import { nextTourGame, preferredTour, toursFor } from '@/meta/tour';
 import { useSave } from '@/state/save';
-import { blend, neonText, night, rarityPaint, track, tube } from '@/theme/arcade';
+import { arcade, blend, neonText, night, rarityPaint, track, tube } from '@/theme/arcade';
 import { color, px, space } from '@/theme/tokens';
 import { ArcadeScreen, CoinChip } from '@/ui/arcade/ArcadeScreen';
 import { GoldButton, NeonTile, RoundButton } from '@/ui/arcade/Buttons';
-import { fitPerson, widthOf } from '@/ui/arcade/measure';
+import { SPARE, firstThatFits } from '@/ui/arcade/fitText';
+import { MIN_FIT_LABEL, fitPerson, fitTo, widthOf } from '@/ui/arcade/measure';
 import { placePlates } from '@/ui/arcade/plateRow';
 import { Floor, Spotlight, StageRing } from '@/ui/arcade/Room';
-import { HoopSign, StarSign } from '@/ui/arcade/Signs';
+import { HOOP_SHAPE, HoopSign, StarSign } from '@/ui/arcade/Signs';
 import { Chip, Plate } from '@/ui/arcade/Surface';
 import { Glow, Print } from '@/ui/arcade/Type';
+import { wallSpot, type WallSpot } from '@/ui/arcade/wallSpot';
 
 const ALL_IDS = PLAYERS.map((p) => p.id);
 /** one full breath of the squad's card art, before the live squad takes over */
@@ -44,14 +46,42 @@ const SPREAD = 1.55;
 /** where the front of the base sits, as a share of the way from the top of the corner to the bottom of the screen */
 const BASE_FRONT = 0.885;
 /** the right-hand column: the big button and the four signs */
-const MENU_W = px(284);
+/** the four signs under PLAY */
+const TILE_TITLES = ['PACKS', 'COLLECTION', 'SQUAD', 'MISSIONS'] as const;
+/** a sign's own edge and padding, and the gap between two signs in a row */
+const TILE_EDGE = px(11) * 2 + arcade.outline * 2;
+const TILE_GAP = px(12);
+/**
+ * the right-hand column: the big button and the four signs. Its design width, or wider when a sign's name would not fit
+ * at its full size (lettering does not shrink quite as fast as the room on the smallest screens)
+ */
+const MENU_W = Math.max(px(284), 2 * (Math.max(...TILE_TITLES.map((t) => widthOf(t, 'sign', neonText.sign, track.wide))) / SPARE + TILE_EDGE) + TILE_GAP);
+/** the room for the line under a sign's name */
+const TILE_ROOM = (MENU_W - TILE_GAP) / 2 - TILE_EDGE;
 /** the room for the line under PLAY: the big button less its padding, its icon and the gap after it */
 const PLAY_ROOM = MENU_W - px(18) * 2 - px(46) - px(14);
 
 /** The first of these that fits on the line under PLAY at its own size (the last one if none does): a shrunk line would be cut. */
 function fitLine(choices: readonly string[], room: number): string {
-  return choices.find((t) => widthOf(t, 'bold', neonText.small, track.close) <= room) ?? choices[choices.length - 1];
+  return firstThatFits(choices, 'bold', neonText.small, room, 'close');
 }
+
+/** The first of these that fits under a sign's name at its own size. */
+function fitSub(choices: readonly string[]): string {
+  return firstThatFits(choices, 'body', neonText.tiny, TILE_ROOM, 'tight');
+}
+
+/** the squad's size against the corner, tried in turn until the hoop finds clear wall: at most about a tenth smaller */
+const SQUAD_SIZES = [1, 0.97, 0.94, 0.91, 0.88] as const;
+/** the hoop sign at its own size, the smallest it may hang at, and how far along the wall it may go (as a share of the corner) */
+const HOOP_W = px(92);
+const HOOP_LEAST = px(64);
+const HOOP_REACH = 0.62;
+/** a head's top and half its width at rest, as shares of the figure's height (the hair and ears included) */
+const HEAD_TOP = 1.14;
+const HEAD_HALF = 0.3;
+/** a stage focus with nothing to frame yet */
+const NO_FOCUS: StageFocus = { x: 0, y: 0, w: 1, h: 1 };
 
 /** the slow breath of the lit lettering and signs */
 const BREATH_MS = 3600;
@@ -115,7 +145,10 @@ function plateText(id: string, owned: Record<string, number>, room: number): { n
   const p = mustPlayer(id);
   const ovr = String(playerOverall(p, levelOf(owned[id] ?? 1)));
   const fit = fitPerson(p.name.toUpperCase(), 'bold', neonText.tiny, room - PLATE_PAD - widthOf(ovr, 'bold', neonText.tiny, track.normal), track.normal, p.short?.toUpperCase(), 0.8);
-  return { name: fit.text, size: fit.size, ovr };
+  // a name that still does not fit at the floor (a very narrow plate) shrinks further rather than being cut
+  const room2 = (room - PLATE_PAD - widthOf(ovr, 'bold', neonText.tiny, track.normal)) * SPARE;
+  const size = widthOf(fit.text, 'bold', fit.size, (track.normal * fit.size) / neonText.tiny) <= room2 ? fit.size : fitTo(fit.text, 'bold', neonText.tiny, room2, track.normal, MIN_FIT_LABEL);
+  return { name: fit.text, size, ovr };
 }
 
 /** inside a plate: its padding and edges, and the gap between the name and the number */
@@ -166,16 +199,42 @@ function SquadCorner({ ids, owned, onPress }: { ids: string[]; owned: Record<str
   // the bar is drawn over it
   const glW = rect ? rect.x + rect.w + space.lg : 1;
   const glH = window.height;
-  const focus = useMemo<StageFocus>(() => {
-    if (!rect) return { x: 0, y: 0, w: 1, h: 1 };
-    // room above the heads for a hop or a tossed ball before it passes under the top bar
-    const top = rect.y + px(30);
-    const front = rect.y + (glH - rect.y) * BASE_FRONT;
-    // the squad is framed to the box's width when that is what holds it back: narrow it until the ring and its glow fit the corner
-    const wide = Math.min(rect.w - px(32), ((rect.w + px(8) - px(20)) / (2 * RING * STAGE_BASE_R)) * groupWidth(SPREAD));
-    return { x: (rect.x + (rect.w - wide) / 2) / glW, y: top / glH, w: wide / glW, h: (front - top) / glH };
-  }, [rect, glW, glH]);
-  const marks = useMemo<StageMarks | null>(() => (rect ? stageMarks(setup, focus, glW, glH, RING) : null), [rect, setup, focus, glW, glH]);
+  // the people in the order the stage stands them, and how tall each is built
+  const builds = useMemo(() => setup.groups.flatMap((g) => g.members.map((m) => m.look.build?.height ?? 1)), [setup]);
+  // the squad as big as the corner allows, and the hoop on the wall where their heads leave room for its board; only when
+  // there is no such room even for a smaller hoop does the squad step back a little, and never by much
+  const frame = useMemo(() => {
+    if (!rect) return null;
+    let last: { focus: StageFocus; marks: StageMarks; hoop: WallSpot } | null = null;
+    for (const s of SQUAD_SIZES) {
+      // room above the heads for a hop or a tossed ball before it passes under the top bar
+      const front = rect.y + (glH - rect.y) * BASE_FRONT;
+      const top = front - (front - rect.y - px(30)) * s;
+      // the squad is framed to the box's width when that is what holds it back: narrow it until the ring and its glow fit the corner
+      const wide = s * Math.min(rect.w - px(32), ((rect.w + px(8) - px(20)) / (2 * RING * STAGE_BASE_R)) * groupWidth(SPREAD));
+      const focus = { x: (rect.x + (rect.w - wide) / 2) / glW, y: top / glH, w: wide / glW, h: (front - top) / glH };
+      const marks = stageMarks(setup, focus, glW, glH, RING);
+      const unit = marks.scale * glH;
+      const heads = marks.feet.map((f, i) => {
+        const tall = unit * STAGE_FIGURE_H * (builds[i] ?? 1);
+        return { x: f.x * glW, top: f.y * glH - tall * HEAD_TOP, half: tall * HEAD_HALF };
+      });
+      const hoop = wallSpot(heads, HOOP_SHAPE, {
+        from: rect.x + px(2),
+        to: rect.x + rect.w * HOOP_REACH,
+        tops: [rect.y + px(16), rect.y + px(8)],
+        widest: HOOP_W,
+        least: HOOP_LEAST,
+        step: px(4),
+        clear: px(4),
+      });
+      last = { focus, marks, hoop: hoop ?? { left: rect.x + px(2), top: rect.y + px(8), width: HOOP_LEAST } };
+      if (hoop) break;
+    }
+    return last;
+  }, [rect, setup, builds, glW, glH]);
+  const focus = frame?.focus ?? NO_FOCUS;
+  const marks = frame?.marks ?? null;
   const showLive = LIVE && focused && !failed && rect !== null;
 
   // in the GL view's own frame, which starts at the screen's top left corner
@@ -210,9 +269,9 @@ function SquadCorner({ ids, owned, onPress }: { ids: string[]; owned: Record<str
 
   return (
     <View style={styles.corner} ref={area} onLayout={measure}>
-      {rect && marks && ring && (
+      {rect && frame && marks && ring && (
         <View pointerEvents="box-none" style={[styles.room, { left: -rect.x, top: -rect.y, width: window.width, height: glH }]}>
-          <HoopSign width={px(92)} style={[styles.at, { left: rect.x + px(4), top: rect.y + px(16) }, styles.sign]} />
+          <HoopSign width={frame.hoop.width} style={[styles.at, { left: frame.hoop.left, top: frame.hoop.top }, styles.sign]} />
           <StarSign size={px(40)} style={[styles.at, { left: rect.x + rect.w - px(54), top: rect.y + px(22) }, styles.sign]} />
           <Spotlight width={rx * 2.08} height={cy - rect.y + px(4)} style={[styles.at, { left: cx - rx * 1.04, top: rect.y - px(6) }]} />
           <Floor style={[styles.at, { left: 0, right: 0, top: cy - ry - px(12), bottom: 0 }]} />
@@ -257,7 +316,7 @@ function SquadCorner({ ids, owned, onPress }: { ids: string[]; owned: Record<str
             return (
               <View key={p.id} pointerEvents="none" style={[styles.at, styles.plateBox, { left: p.x - p.width / 2, top: p.top, width: p.width }]}>
                 <Plate tube={tb}>
-                  <Print face="bold" size={p.size} track="normal" lines={1}>
+                  <Print face="bold" size={p.size} track="normal">
                     {p.name}
                   </Print>
                   <Print face="bold" size="tiny" color={tube[tb].soft} track="normal">
@@ -302,10 +361,11 @@ export default function Home() {
   const next = nextTourGame(tour, current);
   const nextStage = next ? current.stages[next.stage] : null;
   const stop = nextStage?.team.name.toUpperCase();
-  const playSub = fitLine(stop !== undefined ? [`TOUR · NEXT STOP: ${stop}`, `TOUR · NEXT: ${stop}`, `NEXT: ${stop}`, stop] : [`LADDER · ${tier.name.toUpperCase()}`], PLAY_ROOM);
+  const playSub = fitLine(stop !== undefined ? [`TOUR · NEXT STOP: ${stop}`, `TOUR · NEXT: ${stop}`, `NEXT: ${stop}`, stop] : [`LADDER · ${tier.name.toUpperCase()}`, tier.name.toUpperCase()], PLAY_ROOM);
   const tierLight = color[tier.color];
 
-  const packSub = freePack ? (packCount > 0 ? `Free pack + ${packCount} more` : '1 free pack today') : packCount > 0 ? `${packCount} to open` : 'Card shop';
+  const packSub = fitSub(freePack ? (packCount > 0 ? [`Free pack + ${packCount} more`, `Free + ${packCount} more`, `${packCount + 1} to open`] : ['1 free pack today', 'Free pack today', 'Free pack']) : packCount > 0 ? [`${packCount} to open`] : ['Card shop']);
+  const collectionSub = fitSub([`${have} of ${ALL_IDS.length} players`, `${have} of ${ALL_IDS.length}`]);
 
   return (
     <ArcadeScreen
@@ -335,11 +395,11 @@ export default function Home() {
           <View style={styles.tiles}>
             <View style={styles.tileRow}>
               <BreathingTile delay={0} tube="pink" icon="pack" title="PACKS" sub={packSub} badge={packCount + (freePack ? 1 : 0)} onPress={go('/packs')} />
-              <BreathingTile delay={900} tube="cyan" icon="grid" title="COLLECTION" sub={`${have} of ${ALL_IDS.length} players`} badge={fresh.length} onPress={go('/shelf')} />
+              <BreathingTile delay={900} tube="cyan" icon="grid" title="COLLECTION" sub={collectionSub} badge={fresh.length} onPress={go('/shelf')} />
             </View>
             <View style={styles.tileRow}>
-              <BreathingTile delay={1800} tube="violet" icon="squad" title="SQUAD" sub="Pick your three" onPress={go('/squad')} />
-              <BreathingTile delay={2700} tube="green" icon="target" title="MISSIONS" sub={toClaim > 0 ? 'Prizes waiting!' : 'New every day'} badge={toClaim} onPress={go('/missions')} />
+              <BreathingTile delay={1800} tube="violet" icon="squad" title="SQUAD" sub={fitSub(['Pick your three', 'Pick three'])} onPress={go('/squad')} />
+              <BreathingTile delay={2700} tube="green" icon="target" title="MISSIONS" sub={fitSub(toClaim > 0 ? ['Prizes waiting!', 'Prizes!'] : ['New every day', 'New daily'])} badge={toClaim} onPress={go('/missions')} />
             </View>
           </View>
         </View>
@@ -392,7 +452,7 @@ const styles = StyleSheet.create({
   },
   tileRow: {
     flexDirection: 'row',
-    gap: px(12),
+    gap: TILE_GAP,
   },
   tile: {
     flex: 1,

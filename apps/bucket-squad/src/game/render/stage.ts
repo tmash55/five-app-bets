@@ -117,6 +117,8 @@ const HEY_LENGTH = ACT_LENGTH.hey;
 const FLOOR_R = BASE_R * 1.3;
 /** the height of a figure for a build height of 1 */
 const FIGURE_H = 1.57;
+/** how tall a figure of build height 1 stands, in world units: for a screen working out where heads are */
+export const STAGE_FIGURE_H = FIGURE_H;
 
 /** Spots on the base: the captain in front in the middle, the others a step back and turned in. */
 const SPOTS = [

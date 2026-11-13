@@ -15,6 +15,7 @@ import { RARITY_LABEL, type PlayerDef } from '@/data/types';
 import { tapFeedback } from '@/fx/feedback';
 import { arcade, night, rarityPaint, tube as tubes } from '@/theme/arcade';
 import { px } from '@/theme/tokens';
+import { MIN_FIT_LABEL } from './measure';
 import { Rays, useSvgId } from './Room';
 import { OvrBox } from './Surface';
 import { Glow } from './Type';
@@ -87,7 +88,7 @@ export const Portrait = memo(function Portrait({ player, level, onPress, style }
             />
           )}
           <View style={[styles.side, { right: pad, top: stacked ? pad : 0, bottom: stacked ? undefined : 0, flexDirection: stacked ? 'column' : 'row', alignItems: stacked ? 'flex-end' : 'center' }]}>
-            <Glow face="sign" size={stacked ? 'sign' : 'large'} tube={tb} track="widest" tight room={w * 0.5}>
+            <Glow face="sign" size={stacked ? 'sign' : 'large'} tube={tb} track="widest" tight room={w * 0.5} least={MIN_FIT_LABEL}>
               {word}
             </Glow>
             {found && <OvrBox value={playerOverall(player, level)} tube={{ ...tb, glass: tb.soft }} small />}

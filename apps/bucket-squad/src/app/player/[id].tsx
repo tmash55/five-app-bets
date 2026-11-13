@@ -44,7 +44,7 @@ function Hint({ icon, text, tb }: { icon: LineIconName; text: string; tb: Tube }
   return (
     <View style={styles.hint}>
       <LineIcon name={icon} size={px(18)} tube={tb} weight={2.2} />
-      <Print face="bold" size="small" color="textSoft" lines={2} style={styles.grow}>
+      <Print face="bold" size="small" color="textSoft" style={styles.grow}>
         {text}
       </Print>
     </View>
@@ -94,16 +94,16 @@ function Detail({ player }: { player: PlayerDef }) {
 
         <NeonPanel tube={rp.tube} round={arcade.rBig} style={[styles.panel, { width: panelW }]}>
           <View style={styles.words}>
-            <Print face="display" size={name.size} track="tight" lines={1} style={{ lineHeight: Math.round(name.size * 1.04) }}>
+            <Print face="display" size={name.size} track="tight" style={{ lineHeight: Math.round(name.size * 1.04) }}>
               {name.text}
             </Print>
             <View style={styles.line}>
-              <Print face="bold" size="small" color={tubes.cyan.soft} track="wide" upper lines={1} style={styles.shrink}>
+              <Print face="bold" size="small" color={tubes.cyan.soft} track="wide" upper style={styles.shrink}>
                 {`${team.name} · ${player.role}`}
               </Print>
               <View style={styles.rarity}>
                 <Gems rarity={player.rarity} size={px(10)} />
-                <Print face="bold" size="tiny" color={tb.tint} track="widest" upper lines={1}>
+                <Print face="bold" size="tiny" color={tb.tint} track="widest" upper>
                   {RARITY_LABEL[player.rarity]}
                 </Print>
               </View>
@@ -113,7 +113,7 @@ function Detail({ player }: { player: PlayerDef }) {
 
           {have ? (
             <>
-              <Print face="body" size="small" color="textMuted" lines={2}>
+              <Print face="body" size="small" color="textMuted">
                 {player.nickname ? `"${player.nickname}". ${player.blurb}` : player.blurb}
               </Print>
               <View style={[styles.ratings, { columnGap: space.lg }]}>
@@ -132,13 +132,13 @@ function Detail({ player }: { player: PlayerDef }) {
                   <Pips have={prog.level} of={MAX_LEVEL} tube="gold" size={px(9)} />
                 </View>
                 {prog.maxed ? (
-                  <Print face="bold" size="small" color={tubes.gold.soft} lines={2} style={styles.grow}>
+                  <Print face="bold" size="small" color={tubes.gold.soft} style={styles.grow}>
                     Top level! Extra copies turn into coins.
                   </Print>
                 ) : (
                   <View accessible accessibilityLabel={`${left} more ${left === 1 ? 'copy' : 'copies'} to level up`} style={styles.levelBar}>
                     <SegBar lit={prog.have} lamps={prog.need} tube="gold" small style={{ width: prog.need * COPY_LAMP }} />
-                    <Print face="bold" size="tiny" color="textDim" track="normal" lines={1}>
+                    <Print face="bold" size="tiny" color="textDim" track="normal">
                       {`${left} MORE ${left === 1 ? 'COPY' : 'COPIES'} TO LEVEL UP`}
                     </Print>
                   </View>
@@ -152,7 +152,7 @@ function Detail({ player }: { player: PlayerDef }) {
             </>
           ) : (
             <>
-              <Print face="body" size="small" color="textMuted" lines={3}>
+              <Print face="body" size="small" color="textMuted">
                 {`A mystery ${player.role} from the ${team.place} ${team.name}. Their ratings show up once you find them.`}
               </Print>
               <Well style={styles.hints}>
