@@ -11,23 +11,25 @@ import { levelOf, type Gain } from '@/meta/collection';
 import { tierProgress, type Tier } from '@/meta/ladder';
 import type { MatchSetup, MatchSummary, PlayerLine } from '@/meta/match';
 import type { RewardLine } from '@/meta/rewards';
-import { nextTourGame, tourById } from '@/meta/tour';
+import { packById } from '@/meta/packs';
+import { nextTourGame, tourById, type Tour } from '@/meta/tour';
 import type { MatchOutcome } from '@/state/logic';
 import { startNext } from '@/state/play';
 import { useSave } from '@/state/save';
 import { useSession } from '@/state/session';
-import { arcade, night, tube as tubes } from '@/theme/arcade';
+import { arcade, neonLeading, night, tube as tubes } from '@/theme/arcade';
 import { px, size as sizes, space } from '@/theme/tokens';
 import { useCountUp } from '@/ui/Bits';
 import { useAfter } from '@/ui/hooks';
 import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
-import { GhostButton, GoldButton } from '@/ui/arcade/Buttons';
+import { DECK_H, GhostButton, GoldButton, KeyButton } from '@/ui/arcade/Buttons';
 import { ArcadeCard } from '@/ui/arcade/Card';
 import { SignHead, Star } from '@/ui/arcade/Controls';
 import { Face } from '@/ui/arcade/Face';
-import { LineIcon } from '@/ui/arcade/LineIcon';
+import { LineIcon, type LineIconName } from '@/ui/arcade/LineIcon';
 import { TierMedal, tierIndexOf, tierTube } from '@/ui/arcade/Medal';
-import { Arrive } from '@/ui/arcade/Motion';
+import { FoilPack } from '@/ui/arcade/Foil';
+import { Arrive, Breathe } from '@/ui/arcade/Motion';
 import { Popup } from '@/ui/arcade/Popup';
 import { CoinAmount, PackPrize } from '@/ui/arcade/Rewards';
 import { Rays } from '@/ui/arcade/Room';
@@ -45,6 +47,8 @@ const LINES_START = 500;
 const STARS_START = 420;
 const STAR_MS = 320;
 const SCORE = px(56);
+/** the buttons at the bottom come up once the score and the best player are in */
+const DECK_AT = 260;
 const STAR = px(30);
 const MOMENT_CARD = sizes.card + space.md;
 
@@ -55,6 +59,18 @@ function statLine(p: PlayerLine): string {
   if (p.steals > 0) parts.push(`${p.steals} STL`);
   if (p.blocks > 0) parts.push(`${p.blocks} BLK`);
   return parts.slice(0, 4).join('  ·  ');
+}
+
+/** What the yellow button at the bottom says: what it does, the game it starts, and its picture. */
+function goNext(setup: MatchSetup, won: boolean, tour: Tour | null, nextStop: { stage: number; game: number } | null): { label: string; sub: string; icon: LineIconName } {
+  const label = nextStop ? 'NEXT GAME' : won ? 'PLAY AGAIN' : 'TRY AGAIN';
+  const icon: LineIconName = nextStop ? 'play' : 'again';
+  const at = nextStop ?? (setup.tour ? { stage: setup.tour.stage, game: setup.tour.game } : null);
+  const stop = tour && at ? tour.stages[at.stage] : undefined;
+  const game = stop?.games[at?.game ?? 0];
+  if (stop && game) return { label, icon, sub: `${stop.team.name} · ${game.title}`.toUpperCase() };
+  const size = `${setup.perTeam} ON ${setup.perTeam}`;
+  return { label, icon, sub: setup.mode === 'ladder' ? `LADDER · ${size}` : `QUICK GAME · ${size}` };
 }
 
 function headline(s: MatchSummary): string {
@@ -162,6 +178,8 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
   const [burst, setBurst] = useState(0);
   const [starsLit, setStarsLit] = useState(0);
   const [momentsOn, setMomentsOn] = useState(false);
+  /** every line is in and counted: the yellow button starts to breathe */
+  const [settled, setSettled] = useState(false);
   const list = useRef<ComponentRef<typeof ScrollView>>(null);
   /** how tall the list and one of its lines are */
   const room = useRef({ list: 0, line: 0 });
@@ -192,6 +210,7 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
     );
     const done = LINES_START + lines.length * LINE_MS;
     after(done + 150, () => playSfx('coins'));
+    after(done + 300, () => setSettled(true));
     after(done + 500, () => setMomentsOn(true));
     after(Math.max(2600, done + 600), () => setMusic('menu'));
   }, [after, lines, summary.won, earnedStars]);
@@ -206,7 +225,8 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
   const packIds = Object.keys(packs).filter((id) => packs[id] > 0);
   const packCount = packIds.reduce((a, id) => a + packs[id], 0);
   const tour = setup.mode === 'tour' && setup.tour ? tourById(setup.tour.tourId, homeTeam) : null;
-  const hasNext = tour !== null && summary.won && nextTourGame(tourProgress, tour) !== null;
+  const nextStop = tour !== null && summary.won ? nextTourGame(tourProgress, tour) : null;
+  const go = goNext(setup, summary.won, tour, nextStop);
   const tp = outcome.ladder ? tierProgress(outcome.ladder.after) : null;
   const ladderGain = outcome.ladder ? outcome.ladder.after - outcome.ladder.before : 0;
   const wonPacks: string[] = [];
@@ -229,9 +249,7 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
             <Arrive>
               <Well style={styles.board}>
                 <ScoreSide name={summary.names[0]} score={summary.score[0]} lit={summary.won} />
-                <Print face="display" size="title" color="textFaint" style={styles.dash}>
-                  -
-                </Print>
+                <View style={styles.dash} />
                 <ScoreSide name={summary.names[1]} score={summary.score[1]} lit={!summary.won} mark={<TeamMark team={away} small />} />
               </Well>
             </Arrive>
@@ -316,7 +334,7 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
                       {l.label}
                     </Print>
                     <View style={styles.leader} />
-                    <CoinAmount coins={l.coins} size="small" plus />
+                    <CoinAmount coins={l.coins} size="small" plus plain />
                   </View>
                 ))}
               </ScrollView>
@@ -356,11 +374,29 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
           </Arrive>
         </View>
 
-        <View style={styles.buttons}>
-          <GhostButton label="HOME" icon="home" tube="cyan" onPress={() => router.dismissTo('/')} style={styles.side} />
-          {packCount > 0 && <GhostButton label={`OPEN PACK${packCount > 1 ? `S (${packCount})` : ''}`} icon="pack" tube="pink" onPress={() => router.push({ pathname: '/open', params: { pack: packIds[0] } })} style={styles.side} />}
-          <GoldButton label={hasNext ? 'NEXT GAME' : 'PLAY AGAIN'} icon="play" onPress={again} style={styles.main} />
-        </View>
+        {/* the way home in the left corner, the next game under the coins, all the same height; packs to open (or the squad) in between */}
+        <Arrive delay={DECK_AT} from="up" style={styles.deck}>
+          <View style={styles.deckLeft}>
+            <KeyButton label="HOME" icon="home" tube="cyan" sound="back" onPress={() => router.dismissTo('/')} />
+            {packCount > 0 && (
+              <GhostButton
+                tall
+                label={packCount > 1 ? 'OPEN PACKS' : 'OPEN PACK'}
+                art={<FoilPack pack={packById(packIds[0])} width={px(24)} />}
+                badge={packCount}
+                tube="pink"
+                accessibilityLabel={`Open ${packCount === 1 ? 'your pack' : `your ${packCount} packs`}`}
+                onPress={() => router.push({ pathname: '/open', params: { pack: packIds[0] } })}
+                style={styles.grow}
+              />
+            )}
+            {/* nothing to open: the squad instead, to change players before the next game (back comes here again) */}
+            {packCount === 0 && <GhostButton tall label="MY SQUAD" icon="squad" tube="violet" onPress={() => router.push('/squad')} style={styles.grow} />}
+          </View>
+          <Breathe on={settled} depth={0} swell={0.03} ms={900} style={styles.deckRight}>
+            <GoldButton label={go.label} sub={go.sub} icon={go.icon} onPress={again} accessibilityLabel={`${go.label}. ${go.sub}`} />
+          </Breathe>
+        </Arrive>
       </ArcadeScreen>
       {momentsOn && moments.length > 0 && <MomentOverlay key={moments.length} moment={moments[0]} onClose={() => setMoments((m) => m.slice(1))} />}
     </View>
@@ -408,8 +444,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.xs,
   },
+  // a short lit bar between the two scores, level with the middle of their digits
   dash: {
-    marginBottom: SCORE * 0.3,
+    width: px(18),
+    height: px(6),
+    borderRadius: px(3),
+    backgroundColor: night.lineLit,
+    marginBottom: Math.round((SCORE * neonLeading.display) / 2) - px(3),
   },
   centerSelf: {
     alignSelf: 'center',
@@ -505,18 +546,26 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     borderColor: tubes.green.glass,
   },
-  buttons: {
+  // the bottom row keeps the columns above it: its left part under the score, the yellow button under the coins
+  deck: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.lg,
+    height: DECK_H,
+    marginTop: space.md,
+    marginBottom: space.xs,
+  },
+  deckLeft: {
+    flex: 1.1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    paddingTop: space.sm,
-    paddingBottom: space.xs,
   },
-  side: {
+  deckRight: {
     flex: 1,
   },
-  main: {
-    flex: 1.4,
+  grow: {
+    flex: 1,
   },
   moment: {
     flexDirection: 'row',

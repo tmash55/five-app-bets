@@ -16,6 +16,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { setMusicEnabled, setSoundEnabled, warmSounds } from '@/audio/sound';
 import { exposeForTooling } from '@/dev/expose';
+import { DevInsets } from '@/dev/insets';
 import { setHapticsEnabled } from '@/fx/feedback';
 import { useSave, useSaveReady } from '@/state/save';
 import { night } from '@/theme/arcade';
@@ -59,10 +60,12 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar hidden />
-      {/* no swipe-back: in landscape it would fight the game pad's stick */}
-      <Stack screenOptions={{ headerShown: false, animation: 'fade', gestureEnabled: false, contentStyle: { backgroundColor: night.wallTop } }} />
-      {opening && <Boot onShown={() => SplashScreen.hideAsync().catch(() => {})} onDone={() => setOpening(false)} />}
+      <DevInsets>
+        <StatusBar hidden />
+        {/* no swipe-back: in landscape it would fight the game pad's stick */}
+        <Stack screenOptions={{ headerShown: false, animation: 'fade', gestureEnabled: false, contentStyle: { backgroundColor: night.wallTop } }} />
+        {opening && <Boot onShown={() => SplashScreen.hideAsync().catch(() => {})} onDone={() => setOpening(false)} />}
+      </DevInsets>
     </SafeAreaProvider>
   );
 }

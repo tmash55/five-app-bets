@@ -35,14 +35,14 @@ export function useWidth(what?: string): [number, (e: LayoutChangeEvent) => void
   return [seen.what === what ? seen.width : 0, onLayout];
 }
 
-/** a label measured by hand may come out a touch wider than it is drawn: let it into the padding before shrinking it */
-const GIVE = 1.04;
-
 type GoldSize = 'big' | 'regular' | 'small';
+
+/** how tall the buttons at the foot of a page are, so a row of them lines up: the regular yellow button's height */
+export const DECK_H = px(60);
 
 const GOLD: Record<GoldSize, { height: number; round: number; lip: number; padX: number; gap: number; label: number; icon: number; ring: boolean; glow: readonly [number, number, number] }> = {
   big: { height: px(88), round: arcade.rBig, lip: px(6), padX: px(18), gap: px(14), label: neonText.huge, icon: px(46), ring: true, glow: [22, 0.75, 4] },
-  regular: { height: px(60), round: arcade.rTile, lip: px(6), padX: px(16), gap: px(12), label: px(25), icon: px(24), ring: true, glow: [22, 0.7, 4] },
+  regular: { height: DECK_H, round: arcade.rTile, lip: px(6), padX: px(16), gap: px(12), label: px(25), icon: px(24), ring: true, glow: [22, 0.7, 4] },
   small: { height: sizes.tap, round: arcade.rButton, lip: px(4), padX: px(12), gap: px(8), label: neonText.large, icon: px(18), ring: false, glow: [12, 0.65, 0] },
 };
 
@@ -73,7 +73,7 @@ export function GoldButton({ label, sub, icon, iconAfter, size = 'regular', onPr
     onPress?.();
   }, [onPress, quiet, sound]);
   const used = g.padX * 2 + (icon ? g.icon + g.gap : 0) + (iconAfter ? g.icon + g.gap : 0);
-  const room = width > 0 ? (width - used) * GIVE : undefined;
+  const room = width > 0 ? width - used : undefined;
   const big = size === 'big';
   return (
     <Pressable
@@ -173,8 +173,14 @@ export function RoundButton({ icon, label, onPress, tube: t, quiet, sound, disab
 export interface GhostButtonProps {
   label: string;
   icon?: LineIconName;
+  /** a small picture in place of the icon (a pack in its foil) */
+  art?: React.ReactNode;
   tube?: TubeName | Tube;
   small?: boolean;
+  /** as tall as the yellow button beside it, for the row of buttons at the foot of a page */
+  tall?: boolean;
+  /** a lit number on its corner */
+  badge?: number;
   /** switched off it is a quiet outline: a choice not taken, a thing not on */
   lit?: boolean;
   onPress?: () => void;
@@ -186,16 +192,18 @@ export interface GhostButtonProps {
 }
 
 /** A dark button with a lit edge, for everything that is not the next thing to do. */
-export function GhostButton({ label, icon, tube: t = 'cyan', small, lit = true, onPress, disabled, quiet, sound, accessibilityLabel, style }: GhostButtonProps) {
+export function GhostButton({ label, icon, art, tube: t = 'cyan', small, tall, badge = 0, lit = true, onPress, disabled, quiet, sound, accessibilityLabel, style }: GhostButtonProps) {
   const tb = tubeOf(t);
   const [width, onLayout] = useWidth(label);
+  const [artW, onArtLayout] = useWidth();
   const press = useCallback(() => {
     if (!quiet) tapFeedback(sound);
     onPress?.();
   }, [onPress, quiet, sound]);
-  const iconSize = small ? px(16) : px(19);
-  const padX = small ? px(10) : px(14);
-  const room = width > 0 ? (width - padX * 2 - (icon ? iconSize + space.sm : 0) - arcade.outline * 2) * GIVE : undefined;
+  const iconSize = small ? px(16) : tall ? px(22) : px(19);
+  const padX = small ? px(10) : tall ? px(16) : px(14);
+  const before = art !== undefined ? artW + space.sm : icon ? iconSize + space.sm : 0;
+  const room = width > 0 ? width - padX * 2 - before - arcade.outline * 2 : undefined;
   return (
     <Pressable
       accessibilityRole="button"
@@ -208,14 +216,52 @@ export function GhostButton({ label, icon, tube: t = 'cyan', small, lit = true, 
       style={({ pressed }) => [
         styles.ghost,
         small && styles.ghostSmall,
+        tall && styles.ghostTall,
         { paddingHorizontal: padX },
         lit ? { borderColor: tb.glass, boxShadow: [halo(tb.glass, 10, pressed ? 0.35 : 0.6), inner(tb.glass, 12, 0.25)] } : styles.ghostOff,
         pressed && styles.pressed,
         disabled && styles.off,
         style,
       ]}>
-      {icon && <LineIcon name={icon} size={iconSize} tube={lit ? tb : undefined} color={lit ? undefined : night.textFaint} weight={2.2} />}
-      <Print face="display" size={small ? 'small' : 'body'} color={lit ? tb.tint : 'textDim'} track="normal" room={room} least={MIN_FIT_LABEL}>
+      {art !== undefined ? <View onLayout={onArtLayout}>{art}</View> : icon && <LineIcon name={icon} size={iconSize} tube={lit ? tb : undefined} color={lit ? undefined : night.textFaint} weight={2.2} />}
+      <Print face="display" size={small ? 'small' : tall ? 'large' : 'body'} color={lit ? tb.tint : 'textDim'} track={tall ? 'wide' : 'normal'} room={room} least={MIN_FIT_LABEL}>
+        {label}
+      </Print>
+      <CountBadge count={badge} tube={tb} style={styles.cornerBadge} />
+    </Pressable>
+  );
+}
+
+export interface KeyButtonProps {
+  label: string;
+  icon: LineIconName;
+  tube?: TubeName | Tube;
+  onPress?: () => void;
+  quiet?: boolean;
+  sound?: SfxName;
+  accessibilityLabel?: string;
+  style?: StyleProp<ViewStyle>;
+}
+
+/**
+ * A square key with a lit picture over one short word, as tall as the yellow button: the way out beside
+ * the big thing to do next, which a child knows by its picture before they can read the word.
+ */
+export function KeyButton({ label, icon, tube: t = 'cyan', onPress, quiet, sound, accessibilityLabel, style }: KeyButtonProps) {
+  const tb = tubeOf(t);
+  const press = useCallback(() => {
+    if (!quiet) tapFeedback(sound);
+    onPress?.();
+  }, [onPress, quiet, sound]);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      hitSlop={space.xs}
+      onPress={press}
+      style={({ pressed }) => [styles.key, { borderColor: tb.glass, boxShadow: [halo(tb.glass, 12, pressed ? 0.35 : 0.65), inner(tb.glass, 16, 0.3)] }, pressed && styles.pressed, style]}>
+      <LineIcon name={icon} size={px(24)} tube={tb} weight={2.4} />
+      <Print face="display" size="small" color={tb.tint} track="wide" lines={1}>
         {label}
       </Print>
     </Pressable>
@@ -239,7 +285,7 @@ export interface NeonTileProps {
 export function NeonTile({ tube: t, icon, title, sub, badge = 0, onPress, accessibilityLabel, style }: NeonTileProps) {
   const tb = tubeOf(t);
   const [width, onLayout] = useWidth(title);
-  const room = width > 0 ? (width - TILE_PAD_X * 2 - arcade.outline * 2) * GIVE : undefined;
+  const room = width > 0 ? width - TILE_PAD_X * 2 - arcade.outline * 2 : undefined;
   return (
     <Pressable
       accessibilityRole="button"
@@ -342,8 +388,29 @@ const styles = StyleSheet.create({
     height: px(36),
     borderRadius: arcade.rCell,
   },
+  ghostTall: {
+    height: DECK_H,
+    borderRadius: arcade.rTile,
+    gap: px(10),
+  },
   ghostOff: {
     borderColor: night.lineLit,
+  },
+  cornerBadge: {
+    position: 'absolute',
+    right: -px(8),
+    top: -px(10),
+  },
+  key: {
+    height: DECK_H,
+    minWidth: DECK_H * 1.3,
+    paddingHorizontal: px(12),
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: px(3),
+    backgroundColor: night.pit,
+    borderWidth: arcade.outline,
+    borderRadius: arcade.rTile,
   },
   tile: {
     justifyContent: 'center',

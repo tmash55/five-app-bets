@@ -18,9 +18,6 @@ import { MIN_FIT_LABEL } from './measure';
 import { CountBadge } from './Surface';
 import { Glow, Print } from './Type';
 
-/** a label measured by hand may come out a touch wider than it is drawn (as in Buttons) */
-const GIVE = 1.04;
-
 export interface SignHeadProps {
   title: string;
   tube?: TubeName | Tube;
@@ -106,7 +103,7 @@ const Lamps = memo(function Lamps({ count, lit, tube: tb }: { count: number; lit
 function PickCell<T extends string | number>({ option, on, tube: tb, fill, onPick }: { option: Choice<T>; on: boolean; tube: Tube; fill: boolean; onPick: (value: T) => void }) {
   const [width, onLayout] = useWidth(fill ? option.label : undefined);
   const iconSize = px(16);
-  const room = fill && width > 0 ? (width - PICK_PAD * 2 - arcade.outline * 2 - (option.icon ? iconSize + space.xs : 0)) * GIVE : undefined;
+  const room = fill && width > 0 ? width - PICK_PAD * 2 - arcade.outline * 2 - (option.icon ? iconSize + space.xs : 0) : undefined;
   const tall = option.lamps !== undefined;
   return (
     <Pressable
@@ -175,7 +172,7 @@ export interface LampSwitchProps {
 export function LampSwitch({ label, on, onChange, icon, iconOff, tube: t = 'green', sound, style }: LampSwitchProps) {
   const tb = tubeOf(t);
   const [width, onLayout] = useWidth(label);
-  const room = width > 0 ? (width - SWITCH_PAD * 2 - arcade.outline * 2) * GIVE : undefined;
+  const room = width > 0 ? width - SWITCH_PAD * 2 - arcade.outline * 2 : undefined;
   const press = useCallback(() => {
     tapFeedback(sound);
     onChange(!on);

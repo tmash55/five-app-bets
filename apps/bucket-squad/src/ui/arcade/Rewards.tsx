@@ -20,12 +20,28 @@ const COIN: Record<PrizeSize, { coin: number; text: number }> = {
 };
 
 /** An amount of coins: the coin, then the number in lit gold. */
-export function CoinAmount({ coins, size = 'body', plus, dim, style }: { coins: number; size?: PrizeSize; plus?: boolean; /** not earned yet, or already taken */ dim?: boolean; style?: StyleProp<ViewStyle> }) {
+export function CoinAmount({
+  coins,
+  size = 'body',
+  plus,
+  dim,
+  plain,
+  style,
+}: {
+  coins: number;
+  size?: PrizeSize;
+  plus?: boolean;
+  /** not earned yet, or already taken */
+  dim?: boolean;
+  /** no light round the number: for a line inside a list that scrolls, where a phone would cut the light off square */
+  plain?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
   const c = COIN[size];
   return (
     <View accessible accessibilityLabel={`${coins} coins`} style={[styles.row, { gap: c.coin * 0.32 }, style]}>
       <Coin size={c.coin} />
-      <Print face="bold" size={c.text} color={dim ? 'textFaint' : tubes.gold.glass} track="wide" glow={dim ? undefined : tubes.gold.glass} lines={1}>
+      <Print face="bold" size={c.text} color={dim ? 'textFaint' : tubes.gold.glass} track="wide" glow={dim || plain ? undefined : tubes.gold.glass} lines={1}>
         {`${plus ? '+' : ''}${coins.toLocaleString('en-US')}`}
       </Print>
     </View>
