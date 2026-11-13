@@ -9,7 +9,7 @@
  */
 
 import { memo, useLayoutEffect, useMemo, type ComponentType } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated';
 
 import { px } from '@/theme/tokens';
@@ -170,7 +170,8 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
   },
-  off: {
-    opacity: 0,
-  },
+  // out of sight but built. A browser keeps a layer for everything it draws, even unseen, and a few hundred
+  // waiting bulbs and sparks can run its software renderer out of tiles, so there it is not drawn at all; a
+  // phone keeps the views made and simply does not show them
+  off: Platform.OS === 'web' ? { display: 'none' } : { opacity: 0 },
 });
