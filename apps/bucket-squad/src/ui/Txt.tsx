@@ -3,7 +3,7 @@
 import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
 import { color, font, stroke, text, type ColorName } from '@/theme/tokens';
-import { MIN_FIT_LABEL } from './fitName';
+import { MIN_FIT_LABEL, fitSize } from './fitName';
 
 type SizeName = keyof typeof text;
 type FontName = keyof typeof font;
@@ -69,6 +69,8 @@ export interface StickerTextProps {
   /** how far the hard shadow drops below the letters */
   drop?: number;
   center?: boolean;
+  /** the width there is for the lettering: it shrinks a little to stay on one line inside it */
+  room?: number;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -77,8 +79,8 @@ export interface StickerTextProps {
  * die-cut sticker. Built from stacked copies because text strokes are not
  * available on every platform.
  */
-export function StickerText({ children, size = 'big', color: c = 'white', outline = 'ink', weight = stroke.regular, drop, center, style }: StickerTextProps) {
-  const px = text[size];
+export function StickerText({ children, size = 'big', color: c = 'white', outline = 'ink', weight = stroke.regular, drop, center, room, style }: StickerTextProps) {
+  const px = room === undefined ? text[size] : fitSize(children, text[size], room - weight * 2);
   const d = drop ?? Math.max(3, Math.round(px * 0.09));
   const base: TextStyle = {
     fontFamily: font.display,
@@ -89,16 +91,19 @@ export function StickerText({ children, size = 'big', color: c = 'white', outlin
   const edge = resolveColor(outline);
   return (
     <View style={[{ paddingHorizontal: weight, paddingTop: weight, paddingBottom: weight + d }, style]}>
-      {RING.map(([x, y], i) => (
-        <Text key={`s${i}`} allowFontScaling={false} style={[base, styles.layer, { color: edge, left: weight + x * weight, right: weight - x * weight, top: weight + y * weight + d }]}>
-          {children}
-        </Text>
-      ))}
-      {RING.map(([x, y], i) => (
-        <Text key={`o${i}`} allowFontScaling={false} style={[base, styles.layer, { color: edge, left: weight + x * weight, right: weight - x * weight, top: weight + y * weight }]}>
-          {children}
-        </Text>
-      ))}
+      {/* the copies are only ink: a screen reader gets the lettering once, from the top layer */}
+      <View pointerEvents="none" aria-hidden importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={StyleSheet.absoluteFill}>
+        {RING.map(([x, y], i) => (
+          <Text key={`s${i}`} allowFontScaling={false} style={[base, styles.layer, { color: edge, left: weight + x * weight, right: weight - x * weight, top: weight + y * weight + d }]}>
+            {children}
+          </Text>
+        ))}
+        {RING.map(([x, y], i) => (
+          <Text key={`o${i}`} allowFontScaling={false} style={[base, styles.layer, { color: edge, left: weight + x * weight, right: weight - x * weight, top: weight + y * weight }]}>
+            {children}
+          </Text>
+        ))}
+      </View>
       <Text allowFontScaling={false} style={[base, { color: resolveColor(c) }]}>
         {children}
       </Text>

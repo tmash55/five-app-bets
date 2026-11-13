@@ -167,7 +167,10 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+  // a few packs sit in the middle of the screen; a long row scrolls from the left
   scroll: {
+    flexGrow: 1,
+    justifyContent: 'center',
     gap: space.xl,
     paddingRight: space.lg,
     alignItems: 'center',

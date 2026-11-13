@@ -13,11 +13,15 @@ import { color, px, radius, size as sizes, space, stroke } from '@/theme/tokens'
 import { Tag } from '@/ui/Bits';
 import { Icon, type IconName } from '@/ui/Icon';
 import { PlayerCard } from '@/ui/PlayerCard';
+import { columnsThatFit, rowsOf } from '@/ui/rows';
 import { Screen, useBodySize } from '@/ui/Screen';
 import { Txt } from '@/ui/Txt';
 
 /** what the spot labels, tags and hint need around the three squad cards */
 const AROUND_CARDS = px(104);
+/** the dashed ring round a spot, both sides of its card */
+const RING = (stroke.regular + space.hair) * 2;
+const BENCH_CARD = sizes.cardSmall - space.sm;
 
 const SPOTS: readonly { label: string; icon: IconName }[] = [
   { label: 'CAPTAIN', icon: 'crown' },
@@ -65,7 +69,8 @@ export default function Squad() {
   };
 
   const leftW = body.width * 0.46;
-  const spotW = Math.max(sizes.cardSmall - space.md, Math.min(sizes.card, Math.floor((leftW - space.sm * 2) / 3), Math.floor((body.height - AROUND_CARDS) / sizes.cardRatio)));
+  const spotW = Math.max(sizes.cardSmall - space.md, Math.min(sizes.card, Math.floor((leftW - space.sm * 2 - RING * 3) / 3), Math.floor((body.height - AROUND_CARDS) / sizes.cardRatio)));
+  const benchColumns = columnsThatFit(body.width - leftW - space.lg - space.xs * 2, BENCH_CARD, space.sm);
   const hint = pick !== null ? `Tap a spot for ${mustPlayer(pick).name}.` : spot !== null ? 'Now tap the player you want there.' : 'Tap a spot, then tap a player. Your squad wears the captain’s uniform.';
 
   return (
@@ -96,19 +101,25 @@ export default function Squad() {
           </Txt>
         </View>
         <ScrollView style={styles.bench} contentContainerStyle={styles.benchBody} showsVerticalScrollIndicator={false}>
-          {mine.map((p) => {
-            const at = squad.indexOf(p.id);
-            return (
-              <View key={p.id}>
-                <PlayerCard player={p} level={level(p.id)} width={sizes.cardSmall - space.sm} selected={pick === p.id} onPress={() => tapPlayer(p.id)} />
-                {at >= 0 && (
-                  <View pointerEvents="none" style={styles.inSquad}>
-                    <Icon name={SPOTS[at].icon} size={sizes.iconTiny} color={at === 0 ? 'sun' : 'white'} />
-                  </View>
-                )}
+          <View style={styles.benchRows}>
+            {rowsOf(mine, benchColumns).map((row) => (
+              <View key={row[0].id} style={styles.benchRow}>
+                {row.map((p) => {
+                  const at = squad.indexOf(p.id);
+                  return (
+                    <View key={p.id}>
+                      <PlayerCard player={p} level={level(p.id)} width={BENCH_CARD} selected={pick === p.id} onPress={() => tapPlayer(p.id)} />
+                      {at >= 0 && (
+                        <View pointerEvents="none" style={styles.inSquad}>
+                          <Icon name={SPOTS[at].icon} size={sizes.iconTiny} color={at === 0 ? 'sun' : 'white'} />
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
               </View>
-            );
-          })}
+            ))}
+          </View>
         </ScrollView>
       </View>
     </Screen>
@@ -160,13 +171,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   benchBody: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space.sm,
-    justifyContent: 'center',
+    alignItems: 'center',
     paddingBottom: space.md,
     paddingTop: space.xs,
     paddingHorizontal: space.xs,
+  },
+  // the rows share a left edge, and the whole block sits in the middle
+  benchRows: {
+    gap: space.sm,
+  },
+  benchRow: {
+    flexDirection: 'row',
+    gap: space.sm,
   },
   // the spot's own icon on the corner the card leaves free, so the rating stays readable
   inSquad: {

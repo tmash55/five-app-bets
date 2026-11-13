@@ -454,8 +454,10 @@ const styles = StyleSheet.create({
     backgroundColor: color.white,
     zIndex: layer.overlay,
   },
+  // the same row every other screen's header has, so the coins do not jump on the way here
   top: {
     position: 'absolute',
+    height: sizes.button,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',

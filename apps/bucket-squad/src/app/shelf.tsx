@@ -12,6 +12,7 @@ import { size as sizes, space } from '@/theme/tokens';
 import { Tag, TeamBadge } from '@/ui/Bits';
 import { HeaderTabs } from '@/ui/Inputs';
 import { PlayerCard } from '@/ui/PlayerCard';
+import { rowsOf } from '@/ui/rows';
 import { Screen, useBodySize } from '@/ui/Screen';
 import { Sticker } from '@/ui/Sticker';
 import { Txt } from '@/ui/Txt';
@@ -40,11 +41,15 @@ function TeamPage({ team, owned, fresh, cardW, onOpen }: { team: TeamDef; owned:
         </Txt>
         <Tag label={`${have} / ${players.length}`} fill={have === players.length ? 'mint' : 'paperDim'} style={styles.centerSelf} />
       </View>
-      <View style={[styles.grid, { width: cardW * columns + space.sm * (columns - 1) }]}>
-        {players.map((p) => {
-          const copies = owned[p.id] ?? 0;
-          return <PlayerCard key={p.id} player={p} level={levelOf(copies)} locked={copies === 0} fresh={fresh.includes(p.id)} width={cardW} onPress={() => onOpen(p.id)} />;
-        })}
+      <View style={styles.grid}>
+        {rowsOf(players, columns).map((row) => (
+          <View key={row[0].id} style={styles.gridRow}>
+            {row.map((p) => {
+              const copies = owned[p.id] ?? 0;
+              return <PlayerCard key={p.id} player={p} level={levelOf(copies)} locked={copies === 0} fresh={fresh.includes(p.id)} width={cardW} onPress={() => onOpen(p.id)} />;
+            })}
+          </View>
+        ))}
       </View>
     </Sticker>
   );
@@ -103,8 +108,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   grid: {
+    gap: space.sm,
+  },
+  gridRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: space.sm,
   },
   centerSelf: {

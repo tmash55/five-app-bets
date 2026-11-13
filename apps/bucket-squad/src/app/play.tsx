@@ -11,17 +11,20 @@ import { useSave } from '@/state/save';
 import { color, size as sizes, space, stroke, type ColorName } from '@/theme/tokens';
 import { ProgressBar, Tag, TeamBadge } from '@/ui/Bits';
 import { Icon, type IconName } from '@/ui/Icon';
-import { Screen, Sunburst } from '@/ui/Screen';
+import { Screen, Sunburst, useBodySize } from '@/ui/Screen';
 import { StickerButton } from '@/ui/Sticker';
 import { StickerText, Txt } from '@/ui/Txt';
 
 function ModeCard({ title, text, icon, fill, onPress, children }: { title: string; text: string; icon: IconName; fill: ColorName; onPress: () => void; children: React.ReactNode }) {
+  const body = useBodySize();
+  // three cards share the row; the lettering keeps a gap from its card's edges
+  const room = (body.width - space.lg * 2) / 3 - (stroke.regular + space.md) * 2;
   return (
     <StickerButton fill={fill} round="xl" raise="high" stretch onPress={onPress} accessibilityLabel={`${title}. ${text}`} style={styles.card} face={styles.cardFace}>
       <Sunburst strength={0.16} />
       <View style={styles.cardTop}>
         <Icon name={icon} size={sizes.iconHuge + space.sm} color="white" />
-        <StickerText size="big" color="white" center>
+        <StickerText size="big" color="white" center room={room}>
           {title}
         </StickerText>
         <Txt font="bodyBold" size="body" color="ink" center style={styles.cardText}>
