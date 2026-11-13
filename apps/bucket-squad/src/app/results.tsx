@@ -1,4 +1,4 @@
-/** After the final buzzer: the score, the best player, and every coin and prize the game earned. */
+/** After the final buzzer: the score, the best player, and every coin and prize the game earned, in lights. */
 
 import { Redirect, useRouter } from 'expo-router';
 import { useEffect, useRef, useState, type ComponentRef } from 'react';
@@ -16,23 +16,37 @@ import type { MatchOutcome } from '@/state/logic';
 import { startNext } from '@/state/play';
 import { useSave } from '@/state/save';
 import { useSession } from '@/state/session';
-import { color, px, size as sizes, space, stroke } from '@/theme/tokens';
-import { Avatar, ProgressBar, Stars, Tag, TeamBadge, useCountUp } from '@/ui/Bits';
-import { Confetti } from '@/ui/Confetti';
+import { arcade, night, tube as tubes } from '@/theme/arcade';
+import { px, size as sizes, space } from '@/theme/tokens';
+import { useCountUp } from '@/ui/Bits';
 import { useAfter } from '@/ui/hooks';
-import { Icon } from '@/ui/Icon';
-import { Overlay, Panel } from '@/ui/Overlay';
-import { PlayerCard } from '@/ui/PlayerCard';
-import { CoinAmount, PackChip } from '@/ui/Rewards';
-import { Screen } from '@/ui/Screen';
-import { Sticker, StickerButton } from '@/ui/Sticker';
-import { StickerText, Txt } from '@/ui/Txt';
+import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
+import { GhostButton, GoldButton } from '@/ui/arcade/Buttons';
+import { ArcadeCard } from '@/ui/arcade/Card';
+import { SignHead, Star } from '@/ui/arcade/Controls';
+import { Face } from '@/ui/arcade/Face';
+import { LineIcon } from '@/ui/arcade/LineIcon';
+import { TierMedal, tierIndexOf, tierTube } from '@/ui/arcade/Medal';
+import { Arrive } from '@/ui/arcade/Motion';
+import { Popup } from '@/ui/arcade/Popup';
+import { CoinAmount, PackPrize } from '@/ui/arcade/Rewards';
+import { Rays } from '@/ui/arcade/Room';
+import { SegBar } from '@/ui/arcade/SegBar';
+import { Sparks } from '@/ui/arcade/Sparks';
+import { Chip, NeonPanel, Plate, Tag, TeamMark, Well } from '@/ui/arcade/Surface';
+import { Glow, Print } from '@/ui/arcade/Type';
 
 type Moment = { kind: 'player'; gain: Gain } | { kind: 'tier'; tier: Tier };
 
 /** time between reward lines appearing */
 const LINE_MS = 240;
 const LINES_START = 500;
+/** the tour stars light one after another, in step with the first reward lines */
+const STARS_START = 420;
+const STAR_MS = 320;
+const SCORE = px(56);
+const STAR = px(30);
+const MOMENT_CARD = sizes.card + space.md;
 
 function statLine(p: PlayerLine): string {
   const parts = [`${p.points} PTS`];
@@ -57,43 +71,69 @@ function MomentOverlay({ moment, onClose }: { moment: Moment; onClose: () => voi
     const player = mustPlayer(moment.gain.playerId);
     const title = moment.gain.isNew ? 'NEW PLAYER!' : moment.gain.levelAfter > moment.gain.levelBefore ? 'LEVEL UP!' : 'EXTRA COPY!';
     return (
-      <Overlay>
-        <Panel width={sizes.panelMax - px(60)} face={styles.moment}>
-          <PlayerCard player={player} level={Math.max(1, moment.gain.levelAfter)} width={sizes.card + space.md} shine />
-          <View style={styles.momentText}>
-            <StickerText size="title" color="coral">
-              {title}
-            </StickerText>
-            <Txt font="display" size="large">
-              {player.name}
-            </Txt>
-            <Txt color="inkSoft">{moment.gain.isNew ? `You beat the ${teamById(player.team).name}, so their star joins your Shelf.` : 'You already had this star, so they got stronger.'}</Txt>
-            <StickerButton label="AWESOME!" fill="mint" onPress={onClose} />
-          </View>
-        </Panel>
-        <Confetti burst={1} count={40} reach={260} style={styles.momentConfetti} />
-      </Overlay>
+      <Popup tube="gold" width={sizes.panelMax - px(60)} style={styles.moment}>
+        <View>
+          <Rays size={MOMENT_CARD * 2.6} color={tubes.gold.glass} alpha={0.26} count={18} fill={0.3} fadeAt={[0.25, 0.9]} style={styles.momentRays} />
+          <Arrive>
+            <ArcadeCard player={player} level={Math.max(1, moment.gain.levelAfter)} width={MOMENT_CARD} shine />
+          </Arrive>
+        </View>
+        <View style={styles.momentText}>
+          <Glow face="display" size="title" tube="gold" track="close">
+            {title}
+          </Glow>
+          <Print face="display" size="large" color="text">
+            {player.name}
+          </Print>
+          <Print face="medium" size="body" color="textSoft">
+            {moment.gain.isNew ? `You beat the ${teamById(player.team).name}, so their star joins your collection.` : 'You already had this star, so they got stronger.'}
+          </Print>
+          <GoldButton label="AWESOME!" size="small" onPress={onClose} />
+        </View>
+        <Sparks burst={1} count={40} reach={260} style={styles.momentSparks} />
+      </Popup>
     );
   }
   const { tier } = moment;
+  const index = tierIndexOf(tier.name);
   return (
-    <Overlay>
-      <Panel width={sizes.panelMax - px(140)} face={styles.tierPanel}>
-        <Icon name="trophy" size={sizes.avatarLarge} color={tier.color} />
-        <StickerText size="title" color="sun" center>
-          {`${tier.name.toUpperCase()} TIER!`}
-        </StickerText>
-        <Txt color="inkSoft" center>
-          You climbed the Ladder. Here is your prize.
-        </Txt>
-        <View style={styles.prizeRow}>
-          {tier.reward.coins > 0 && <CoinAmount coins={tier.reward.coins} size="large" plus />}
-          {tier.reward.pack !== undefined && <PackChip packId={tier.reward.pack} />}
-        </View>
-        <StickerButton label="LET'S GO!" fill="mint" onPress={onClose} style={styles.wide} />
-      </Panel>
-      <Confetti burst={1} count={40} reach={260} style={styles.momentConfetti} />
-    </Overlay>
+    <Popup tube={tierTube(index)} width={sizes.panelMax - px(140)} style={styles.tierPanel}>
+      <View>
+        <Rays size={px(220)} color={tierTube(index).glass} alpha={0.3} count={18} fill={0.32} fadeAt={[0.2, 0.9]} style={styles.tierRays} />
+        <Arrive>
+          <TierMedal index={index} size={px(80)} />
+        </Arrive>
+      </View>
+      <Glow face="display" size="title" tube={tierTube(index)} track="close" center>
+        {`${tier.name.toUpperCase()} TIER!`}
+      </Glow>
+      <Print face="medium" size="body" color="textSoft" center>
+        You climbed the Ladder. Here is your prize.
+      </Print>
+      <View style={styles.prizeRow}>
+        {tier.reward.coins > 0 && <CoinAmount coins={tier.reward.coins} size="large" plus />}
+        {tier.reward.pack !== undefined && <PackPrize packId={tier.reward.pack} width={px(30)} />}
+      </View>
+      <GoldButton label="LET'S GO!" onPress={onClose} style={styles.wide} />
+      <Sparks burst={1} count={40} reach={260} style={styles.momentSparks} />
+    </Popup>
+  );
+}
+
+/** One side of the scoreboard: its name over its score, the winner's lit gold. */
+function ScoreSide({ name, score, lit, mark }: { name: string; score: number; lit: boolean; mark?: React.ReactNode }) {
+  return (
+    <View style={styles.scoreSide}>
+      <View style={styles.scoreName}>
+        {mark}
+        <Print face="bold" size="small" color={lit ? 'text' : 'textDim'} track="wide" lines={1}>
+          {name.toUpperCase()}
+        </Print>
+      </View>
+      <Glow face="display" size={SCORE} tube={lit ? 'gold' : 'steel'} lit={lit} track="close">
+        {String(score)}
+      </Glow>
+    </View>
   );
 }
 
@@ -120,10 +160,12 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
   });
   const [shown, setShown] = useState(0);
   const [burst, setBurst] = useState(0);
+  const [starsLit, setStarsLit] = useState(0);
   const [momentsOn, setMomentsOn] = useState(false);
   const list = useRef<ComponentRef<typeof ScrollView>>(null);
   /** how tall the list and one of its lines are */
   const room = useRef({ list: 0, line: 0 });
+  const earnedStars = outcome.tour?.stars ?? 0;
 
   // a long game earns more lines than fit: follow the newest one down, like a till receipt
   useEffect(() => {
@@ -140,6 +182,8 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
         playSfx('cheer');
       });
     }
+    // the stars come on one by one, each a beat after the last
+    for (let i = 0; i < earnedStars; i++) after(STARS_START + i * STAR_MS, () => setStarsLit(i + 1));
     lines.forEach((_, i) =>
       after(LINES_START + i * LINE_MS, () => {
         setShown(i + 1);
@@ -150,7 +194,7 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
     after(done + 150, () => playSfx('coins'));
     after(done + 500, () => setMomentsOn(true));
     after(Math.max(2600, done + 600), () => setMusic('menu'));
-  }, [after, lines, summary.won]);
+  }, [after, lines, summary.won, earnedStars]);
 
   const landed = lines.slice(0, shown).reduce((a, l) => a + l.coins, 0);
   const total = useCountUp(landed, LINE_MS);
@@ -169,6 +213,8 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
   if (outcome.tour?.pack) wonPacks.push(outcome.tour.pack);
   if (outcome.tour?.starPack) wonPacks.push(outcome.tour.starPack);
   if (outcome.ladder?.promoted?.reward.pack) wonPacks.push(outcome.ladder.promoted.reward.pack);
+  const unlock = outcome.tour?.unlock;
+  const hasPrizes = wonPacks.length > 0 || outcome.missionsDone.length > 0 || unlock !== undefined;
 
   const again = () => {
     if (startNext()) router.replace('/versus');
@@ -177,90 +223,77 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
 
   return (
     <View style={styles.root}>
-      <Screen
-        back={false}
-        music={false}
-        coins={Math.max(0, bank - owed)}
-        tone={summary.won ? 'orange' : 'sky'}
-        left={
-          <StickerText size="title" color="white">
-            {headline(summary)}
-          </StickerText>
-        }>
+      <ArcadeScreen title={headline(summary)} tube={summary.won ? 'gold' : 'cyan'} back={false} music={false} coins={Math.max(0, bank - owed)} style={styles.body}>
         <View style={styles.row}>
           <View style={styles.left}>
-            <View style={styles.score}>
-              <View style={styles.scoreSide}>
-                <Txt font="display" size="small" color="white" shadow lines={1}>
-                  {summary.names[0].toUpperCase()}
-                </Txt>
-                <StickerText size="huge" color={summary.won ? 'sun' : 'white'}>
-                  {String(summary.score[0])}
-                </StickerText>
-              </View>
-              <Txt font="display" size="title" color="white" shadow style={styles.dash}>
-                -
-              </Txt>
-              <View style={styles.scoreSide}>
-                <View style={styles.awayName}>
-                  <TeamBadge team={away} diameter={sizes.badgeTiny} />
-                  <Txt font="display" size="small" color="white" shadow lines={1}>
-                    {summary.names[1].toUpperCase()}
-                  </Txt>
-                </View>
-                <StickerText size="huge" color={summary.won ? 'white' : 'sun'}>
-                  {String(summary.score[1])}
-                </StickerText>
-              </View>
-            </View>
-            {summary.overtime && <Tag label="Overtime" fill="coral" textColor="white" style={styles.centerSelf} />}
+            <Arrive>
+              <Well style={styles.board}>
+                <ScoreSide name={summary.names[0]} score={summary.score[0]} lit={summary.won} />
+                <Print face="display" size="title" color="textFaint" style={styles.dash}>
+                  -
+                </Print>
+                <ScoreSide name={summary.names[1]} score={summary.score[1]} lit={!summary.won} mark={<TeamMark team={away} small />} />
+              </Well>
+            </Arrive>
+            {summary.overtime && <Tag label="OVERTIME" tube="red" small style={styles.centerSelf} />}
 
-            <Sticker fill="paper" round="pill" raise="low" style={styles.centerSelf} face={styles.mvp}>
-              <Avatar id={mvp.id} diameter={sizes.avatarSmall + space.xs} />
-              <View>
-                <View style={styles.mvpName}>
-                  <Tag label="MVP" fill="sun" icon="star" />
-                  <Txt font="display" size="body" lines={1}>
-                    {mvpDef.name}
-                  </Txt>
+            <Arrive delay={140} style={styles.centerSelf}>
+              <Plate tube="gold" style={styles.mvp}>
+                <Face id={mvp.id} size={px(40)} />
+                <View style={styles.shrink}>
+                  <View style={styles.mvpName}>
+                    <Tag label="MVP" tube="gold" small />
+                    <Print face="display" size="body" color="text" lines={1}>
+                      {mvpDef.name}
+                    </Print>
+                  </View>
+                  <Print face="bold" size="tiny" color="textDim" track="normal" lines={1}>
+                    {statLine(mvp)}
+                  </Print>
                 </View>
-                <Txt size="small" color="inkSoft" lines={1}>
-                  {statLine(mvp)}
-                </Txt>
-              </View>
-            </Sticker>
+              </Plate>
+            </Arrive>
 
             {outcome.tour && (
               <View style={styles.extra}>
-                <Stars have={outcome.tour.stars} size={sizes.iconLarge} />
-                {summary.won && outcome.tour.stars < 3 && (
-                  <Txt size="small" color="white" shadow>
-                    {`Win by ${outcome.tour.stars === 1 ? 5 : 10} or more for ${outcome.tour.stars + 1} stars`}
-                  </Txt>
-                )}
+                <View accessible accessibilityLabel={`${earnedStars} of 3 stars`} style={styles.stars}>
+                  {[0, 1, 2].map((i) => (
+                    <View key={i}>
+                      <Star lit={false} size={STAR} />
+                      {i < starsLit && (
+                        <Arrive style={StyleSheet.absoluteFill}>
+                          <Star lit size={STAR} />
+                        </Arrive>
+                      )}
+                    </View>
+                  ))}
+                </View>
+                {summary.won && outcome.tour.stars < 3 && <Print face="medium" size="small" color="textDim">{`Win by ${outcome.tour.stars === 1 ? 5 : 10} or more for ${outcome.tour.stars + 1} stars`}</Print>}
                 {!summary.won && (
-                  <Txt size="small" color="white" shadow>
+                  <Print face="medium" size="small" color="textDim">
                     Win to earn stars
-                  </Txt>
+                  </Print>
                 )}
               </View>
             )}
             {tp && (
-              <View style={styles.extra}>
+              <Arrive delay={220} style={styles.extra}>
                 <View style={styles.ladderHead}>
-                  <Icon name="trophy" size={sizes.icon} color={tp.tier.color} />
-                  <Txt font="display" size="body" color="white" shadow>
-                    {tp.tier.name}
-                  </Txt>
-                  <Tag label={`${ladderGain >= 0 ? '+' : ''}${ladderGain} points`} fill={ladderGain > 0 ? 'mint' : 'paperDim'} />
+                  <TierMedal index={tp.index} size={px(30)} />
+                  <Glow face="sign" size="large" tube={tierTube(tp.index)} track="wide">
+                    {tp.tier.name.toUpperCase()}
+                  </Glow>
+                  <Tag label={`${ladderGain >= 0 ? '+' : ''}${ladderGain} POINTS`} tube={ladderGain > 0 ? 'green' : 'steel'} small />
                 </View>
-                {tp.next && <ProgressBar value={tp.span > 0 ? tp.have / tp.span : 1} fill={tp.next.color} style={styles.ladderBar} />}
-              </View>
+                {tp.next && <SegBar value={tp.span > 0 ? (tp.have / tp.span) * 100 : 100} tube={tierTube(tp.index + 1)} small style={styles.ladderBar} />}
+              </Arrive>
             )}
+            <Sparks burst={burst} count={44} reach={280} style={styles.sparks} />
           </View>
 
-          <View style={styles.right}>
-            <Sticker fill="paper" round="lg" raise="mid" style={styles.panelBox} face={styles.panel}>
+          <Arrive delay={80} from="right" style={styles.right}>
+            <NeonPanel tube="gold" style={styles.panel}>
+              <SignHead title="COINS" tube="gold" />
               <ScrollView
                 ref={list}
                 style={styles.lines}
@@ -279,49 +312,56 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
                           }
                         : undefined
                     }>
-                    <Txt size="small" lines={1} style={styles.lineLabel}>
+                    <Print face="medium" size="small" color="textSoft" lines={1} style={styles.shrink}>
                       {l.label}
-                    </Txt>
-                    <Txt font="display" size="small" color="sunDeep">{`+${l.coins}`}</Txt>
+                    </Print>
+                    <View style={styles.leader} />
+                    <CoinAmount coins={l.coins} size="small" plus />
                   </View>
                 ))}
               </ScrollView>
               <View style={styles.total}>
-                <Txt font="display" size="body">
-                  COINS
-                </Txt>
+                <Print face="display" size="body" color={tubes.gold.tint} track="wide">
+                  TOTAL
+                </Print>
                 <CoinAmount coins={total} size="large" plus />
               </View>
-              {(wonPacks.length > 0 || outcome.missionsDone.length > 0 || outcome.tour?.unlock) && (
+              {hasPrizes && (
                 <View style={styles.prizes}>
-                  {outcome.tour?.unlock && (
-                    <View style={styles.prize}>
-                      <Avatar id={outcome.tour.unlock.playerId} diameter={sizes.badgeSmall} />
-                      <Txt font="display" size="small" lines={1}>
-                        {`${mustPlayer(outcome.tour.unlock.playerId).name}  ${playerOverall(mustPlayer(outcome.tour.unlock.playerId), Math.max(1, levelOf(owned[outcome.tour.unlock.playerId] ?? 1)))}`}
-                      </Txt>
-                    </View>
+                  {unlock && (
+                    <Chip small>
+                      <Face id={unlock.playerId} size={px(24)} />
+                      <Print face="bold" size="small" color="text" lines={1}>
+                        {mustPlayer(unlock.playerId).name}
+                      </Print>
+                      <Print face="display" size="small" color={tubes.gold.tint}>
+                        {String(playerOverall(mustPlayer(unlock.playerId), Math.max(1, levelOf(owned[unlock.playerId] ?? 1))))}
+                      </Print>
+                    </Chip>
                   )}
                   {wonPacks.map((id, i) => (
-                    <PackChip key={`${id}${i}`} packId={id} width={sizes.badgeTiny} />
+                    <Chip key={`${id}${i}`} small>
+                      <PackPrize packId={id} width={px(16)} />
+                    </Chip>
                   ))}
                   {outcome.missionsDone.map((m, i) => (
-                    <Tag key={i} label={`Mission done: ${m.text}`} fill="mint" icon="check" />
+                    <Chip key={i} small style={styles.mission}>
+                      <LineIcon name="check" size={px(14)} tube="green" weight={3} />
+                      <Print face="bold" size="tiny" color={tubes.green.tint} lines={1} style={styles.shrink}>{`Mission done: ${m.text}`}</Print>
+                    </Chip>
                   ))}
                 </View>
               )}
-            </Sticker>
-          </View>
+            </NeonPanel>
+          </Arrive>
         </View>
 
         <View style={styles.buttons}>
-          <StickerButton label="HOME" icon="home" iconColor="sky" fill="white" textSize="body" onPress={() => router.dismissTo('/')} style={styles.side} />
-          {packCount > 0 && <StickerButton label={`OPEN PACK${packCount > 1 ? `S (${packCount})` : ''}`} icon="pack" iconColor="white" fill="grape" textColor="white" textSize="body" onPress={() => router.push({ pathname: '/open', params: { pack: packIds[0] } })} style={styles.side} />}
-          <StickerButton label={hasNext ? 'NEXT GAME' : 'PLAY AGAIN'} icon="play" iconColor="white" fill="mint" raise="high" onPress={again} style={styles.main} />
+          <GhostButton label="HOME" icon="home" tube="cyan" onPress={() => router.dismissTo('/')} style={styles.side} />
+          {packCount > 0 && <GhostButton label={`OPEN PACK${packCount > 1 ? `S (${packCount})` : ''}`} icon="pack" tube="pink" onPress={() => router.push({ pathname: '/open', params: { pack: packIds[0] } })} style={styles.side} />}
+          <GoldButton label={hasNext ? 'NEXT GAME' : 'PLAY AGAIN'} icon="play" onPress={again} style={styles.main} />
         </View>
-
-        <Confetti burst={burst} count={44} reach={280} style={styles.confetti} />
-      </Screen>
+      </ArcadeScreen>
       {momentsOn && moments.length > 0 && <MomentOverlay key={moments.length} moment={moments[0]} onClose={() => setMoments((m) => m.slice(1))} />}
     </View>
   );
@@ -339,6 +379,9 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+  body: {
+    paddingTop: space.sm,
+  },
   row: {
     flex: 1,
     flexDirection: 'row',
@@ -349,33 +392,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: space.sm,
   },
-  score: {
+  board: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'center',
     gap: space.lg,
+    paddingVertical: px(6),
   },
   scoreSide: {
     alignItems: 'center',
     minWidth: sizes.card,
   },
-  dash: {
-    marginBottom: space.xl,
-  },
-  awayName: {
+  scoreName: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.xs,
   },
+  dash: {
+    marginBottom: SCORE * 0.3,
+  },
   centerSelf: {
     alignSelf: 'center',
   },
+  shrink: {
+    flexShrink: 1,
+  },
+  // a name plate grown to hold a face and two lines
   mvp: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    height: 'auto',
+    borderRadius: arcade.rWell,
     gap: space.sm,
-    paddingVertical: space.xs,
-    paddingLeft: space.xs,
+    paddingVertical: px(5),
+    paddingLeft: px(5),
     paddingRight: space.lg,
   },
   mvpName: {
@@ -385,7 +433,11 @@ const styles = StyleSheet.create({
   },
   extra: {
     alignItems: 'center',
-    gap: space.hair,
+    gap: px(4),
+  },
+  stars: {
+    flexDirection: 'row',
+    gap: px(6),
   },
   ladderHead: {
     flexDirection: 'row',
@@ -395,18 +447,21 @@ const styles = StyleSheet.create({
   ladderBar: {
     width: '60%',
   },
+  sparks: {
+    top: '22%',
+    left: '50%',
+  },
   right: {
     flex: 1,
     justifyContent: 'center',
   },
-  panelBox: {
-    maxHeight: '100%',
-  },
   panel: {
     flexShrink: 1,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-    gap: space.xs,
+    maxHeight: '100%',
+    paddingHorizontal: px(12),
+    paddingTop: px(9),
+    paddingBottom: px(10),
+    gap: px(6),
   },
   lines: {
     flexGrow: 0,
@@ -414,11 +469,17 @@ const styles = StyleSheet.create({
   line: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: space.md,
+    gap: space.sm,
+    paddingVertical: px(2),
   },
-  lineLabel: {
+  // the dotted line from a reward to its coins, as on a receipt
+  leader: {
     flex: 1,
+    minWidth: space.sm,
+    height: 0,
+    borderBottomWidth: arcade.hairline,
+    borderStyle: 'dotted',
+    borderColor: night.lineLit,
   },
   hidden: {
     opacity: 0,
@@ -427,27 +488,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderTopWidth: stroke.thin,
-    borderColor: color.paperDim,
-    paddingTop: space.xs,
+    borderTopWidth: arcade.hairline,
+    borderColor: tubes.gold.glass,
+    paddingTop: px(6),
   },
   prizes: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: space.sm,
-    borderTopWidth: stroke.thin,
-    borderColor: color.paperDim,
-    paddingTop: space.xs,
-  },
-  prize: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: space.xs,
+    borderTopWidth: arcade.hairline,
+    borderColor: night.line,
+    paddingTop: px(6),
+  },
+  mission: {
+    maxWidth: '100%',
+    borderColor: tubes.green.glass,
   },
   buttons: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     gap: space.md,
     paddingTop: space.sm,
     paddingBottom: space.xs,
@@ -458,27 +518,33 @@ const styles = StyleSheet.create({
   main: {
     flex: 1.4,
   },
-  confetti: {
-    top: '34%',
-    left: '27%',
-  },
   moment: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.lg,
+  },
+  momentRays: {
+    position: 'absolute',
+    left: (MOMENT_CARD - MOMENT_CARD * 2.6) / 2,
+    top: (Math.round(MOMENT_CARD * sizes.cardRatio) - MOMENT_CARD * 2.6) / 2,
   },
   momentText: {
     flex: 1,
     gap: space.sm,
     alignItems: 'flex-start',
   },
-  momentConfetti: {
+  momentSparks: {
     top: '45%',
     left: '50%',
   },
   tierPanel: {
     alignItems: 'center',
     gap: space.sm,
+  },
+  tierRays: {
+    position: 'absolute',
+    left: (px(80) - px(220)) / 2,
+    top: (px(80) - px(220)) / 2,
   },
   prizeRow: {
     flexDirection: 'row',
