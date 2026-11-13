@@ -25,7 +25,7 @@ function useWorn() {
 
 /** the name of what the squad wears, as the pages print it */
 export function wornName(def: { name: string } | null): string {
-  return def ? def.name : 'Captain’s colours';
+  return def ? def.name : 'Captain’s colors';
 }
 
 /** A small button for the top bar: the squad's jersey and the word UNIFORMS. */
