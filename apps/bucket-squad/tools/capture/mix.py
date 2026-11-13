@@ -18,14 +18,26 @@ VOICES = {'tap': 2, 'coin': 3, 'dribble': 3, 'bounce': 2, 'rim': 2, 'cardFlip': 
 MUSIC = {'menu': 'musicMenu', 'game': 'musicGame'}
 
 _cache = {}
+_takes = {}
 
 
-def load(name):
-    if name not in _cache:
-        w = wave.open(os.path.join(SOUNDS, name + '.wav'))
-        assert w.getnchannels() == 1 and w.getframerate() == SR and w.getsampwidth() == 2, name
-        _cache[name] = np.frombuffer(w.readframes(w.getnframes()), dtype='<i2').astype(np.float32) / 32768.0
-    return _cache[name]
+def takes(name):
+    """How many takes a sound has: recorded sounds come as name_1.wav, name_2.wav, ..."""
+    if name not in _takes:
+        n = 0
+        while os.path.exists(os.path.join(SOUNDS, '%s_%d.wav' % (name, n + 1))):
+            n += 1
+        _takes[name] = n
+    return _takes[name]
+
+
+def load(name, take=0):
+    stem = '%s_%d' % (name, take + 1) if takes(name) else name
+    if stem not in _cache:
+        w = wave.open(os.path.join(SOUNDS, stem + '.wav'))
+        assert w.getnchannels() == 1 and w.getframerate() == SR and w.getsampwidth() == 2, stem
+        _cache[stem] = np.frombuffer(w.readframes(w.getnframes()), dtype='<i2').astype(np.float32) / 32768.0
+    return _cache[stem]
 
 
 def fade(buf, a, b, up):
@@ -105,19 +117,21 @@ def main():
         t = when(i, e['t'])
         if t is None or t >= seconds:
             continue
-        events.append({'t': t, 'name': e['name'], 'vol': e['volume'], 'late': i_cut1 is not None and i > i_cut1})
+        events.append({'t': t, 'name': e['name'], 'take': e.get('take', 0), 'vol': e['volume'], 'late': i_cut1 is not None and i > i_cut1})
     turn = {}
     held = {}
     for ev in events:
-        voices = VOICES.get(ev['name'], 1)
-        v = turn.get(ev['name'], 0)
-        turn[ev['name']] = (v + 1) % voices
-        key = (ev['name'], v)
+        # like the app: each take has its own players, at least one, sharing the sound's voices between them
+        voices = max(1, -(-VOICES.get(ev['name'], 1) // max(1, takes(ev['name']))))
+        row = (ev['name'], ev['take'])
+        v = turn.get(row, 0)
+        turn[row] = (v + 1) % voices
+        key = (ev['name'], ev['take'], v)
         if key in held:
             held[key]['stop'] = ev['t']
         held[key] = ev
     for ev in events:
-        s = load(ev['name'])
+        s = load(ev['name'], ev['take'])
         a = int(round(ev['t'] * SR))
         length = len(s)
         if 'stop' in ev:

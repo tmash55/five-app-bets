@@ -2,19 +2,21 @@
  * Sound effects and music.
  *
  * Each effect gets a tiny pool of players so the same sound can overlap
- * itself (two dribbles, a run of coins). Players are created the first time a
+ * itself (two dribbles, a run of coins). A sound can have several takes
+ * (recordings of the same thing); a different one plays each time, so a run of
+ * dribbles never sounds like a machine. Players are created the first time a
  * sound is needed. Everything here fails quietly: a game with no sound is
  * better than a crash because a speaker was busy.
  */
 
-import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import { createAudioPlayer, setAudioModeAsync, type AudioPlayer, type AudioSource } from 'expo-audio';
 
 import { MUSIC_FILES, SFX_FILES } from './files';
 
 export type SfxName = keyof typeof SFX_FILES;
 export type MusicName = keyof typeof MUSIC_FILES;
 
-/** how many copies of a sound may play at once (default 1) */
+/** how many copies of a sound may play at once (default 1); a sound with several takes always gets a player per take */
 const VOICES: Partial<Record<SfxName, number>> = {
   tap: 2,
   coin: 3,
@@ -58,11 +60,15 @@ const TRIM: Partial<Record<SfxName, number>> = {
 const MUSIC_LEVEL: Record<MusicName, number> = { menu: 0.5, game: 0.36 };
 
 interface Pool {
-  players: AudioPlayer[];
-  next: number;
+  /** one row of players per take */
+  rows: AudioPlayer[][];
+  /** whose turn it is in each row */
+  turn: number[];
 }
 
 const pools = new Map<SfxName, Pool>();
+/** the take each sound played last */
+const lastTake = new Map<SfxName, number>();
 let soundOn = true;
 let musicOn = true;
 let music: { name: MusicName; player: AudioPlayer } | null = null;
@@ -70,10 +76,10 @@ let wanted: MusicName | null = null;
 let modeSet = false;
 
 /** Development only: the preview tooling reads this log to lay a soundtrack under a captured video. */
-function note(kind: 'sfx' | 'music', name: string | null, volume: number): void {
+function note(kind: 'sfx' | 'music', name: string | null, volume: number, take = 0): void {
   if (!__DEV__) return;
-  const log = (globalThis as { __soundLog?: { t: number; kind: string; name: string | null; volume: number }[] }).__soundLog;
-  if (log) log.push({ t: performance.now(), kind, name, volume });
+  const log = (globalThis as { __soundLog?: { t: number; kind: string; name: string | null; volume: number; take: number }[] }).__soundLog;
+  if (log) log.push({ t: performance.now(), kind, name, volume, take });
 }
 
 function ensureMode(): void {
@@ -88,15 +94,26 @@ function poolFor(name: SfxName): Pool | null {
   if (pool) return pool;
   try {
     ensureMode();
-    const count = VOICES[name] ?? 1;
-    const players: AudioPlayer[] = [];
-    for (let i = 0; i < count; i++) players.push(createAudioPlayer(SFX_FILES[name]));
-    pool = { players, next: 0 };
+    const takes: readonly AudioSource[] = SFX_FILES[name];
+    const each = Math.max(1, Math.ceil((VOICES[name] ?? 1) / takes.length));
+    const rows = takes.map((file) => Array.from({ length: each }, () => createAudioPlayer(file)));
+    pool = { rows, turn: rows.map(() => 0) };
     pools.set(name, pool);
     return pool;
   } catch {
     return null;
   }
+}
+
+/** Which take to play: any but the one that played last. */
+function nextTake(name: SfxName): number {
+  const takes = SFX_FILES[name].length;
+  if (takes < 2) return 0;
+  const last = lastTake.get(name);
+  let take = Math.floor(Math.random() * (last === undefined ? takes : takes - 1));
+  if (last !== undefined && take >= last) take++;
+  lastTake.set(name, take);
+  return take;
 }
 
 /** Load sounds ahead of time so the first dunk does not hitch. */
@@ -107,11 +124,13 @@ export function warmSounds(names: readonly SfxName[]): void {
 export function playSfx(name: SfxName, volume = 1): void {
   if (!soundOn) return;
   const level = Math.max(0, Math.min(1, volume * (TRIM[name] ?? 1)));
-  note('sfx', name, level);
+  const take = nextTake(name);
+  note('sfx', name, level, take);
   const pool = poolFor(name);
   if (!pool) return;
-  const p = pool.players[pool.next];
-  pool.next = (pool.next + 1) % pool.players.length;
+  const row = pool.rows[take];
+  const p = row[pool.turn[take]];
+  pool.turn[take] = (pool.turn[take] + 1) % row.length;
   try {
     p.volume = level;
     p.seekTo(0).catch(() => undefined);
