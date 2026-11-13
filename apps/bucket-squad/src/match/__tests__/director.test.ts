@@ -29,8 +29,8 @@ function match(userTeam: -1 | 0 | 1 = 0): MatchState {
   return m;
 }
 
-function director(): MatchDirector {
-  return new MatchDirector({ names: ['A', 'B', 'C', 'D', 'E', 'F'], quarters: 4, show: () => undefined });
+function director(show: (c: { text: string }) => void = () => undefined): MatchDirector {
+  return new MatchDirector({ names: ['A', 'B', 'C', 'D', 'E', 'F'], quarters: 4, show });
 }
 
 const heard = (name: string) => sfx.mock.calls.filter((c) => c[0] === name);
@@ -191,5 +191,71 @@ describe('sneakers', () => {
     expect(scuffs.length).toBeGreaterThanOrEqual(1);
     expect(scuffs.length).toBeLessThanOrEqual(2);
     expect(scuffs.every((c) => (c[1] as number) < 0.5)).toBe(true);
+  });
+});
+
+describe('the horn', () => {
+  /** The person's team (or the other one) scores as time runs out, leaving the score at `after`. */
+  function atTheHorn(quarter: number, after: [number, number], points: number, team: 0 | 1 = 0) {
+    const m = match();
+    const said: string[] = [];
+    const d = director((c) => said.push(c.text));
+    m.quarter = quarter;
+    m.clock = 0;
+    m.score[0] = after[0];
+    m.score[1] = after[1];
+    d.handle({ type: 'score', by: team === 0 ? 0 : 3, team, points, kind: 'jumper', perfect: false, buzzer: true, assist: -1 }, m);
+    return { d, said };
+  }
+
+  test('a shot that wins the game or ties it at the last horn makes the headline', () => {
+    // down one, a two wins it
+    expect(atTheHorn(4, [21, 20], 2).d.buzzerBeater).toBe(true);
+    // level, a two wins it
+    expect(atTheHorn(4, [22, 20], 2).d.buzzerBeater).toBe(true);
+    // down three, a three sends it to overtime
+    expect(atTheHorn(4, [20, 20], 3).d.buzzerBeater).toBe(true);
+  });
+
+  test('a shot at an earlier horn, or one the team did not need, is called out but is not the headline', () => {
+    const early = atTheHorn(2, [12, 11], 2);
+    expect(early.said).toContain('BUZZER BEATER!');
+    expect(early.d.buzzerBeater).toBe(false);
+    // already ahead before the shot
+    const spare = atTheHorn(4, [25, 20], 2);
+    expect(spare.said).toContain('BUZZER BEATER!');
+    expect(spare.d.buzzerBeater).toBe(false);
+    // still behind after it
+    expect(atTheHorn(4, [18, 20], 2).d.buzzerBeater).toBe(false);
+    // the other team's winner
+    expect(atTheHorn(4, [20, 21], 2, 1).d.buzzerBeater).toBe(false);
+  });
+
+  test('sounds once when the game ends, and at the end of every earlier quarter', () => {
+    const m = match();
+    const d = director();
+    m.quarter = 1;
+    d.handle({ type: 'period', quarter: 1, start: false, overtime: false }, m);
+    expect(heard('buzzer')).toHaveLength(1);
+    // the last quarter ends and the game with it, in the same step
+    m.quarter = 4;
+    m.score[0] = 21;
+    m.score[1] = 20;
+    m.phase = 'final';
+    m.winner = 0;
+    d.handle({ type: 'period', quarter: 4, start: false, overtime: false }, m);
+    d.handle({ type: 'final', winner: 0 }, m);
+    expect(heard('buzzer')).toHaveLength(2);
+  });
+
+  test('still sounds when the last quarter ends level and overtime follows', () => {
+    const m = match();
+    const said: string[] = [];
+    const d = director((c) => said.push(c.text));
+    m.quarter = 4;
+    m.phase = 'periodEnd';
+    d.handle({ type: 'period', quarter: 4, start: false, overtime: false }, m);
+    expect(heard('buzzer')).toHaveLength(1);
+    expect(said).toEqual(['END OF Q4']);
   });
 });

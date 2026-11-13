@@ -58,7 +58,7 @@ const OTHERS_CUT_REST = 1.6;
 const AWW_REST = 6;
 
 export class MatchDirector {
-  /** a shot at the horn won it or tied it for the person's team */
+  /** a shot at the last horn won it or tied it for the person's team (the score in the match is already the one after the shot) */
   buzzerBeater = false;
   private n = 0;
   private lastPoster = -9;
@@ -106,7 +106,8 @@ export class MatchDirector {
           if (e.overtime) this.say('OVERTIME!', 'gold', 1.4, 'Next basket wins', true);
           else if (e.quarter === 1) this.say('GO!', 'gold', 0.9, undefined, true);
           else this.say(`QUARTER ${e.quarter}`, 'white', 1.1);
-        } else {
+        } else if (m.phase !== 'final') {
+          // the horn that ends the game is the final's own, so it sounds once
           playSfx('buzzer');
           const half = this.o.quarters % 2 === 0 && e.quarter === this.o.quarters / 2;
           this.say(half ? 'HALFTIME' : `END OF Q${e.quarter}`, 'white', 1.8);
@@ -144,7 +145,10 @@ export class MatchDirector {
         const who = this.o.names[e.by];
         const tone = side(e.team);
         if (e.buzzer) {
-          if (e.team === user) this.buzzerBeater = true;
+          // every shot at a horn is called out, but the headline is for the last horn only: the team was level or behind before the shot and is level or ahead after it
+          const mine = m.score[e.team];
+          const theirs = m.score[1 - e.team];
+          if (e.team === user && m.quarter >= this.o.quarters && mine - e.points <= theirs && mine >= theirs) this.buzzerBeater = true;
           this.say('BUZZER BEATER!', 'gold', 1.8, `${who} +${e.points}`, true);
         } else if (e.kind === 'oop') {
           this.say(this.pick(OOPS), tone, 1.4, `${who} +2`, true);
