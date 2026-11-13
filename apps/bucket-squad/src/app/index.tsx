@@ -260,9 +260,9 @@ function SquadCorner({ ids, owned, onPress }: { ids: string[]; owned: Record<str
       rect.x + rect.w + px(4),
       px(6),
     );
-    // one row along the front of the ring, the captain's plate a step lower like the captain
+    // one straight row along the front of the ring, under the feet of the one standing furthest forward
     const row = Math.max(...across.map((f) => f.y)) + px(8);
-    return placed.map((p, i) => ({ ...p, ...plateText(across[i].id, owned, p.width), top: row + (across[i].id === ids[0] ? px(4) : 0), id: across[i].id }));
+    return placed.map((p, i) => ({ ...p, ...plateText(across[i].id, owned, p.width), top: row, id: across[i].id }));
     // the plates follow the figures, which follow the layout
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rect, marks, owned]);
