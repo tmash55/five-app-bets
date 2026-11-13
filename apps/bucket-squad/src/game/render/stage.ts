@@ -20,6 +20,35 @@ import { MeshBuilder, rgb, tint, type Rgb } from './geo';
 import { buildBallGeometry, programCount, warmUp, wrapContext } from './props';
 import { BASE_FRAG, BASE_VERT, DROP_FRAG, STATIC_FRAG, STATIC_VERT, UNLIT_VERT } from './shaders';
 
+/**
+ * A base that is only the figures' contact shadows: the floor is drawn behind the (transparent) GL view by the
+ * screen itself, so the squad stands on the screen's own floor. Light falls on nothing, so nothing here is lit.
+ */
+const SHADOW_FRAG = /* glsl */ `
+precision highp float;
+#define STAGE_SHADOWS 16
+uniform vec3 uShade;
+uniform float uStrength;
+uniform vec4 uShadows[STAGE_SHADOWS];  // world x, z, radius, strength
+in vec3 vNormal;
+in vec3 vColor;
+in vec3 vWorld;
+in vec3 vLocal;
+out vec4 fragColor;
+void main() {
+  float sh = 0.0;
+  for (int i = 0; i < STAGE_SHADOWS; i++) {
+    vec4 s = uShadows[i];
+    if (s.w <= 0.0) continue;
+    float d = length(vWorld.xz - s.xy);
+    sh = max(sh, (1.0 - smoothstep(s.z * 0.25, s.z, d)) * s.w);
+  }
+  float a = sh * uStrength;
+  if (a < 0.002) discard;
+  fragColor = vec4(uShade * a, a);
+}
+`;
+
 export interface StageMember {
   look: Look;
   role: StageRole;
@@ -39,10 +68,26 @@ export interface StageGroup {
   turn: number;
 }
 
+/**
+ * How the base is painted. Left out, each group stands on a little piece of its home court on a plinth in its
+ * colours. Given, there is no plinth and no court: the screen draws its own floor behind the GL view, and the base
+ * only darkens it where the figures touch it.
+ */
+export interface StagePaint {
+  /** the contact shadows' colour, `#RRGGBB` */
+  shadow: string;
+  /** how dark they get where a foot is planted, 0..1 */
+  strength: number;
+}
+
 export interface StageSetup {
   groups: StageGroup[];
   /** shuffles the act playlists */
   seed: number;
+  /** left out: the court on a plinth */
+  paint?: StagePaint;
+  /** how far apart the figures stand, as a share of the usual: wider keeps every face clear of its neighbours' (1 when left out) */
+  spread?: number;
 }
 
 /** Where on the view the group should sit, as fractions of its width and height. */
@@ -55,6 +100,8 @@ export interface StageFocus {
 
 const BASE_R = 1.24;
 const BASE_H = 0.2;
+/** the base's radius, for a screen that draws round it */
+export const STAGE_BASE_R = BASE_R;
 const FOV = 15;
 /** how far the camera looks down on the group */
 const PITCH = 0.105;
@@ -66,6 +113,10 @@ const GROUP_H = 1.98;
 const GROUP_MID_Y = 0.94;
 const SHADOWS = 16;
 const HEY_LENGTH = ACT_LENGTH.hey;
+/** a painted floor reaches past the base's edge, so a shadow thrown a little wide still lands */
+const FLOOR_R = BASE_R * 1.3;
+/** the height of a figure for a build height of 1 */
+const FIGURE_H = 1.57;
 
 /** Spots on the base: the captain in front in the middle, the others a step back and turned in. */
 const SPOTS = [
@@ -73,6 +124,18 @@ const SPOTS = [
   { x: -0.8, z: -0.4, turn: 0.32, side: -1 },
   { x: 0.8, z: -0.4, turn: -0.32, side: 1 },
 ] as const;
+
+/** A figure's spot with the group spread wider: the side players step out to the sides and a little forward. */
+function spotOf(mi: number, spread: number): { x: number; z: number; turn: number; side: number } {
+  const spot = SPOTS[mi % SPOTS.length];
+  if (spread === 1 || spot.side === 0) return spot;
+  return { ...spot, x: spot.x * spread, z: spot.z + (spread - 1) * 0.3 };
+}
+
+/** How wide a group is framed, with its figures this far apart. */
+export function groupWidth(spread = 1): number {
+  return GROUP_W + 2 * Math.abs(SPOTS[1].x) * (spread - 1);
+}
 
 interface Actor {
   group: number;
@@ -118,7 +181,11 @@ export class StageRenderer {
   private dist = 9;
   private midX = 0;
   private midZ = 0;
-  private captainH = 1.57;
+  private captainH = FIGURE_H;
+  /** where the figures' feet are: the top of the base, which is the floor itself when the screen paints it */
+  private readonly floorY: number;
+  /** how wide one group is framed */
+  private readonly groupW: number;
 
   private readonly tmpV = new THREE.Vector3();
   private readonly tmpQ = new THREE.Quaternion();
@@ -131,6 +198,9 @@ export class StageRenderer {
   constructor(gl: WebGL2RenderingContext, setup: StageSetup) {
     this.seed = setup.seed;
     this.groups = setup.groups;
+    const paint = setup.paint;
+    this.floorY = paint ? 0 : -BASE_H;
+    this.groupW = groupWidth(setup.spread ?? 1);
     this.three = wrapContext(gl, true);
     this.three.sortObjects = true;
     this.scene.matrixAutoUpdate = false;
@@ -164,61 +234,15 @@ export class StageRenderer {
 
     let variant = 1;
     this.groups.forEach((g, gi) => {
-      // --- the base
-      const theme = COURTS[g.court];
-      const jersey = rgb(g.kit.jersey);
-      const trim = rgb(g.kit.trim);
-      const mb = new MeshBuilder();
-      mb.cyl(0, -BASE_H, 0, BASE_R * 0.97, BASE_R, BASE_H * 0.42, 72, tint(jersey, 0.72), tint(jersey, 0.82), false);
-      mb.cyl(0, -BASE_H * 0.58, 0, BASE_R, BASE_R, BASE_H * 0.16, 72, trim, trim, false);
-      mb.cyl(0, -BASE_H * 0.42, 0, BASE_R, BASE_R, BASE_H * 0.42, 72, tint(jersey, 0.86), jersey, false);
-      mb.torus(0, -0.005, 0, BASE_R - 0.035, 0.04, 72, 10, trim);
-      mb.disc(0, 0, 0, BASE_R - 0.03, 96, jersey);
-      const baseGeo = mb.build();
-      const u: Record<string, THREE.IUniform> = {
-        ...L,
-        uRadius: { value: BASE_R - 0.075 },
-        uCourtCol: { value: vec(rgb(theme.floor.court)) },
-        uBandCol: { value: vec(jersey) },
-        uCircleCol: { value: vec(rgb(g.color)) },
-        uLineCol: { value: vec(rgb(theme.floor.line)) },
-        uShadows: { value: new Float32Array(SHADOWS * 4) },
-      };
-      const baseMat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: BASE_VERT, fragmentShader: BASE_FRAG, uniforms: u });
-      const base = new THREE.Mesh(baseGeo, baseMat);
-      base.position.set(g.x, 0, g.z);
-      base.rotation.y = g.turn;
-      base.updateMatrix();
-      base.matrixAutoUpdate = false;
-      base.renderOrder = -2;
-      this.scene.add(base);
-      this.baseU.push(u);
-      this.disposables.push(baseGeo, baseMat);
-
-      // --- its shadow on the backdrop
-      const dropMat = new THREE.RawShaderMaterial({
-        glslVersion: THREE.GLSL3,
-        vertexShader: UNLIT_VERT,
-        fragmentShader: DROP_FRAG,
-        uniforms: { uStrength: { value: 0.42 } },
-        transparent: true,
-        premultipliedAlpha: true,
-        depthWrite: false,
-      });
-      const drop = new THREE.Mesh(disc, dropMat);
-      drop.position.set(g.x + 0.08, -BASE_H - 0.004, g.z - 0.05);
-      drop.scale.set(BASE_R * 2.5, 1, BASE_R * 2.3);
-      drop.updateMatrix();
-      drop.matrixAutoUpdate = false;
-      drop.renderOrder = -3;
-      this.scene.add(drop);
-      this.disposables.push(dropMat);
+      // --- the base, and its shadow on the backdrop
+      if (paint) this.addFloor(g, paint);
+      else this.addPlinth(g, disc);
 
       // --- the figures
       const cg = Math.cos(g.turn);
       const sg = Math.sin(g.turn);
       g.members.forEach((m, mi) => {
-        const spot = SPOTS[mi % SPOTS.length];
+        const spot = spotOf(mi, setup.spread ?? 1);
         const fig = new FigureView(m.look, L);
         const anim = new FigureAnimator(fig.data.build, fig.data.hairPivotA, fig.data.hairPivotB, variant);
         variant += 3;
@@ -231,7 +255,7 @@ export class StageRenderer {
           ball.frustumCulled = false;
           this.scene.add(ball);
         }
-        if (mi === 0) this.captainH = 1.57 * fig.data.build.height;
+        if (mi === 0) this.captainH = FIGURE_H * fig.data.build.height;
         // the base turns with the group: spots are in the base's own frame
         const lx = spot.x;
         const lz = spot.z;
@@ -296,6 +320,81 @@ export class StageRenderer {
     this.warmPrograms = warmUp(this.three, this.scene, this.camera);
   }
 
+  /** The team's court on a plinth in its colours, with a soft shadow under it. */
+  private addPlinth(g: StageGroup, disc: THREE.PlaneGeometry): void {
+    // --- the base
+    const L = this.lights;
+    const theme = COURTS[g.court];
+    const jersey = rgb(g.kit.jersey);
+    const trim = rgb(g.kit.trim);
+    const mb = new MeshBuilder();
+    mb.cyl(0, -BASE_H, 0, BASE_R * 0.97, BASE_R, BASE_H * 0.42, 72, tint(jersey, 0.72), tint(jersey, 0.82), false);
+    mb.cyl(0, -BASE_H * 0.58, 0, BASE_R, BASE_R, BASE_H * 0.16, 72, trim, trim, false);
+    mb.cyl(0, -BASE_H * 0.42, 0, BASE_R, BASE_R, BASE_H * 0.42, 72, tint(jersey, 0.86), jersey, false);
+    mb.torus(0, -0.005, 0, BASE_R - 0.035, 0.04, 72, 10, trim);
+    mb.disc(0, 0, 0, BASE_R - 0.03, 96, jersey);
+    const baseGeo = mb.build();
+    const u: Record<string, THREE.IUniform> = {
+      ...L,
+      uRadius: { value: BASE_R - 0.075 },
+      uCourtCol: { value: vec(rgb(theme.floor.court)) },
+      uBandCol: { value: vec(jersey) },
+      uCircleCol: { value: vec(rgb(g.color)) },
+      uLineCol: { value: vec(rgb(theme.floor.line)) },
+      uShadows: { value: new Float32Array(SHADOWS * 4) },
+    };
+    const baseMat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: BASE_VERT, fragmentShader: BASE_FRAG, uniforms: u });
+    const base = new THREE.Mesh(baseGeo, baseMat);
+    base.position.set(g.x, 0, g.z);
+    base.rotation.y = g.turn;
+    base.updateMatrix();
+    base.matrixAutoUpdate = false;
+    base.renderOrder = -2;
+    this.scene.add(base);
+    this.baseU.push(u);
+    this.disposables.push(baseGeo, baseMat);
+
+    // --- its shadow on the backdrop
+    const dropMat = new THREE.RawShaderMaterial({
+      glslVersion: THREE.GLSL3,
+      vertexShader: UNLIT_VERT,
+      fragmentShader: DROP_FRAG,
+      uniforms: { uStrength: { value: 0.42 } },
+      transparent: true,
+      premultipliedAlpha: true,
+      depthWrite: false,
+    });
+    const drop = new THREE.Mesh(disc, dropMat);
+    drop.position.set(g.x + 0.08, -BASE_H - 0.004, g.z - 0.05);
+    drop.scale.set(BASE_R * 2.5, 1, BASE_R * 2.3);
+    drop.updateMatrix();
+    drop.matrixAutoUpdate = false;
+    drop.renderOrder = -3;
+    this.scene.add(drop);
+    this.disposables.push(dropMat);
+  }
+
+  /** Only the figures' contact shadows, on the floor the screen draws behind the view. */
+  private addFloor(g: StageGroup, paint: StagePaint): void {
+    const mb = new MeshBuilder();
+    mb.disc(0, 0, 0, FLOOR_R, 96, rgb(paint.shadow));
+    const geo = mb.build();
+    const u: Record<string, THREE.IUniform> = {
+      uShade: { value: vec(rgb(paint.shadow)) },
+      uStrength: { value: paint.strength },
+      uShadows: { value: new Float32Array(SHADOWS * 4) },
+    };
+    const mat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: BASE_VERT, fragmentShader: SHADOW_FRAG, uniforms: u, transparent: true, premultipliedAlpha: true, depthWrite: false });
+    const floor = new THREE.Mesh(geo, mat);
+    floor.position.set(g.x, 0, g.z);
+    floor.updateMatrix();
+    floor.matrixAutoUpdate = false;
+    floor.renderOrder = -2;
+    this.scene.add(floor);
+    this.baseU.push(u);
+    this.disposables.push(geo, mat);
+  }
+
   get programs(): number {
     return programCount(this.three);
   }
@@ -328,40 +427,13 @@ export class StageRenderer {
   }
 
   private frameCamera(): void {
-    const W = this.width;
-    const H = this.height;
-    const f = this.focus;
-    const span = this.groups.length > 1 ? GROUP_W * this.groups.length : GROUP_W;
-    const bottom = (f.y + f.h) * H;
-    // pixels per world unit: the captain at their share of the view's height, unless the group would not fit inside the
-    // focus box (the heads stay below whatever is above the box; only a raised arm or a tossed ball goes past its top)
-    const k = Math.min((H * CAPTAIN_SHARE) / this.captainH, (f.w * W) / span, (f.h * H * 0.98) / GROUP_H);
-    const viewH = H / k;
-    this.dist = viewH / 2 / Math.tan((FOV * Math.PI) / 360);
-    const cam = this.camera;
-    cam.fov = FOV;
-    cam.aspect = W / H;
-    cam.near = Math.max(0.5, this.dist - 8);
-    cam.far = this.dist + 12;
-    // the group's middle lands in the middle of the box across, and the front of the base at its bottom
-    this.place(0, PITCH);
-    cam.clearViewOffset();
-    cam.updateProjectionMatrix();
-    this.tmpV.set(this.midX, -BASE_H, this.midZ + BASE_R).project(cam);
-    const footY = (0.5 - this.tmpV.y * 0.5) * H;
-    const px = (f.x + f.w / 2) * W;
-    cam.setViewOffset(W, H, W / 2 - px, footY - bottom, W, H);
-    cam.updateProjectionMatrix();
+    const span = this.groups.length > 1 ? this.groupW * this.groups.length : this.groupW;
+    this.dist = aimCamera(this.camera, this.width, this.height, this.focus, span, this.captainH, this.midX, this.midZ, this.floorY, this.tmpV);
   }
 
   /** Camera on its orbit round the group: `yaw` across, `pitch` up. */
   private place(yaw: number, pitch: number): void {
-    const cam = this.camera;
-    const d = this.dist;
-    cam.position.set(this.midX + Math.sin(yaw) * d * Math.cos(pitch), GROUP_MID_Y + Math.sin(pitch) * d, this.midZ + Math.cos(yaw) * d * Math.cos(pitch));
-    this.tmpV.set(this.midX, GROUP_MID_Y, this.midZ);
-    cam.lookAt(this.tmpV);
-    cam.updateMatrixWorld();
+    placeCamera(this.camera, this.dist, this.midX, this.midZ, yaw, pitch, this.tmpV);
   }
 
   /** A tap on figure `i`: it hops and waves (or flexes) at the camera. False while it cannot react yet. */
@@ -561,4 +633,117 @@ const tw = new Float64Array(3);
 
 function vec(c: Rgb): THREE.Vector3 {
   return new THREE.Vector3(c[0], c[1], c[2]);
+}
+
+/** Camera on its orbit round the group's middle, `d` away: `yaw` across, `pitch` up. */
+function placeCamera(cam: THREE.PerspectiveCamera, d: number, midX: number, midZ: number, yaw: number, pitch: number, tmp: THREE.Vector3): void {
+  cam.position.set(midX + Math.sin(yaw) * d * Math.cos(pitch), GROUP_MID_Y + Math.sin(pitch) * d, midZ + Math.cos(yaw) * d * Math.cos(pitch));
+  tmp.set(midX, GROUP_MID_Y, midZ);
+  cam.lookAt(tmp);
+  cam.updateMatrixWorld();
+}
+
+/**
+ * Frames the groups on a `W` x `H` view so they sit in the focus box, and returns how far the camera is from them.
+ * `span` is how wide they are, `captainH` how tall the captain is, `floorY` the height of the front of the base.
+ */
+function aimCamera(cam: THREE.PerspectiveCamera, W: number, H: number, f: StageFocus, span: number, captainH: number, midX: number, midZ: number, floorY: number, tmp: THREE.Vector3): number {
+  const bottom = (f.y + f.h) * H;
+  // pixels per world unit: the captain at their share of the view's height, unless the group would not fit inside the
+  // focus box (the heads stay below whatever is above the box; only a raised arm or a tossed ball goes past its top)
+  const k = Math.min((H * CAPTAIN_SHARE) / captainH, (f.w * W) / span, (f.h * H * 0.98) / GROUP_H);
+  const viewH = H / k;
+  const dist = viewH / 2 / Math.tan((FOV * Math.PI) / 360);
+  cam.fov = FOV;
+  cam.aspect = W / H;
+  cam.near = Math.max(0.5, dist - 8);
+  cam.far = dist + 12;
+  // the group's middle lands in the middle of the box across, and the front of the base at its bottom
+  placeCamera(cam, dist, midX, midZ, 0, PITCH, tmp);
+  cam.clearViewOffset();
+  cam.updateProjectionMatrix();
+  tmp.set(midX, floorY, midZ + BASE_R).project(cam);
+  const footY = (0.5 - tmp.y * 0.5) * H;
+  const px = (f.x + f.w / 2) * W;
+  cam.setViewOffset(W, H, W / 2 - px, footY - bottom, W, H);
+  cam.updateProjectionMatrix();
+  return dist;
+}
+
+/** An ellipse on the view, as fractions of its width and height from the top left: its middle and its two half-sizes. */
+export interface StageEllipse {
+  x: number;
+  y: number;
+  rx: number;
+  ry: number;
+}
+
+/** Where things on the stage land on the view when it stands still, for a screen that draws round them. */
+export interface StageMarks {
+  /** each group's floor ring, `ring` times the base's size */
+  rings: StageEllipse[];
+  /** each figure's feet at rest, in the order of the groups and their members */
+  feet: { x: number; y: number }[];
+  /** pixels per world unit, as a share of the view's height (a figure of build height 1 stands about 1.57 of them) */
+  scale: number;
+}
+
+/**
+ * The same framing the renderer uses, worked out without GL: where each base's ring and each figure's feet land on a
+ * `width` x `height` view with this focus. A screen lines up what it draws behind the view (a floor, a ring, name plates)
+ * with this, and it is right before the first frame is drawn and wherever there is no GL at all.
+ */
+export function stageMarks(setup: StageSetup, focus: StageFocus, width: number, height: number, ring = 1): StageMarks {
+  const W = Math.max(1, width);
+  const H = Math.max(1, height);
+  const groups = setup.groups;
+  const cam = new THREE.PerspectiveCamera(FOV, W / H, 1, 80);
+  const tmp = new THREE.Vector3();
+  let captainH = FIGURE_H;
+  let mx = 0;
+  let mz = 0;
+  for (const g of groups) {
+    // the renderer's captain is the last group's: the framing follows it
+    if (g.members.length > 0) captainH = FIGURE_H * (g.members[0].look.build?.height ?? 1);
+    mx += g.x;
+    mz += g.z;
+  }
+  mx /= Math.max(1, groups.length);
+  mz /= Math.max(1, groups.length);
+  const one = groupWidth(setup.spread ?? 1);
+  const span = groups.length > 1 ? one * groups.length : one;
+  const floorY = setup.paint ? 0 : -BASE_H;
+  const dist = aimCamera(cam, W, H, focus, span, captainH, mx, mz, floorY, tmp);
+  const onView = (x: number, y: number, z: number) => {
+    tmp.set(x, y, z).project(cam);
+    return { x: tmp.x * 0.5 + 0.5, y: 0.5 - tmp.y * 0.5 };
+  };
+  const rings = groups.map((g) => {
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    const r = BASE_R * ring;
+    for (let i = 0; i < 64; i++) {
+      const a = (i / 64) * Math.PI * 2;
+      const p = onView(g.x + Math.cos(a) * r, 0, g.z + Math.sin(a) * r);
+      x0 = Math.min(x0, p.x);
+      x1 = Math.max(x1, p.x);
+      y0 = Math.min(y0, p.y);
+      y1 = Math.max(y1, p.y);
+    }
+    return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, rx: (x1 - x0) / 2, ry: (y1 - y0) / 2 };
+  });
+  const feet: { x: number; y: number }[] = [];
+  for (const g of groups) {
+    const cg = Math.cos(g.turn);
+    const sg = Math.sin(g.turn);
+    g.members.forEach((_, mi) => {
+      const spot = spotOf(mi, setup.spread ?? 1);
+      feet.push(onView(g.x + spot.x * cg + spot.z * sg, 0, g.z - spot.x * sg + spot.z * cg));
+    });
+  }
+  // the view's height in world units at the group's distance
+  const viewH = 2 * dist * Math.tan((FOV * Math.PI) / 360);
+  return { rings, feet, scale: 1 / viewH };
 }

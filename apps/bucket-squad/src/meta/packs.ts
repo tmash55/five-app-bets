@@ -30,7 +30,7 @@ export const SHOP_PACKS: readonly PackDef[] = [
   {
     id: 'playground',
     name: 'Playground Pack',
-    tagline: '3 players. Great for filling the Shelf.',
+    tagline: '3 players. Great for filling your Collection.',
     price: 250,
     cards: 3,
     odds: { common: 0.74, rare: 0.21, epic: 0.045, legend: 0.005 },

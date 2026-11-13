@@ -1,32 +1,60 @@
-/** Home: your squad on one side, everything you can do on the other. */
+/** Home: your squad warming up in their corner of the arcade on one side, everything you can do on the other. */
 
 import { Image } from 'expo-image';
 import { Redirect, useFocusEffect, useIsFocused, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
-import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming, type SharedValue } from 'react-native-reanimated';
+import { Pressable, StyleSheet, View, useWindowDimensions, type ViewStyle } from 'react-native';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming, type SharedValue } from 'react-native-reanimated';
 
-import { PLAYERS, cardArt, mustPlayer, playerOverall } from '@/data/roster';
+import { PLAYERS, cardArt, leagueOf, mustPlayer, playerOverall } from '@/data/roster';
 import { tapFeedback } from '@/fx/feedback';
 import { StageView } from '@/game/StageView';
+import type { StageFocus, StageMarks, StagePaint } from '@/game/render/stage';
+import { STAGE_BASE_R, groupWidth, stageMarks } from '@/game/render/stage';
 import { squadStage } from '@/game/stage/cast';
 import { countOwned, levelOf } from '@/meta/collection';
+import { tierProgress } from '@/meta/ladder';
 import { currentMissions, missionsToClaim } from '@/meta/missions';
 import { dayKey } from '@/meta/rng';
+import { nextTourGame, preferredTour, toursFor } from '@/meta/tour';
 import { useSave } from '@/state/save';
-import { color, size as sizes, space, type ColorName } from '@/theme/tokens';
-import { Dot, Tag } from '@/ui/Bits';
-import { Icon, type IconName } from '@/ui/Icon';
-import { Screen } from '@/ui/Screen';
-import { IconButton, Sticker, StickerButton } from '@/ui/Sticker';
-import { StickerText, Txt } from '@/ui/Txt';
+import { blend, neonText, night, rarityPaint, track, tube } from '@/theme/arcade';
+import { color, px, space } from '@/theme/tokens';
+import { ArcadeScreen, CoinChip } from '@/ui/arcade/ArcadeScreen';
+import { GoldButton, NeonTile, RoundButton } from '@/ui/arcade/Buttons';
+import { fitPerson, widthOf } from '@/ui/arcade/measure';
+import { placePlates } from '@/ui/arcade/plateRow';
+import { Floor, Spotlight, StageRing } from '@/ui/arcade/Room';
+import { HoopSign, StarSign } from '@/ui/arcade/Signs';
+import { Chip, Plate } from '@/ui/arcade/Surface';
+import { Glow, Print } from '@/ui/arcade/Type';
 
 const ALL_IDS = PLAYERS.map((p) => p.id);
-/** one full breath of the squad on the home screen */
+/** one full breath of the squad's card art, before the live squad takes over */
 const IDLE_MS = 2400;
 /** the live 3D squad needs GL; tests have none and keep the card art */
 const LIVE = process.env.NODE_ENV !== 'test';
 const FADE_MS = 280;
+/** the squad stands on the arcade's own floor: the 3D base is only their contact shadows */
+const FLOOR_PAINT: StagePaint = { shadow: night.pit, strength: 0.62 };
+/** the lit ring they stand in, as a share of the 3D base: a little wider than the squad */
+const RING = 1.5;
+/** the three stand further apart than on a plinth, so every face is clear of its neighbours' */
+const SPREAD = 1.55;
+/** where the front of the base sits, as a share of the way from the top of the corner to the bottom of the screen */
+const BASE_FRONT = 0.885;
+/** the right-hand column: the big button and the four signs */
+const MENU_W = px(284);
+/** the room for the line under PLAY: the big button less its padding, its icon and the gap after it */
+const PLAY_ROOM = MENU_W - px(18) * 2 - px(46) - px(14);
+
+/** The first of these that fits on the line under PLAY at its own size (the last one if none does): a shrunk line would be cut. */
+function fitLine(choices: readonly string[], room: number): string {
+  return choices.find((t) => widthOf(t, 'bold', neonText.small, track.close) <= room) ?? choices[choices.length - 1];
+}
+
+/** the slow breath of the lit lettering and signs */
+const BREATH_MS = 3600;
 
 interface Rect {
   x: number;
@@ -35,44 +63,70 @@ interface Rect {
   h: number;
 }
 
-function Tile({ label, sub, icon, fill, count = 0, tag, onPress }: { label: string; sub: string; icon: IconName; fill: ColorName; count?: number; tag?: string; onPress: () => void }) {
-  return (
-    <View style={styles.tile}>
-      <StickerButton fill={fill} round="lg" onPress={onPress} accessibilityLabel={`${label}. ${sub}`} face={styles.tileFace}>
-        <Icon name={icon} size={sizes.iconLarge} color="white" />
-        <View style={styles.tileText}>
-          <Txt font="display" size="large" color="white" shadow lines={1}>
-            {label}
-          </Txt>
-          <Txt size="small" color="ink" lines={1}>
-            {sub}
-          </Txt>
-        </View>
-      </StickerButton>
-      <Dot count={count} />
-      {tag !== undefined && <Tag label={tag} fill="coral" textColor="white" style={styles.tileTag} />}
-    </View>
-  );
+/** A gentle, endless rise and fall between `low` and 1, starting `delay` in. */
+function useBreath(low: number, delay = 0): SharedValue<number> {
+  const v = useSharedValue(1);
+  useEffect(() => {
+    const half = { duration: BREATH_MS / 2, easing: Easing.inOut(Easing.sin) };
+    v.set(withDelay(delay, withRepeat(withSequence(withTiming(low, half), withTiming(1, half)), -1)));
+  }, [v, low, delay]);
+  return v;
 }
 
-/** One squad member, gently bouncing on their toes. `beat` offsets them so the three never move as one. */
-function Figure({ id, lead, clock, beat }: { id: string; lead: boolean; clock: SharedValue<number>; beat: number }) {
-  const art = cardArt(id);
-  const style = useAnimatedStyle(() => {
-    const wave = Math.sin((clock.value + beat) * Math.PI * 2);
-    return { transform: [{ translateY: -space.xs * 0.5 * (1 + wave) }, { scaleY: 1 + 0.012 * wave }] };
-  });
+/** The game's name in two lit words. It breathes very slightly, never flashes. */
+function Logo() {
+  const breath = useBreath(0.86);
+  const style = useAnimatedStyle(() => ({ opacity: breath.value }));
   return (
-    <Animated.View style={[styles.figure, lead ? styles.figureLead : styles.figureSide, style]}>
-      {art !== undefined && <Image source={art} style={styles.fill} contentFit="contain" contentPosition="bottom" transition={0} />}
+    <Animated.View accessible accessibilityRole="header" accessibilityLabel="Bucket Squad" style={[styles.logo, style]}>
+      <Glow tube="pink" size="title">
+        BUCKET
+      </Glow>
+      <Glow tube="cyan" size="title">
+        SQUAD
+      </Glow>
     </Animated.View>
   );
 }
 
-/** The three players in your squad, standing together: card art at once, then the live warm-up over it. */
-function SquadStage({ ids, onPress }: { ids: string[]; onPress: () => void }) {
-  // captain in the middle and a step in front
-  const order = ids.length >= 3 ? [ids[1], ids[0], ids[2]] : ids;
+/** One of the four signs, breathing a little out of step with the others. */
+function BreathingTile({ delay, ...tile }: React.ComponentProps<typeof NeonTile> & { delay: number }) {
+  const breath = useBreath(0.9, delay);
+  const style = useAnimatedStyle(() => ({ opacity: breath.value }));
+  return (
+    <Animated.View style={[styles.tile, style]}>
+      <NeonTile {...tile} style={styles.tileFace} />
+    </Animated.View>
+  );
+}
+
+/** One squad member's card art, gently bouncing on their toes, standing where the live figure will stand. */
+function Figure({ id, clock, beat, style }: { id: string; clock: SharedValue<number>; beat: number; style: ViewStyle }) {
+  const art = cardArt(id);
+  const bob = useAnimatedStyle(() => {
+    const wave = Math.sin((clock.value + beat) * Math.PI * 2);
+    return { transform: [{ translateY: -space.xs * 0.5 * (1 + wave) }, { scaleY: 1 + 0.012 * wave }] };
+  });
+  return <Animated.View style={[styles.figure, style, bob]}>{art !== undefined && <Image source={art} style={styles.fill} contentFit="contain" contentPosition="bottom" transition={0} />}</Animated.View>;
+}
+
+/** What the plate under a figure says, and how wide it is. */
+function plateText(id: string, owned: Record<string, number>, room: number): { name: string; size: number; ovr: string } {
+  const p = mustPlayer(id);
+  const ovr = String(playerOverall(p, levelOf(owned[id] ?? 1)));
+  const fit = fitPerson(p.name.toUpperCase(), 'bold', neonText.tiny, room - PLATE_PAD - widthOf(ovr, 'bold', neonText.tiny, track.normal), track.normal, p.short?.toUpperCase(), 0.8);
+  return { name: fit.text, size: fit.size, ovr };
+}
+
+/** inside a plate: its padding and edges, and the gap between the name and the number */
+const PLATE_PAD = space.sm * 2 + px(1.5) * 2 + px(7);
+
+/**
+ * The squad's corner of the arcade: a hoop and a star on the wall, a spotlight on the floor, a lit ring to stand in and
+ * a name plate under each player. The three are card art at first, then the live warm-up over it. Everything here is
+ * placed from where the 3D stage puts the figures, so the ring, the light and the plates line up with them on any screen.
+ */
+function SquadCorner({ ids, owned, onPress }: { ids: string[]; owned: Record<string, number>; onPress: () => void }) {
   const clock = useSharedValue(0);
   useEffect(() => {
     clock.set(withRepeat(withTiming(1, { duration: IDLE_MS, easing: Easing.linear }), -1));
@@ -85,7 +139,7 @@ function SquadStage({ ids, onPress }: { ids: string[]; onPress: () => void }) {
   const area = useRef<ComponentRef<typeof View>>(null);
   const window = useWindowDimensions();
   const live = useSharedValue(0);
-  const setup = useMemo(() => squadStage(ids), [ids]);
+  const setup = useMemo(() => squadStage(ids, FLOOR_PAINT, SPREAD), [ids]);
   useFocusEffect(
     useCallback(() => {
       return () => live.set(0);
@@ -108,46 +162,112 @@ function SquadStage({ ids, onPress }: { ids: string[]; onPress: () => void }) {
   const cardStyle = useAnimatedStyle(() => ({ opacity: 1 - live.value }));
   const liveStyle = useAnimatedStyle(() => ({ opacity: live.value }));
 
-  // the GL view reaches up under the header and out to the left edge so raised arms and a flying ball are never cut off
+  // the GL view reaches up under the top bar and out to the left edge so raised arms and a flying ball are never cut off;
+  // the bar is drawn over it
   const glW = rect ? rect.x + rect.w + space.lg : 1;
   const glH = window.height;
-  const focus = useMemo(() => (rect ? { x: rect.x / glW, y: rect.y / glH, w: rect.w / glW, h: rect.h / glH } : { x: 0, y: 0, w: 1, h: 1 }), [rect, glW, glH]);
+  const focus = useMemo<StageFocus>(() => {
+    if (!rect) return { x: 0, y: 0, w: 1, h: 1 };
+    // room above the heads for a hop or a tossed ball before it passes under the top bar
+    const top = rect.y + px(30);
+    const front = rect.y + (glH - rect.y) * BASE_FRONT;
+    // the squad is framed to the box's width when that is what holds it back: narrow it until the ring and its glow fit the corner
+    const wide = Math.min(rect.w - px(32), ((rect.w + px(8) - px(20)) / (2 * RING * STAGE_BASE_R)) * groupWidth(SPREAD));
+    return { x: (rect.x + (rect.w - wide) / 2) / glW, y: top / glH, w: wide / glW, h: (front - top) / glH };
+  }, [rect, glW, glH]);
+  const marks = useMemo<StageMarks | null>(() => (rect ? stageMarks(setup, focus, glW, glH, RING) : null), [rect, setup, focus, glW, glH]);
   const showLive = LIVE && focused && !failed && rect !== null;
 
+  // in the GL view's own frame, which starts at the screen's top left corner
+  const ring = marks?.rings[0];
+  const cx = ring ? ring.x * glW : 0;
+  const cy = ring ? ring.y * glH : 0;
+  const rx = ring ? ring.rx * glW : 0;
+  const ry = ring ? ring.ry * glH : 0;
+  const unit = marks ? marks.scale * glH : 0;
+  // captain in the middle: the stage puts the captain first, then the players to the left and the right
+  const feet = marks ? marks.feet.map((f, i) => ({ id: ids[i], x: f.x * glW, y: f.y * glH })) : [];
+  const across = [...feet].sort((a, b) => a.x - b.x);
+  const plates = useMemo(() => {
+    if (!rect || across.length === 0) return [];
+    const natural = across.map((f) => {
+      const p = mustPlayer(f.id);
+      const ovr = String(playerOverall(p, levelOf(owned[f.id] ?? 1)));
+      return widthOf(p.name.toUpperCase(), 'bold', neonText.tiny, track.normal) + widthOf(ovr, 'bold', neonText.tiny, track.normal) + PLATE_PAD;
+    });
+    const placed = placePlates(
+      across.map((f, i) => ({ at: f.x, width: natural[i] })),
+      rect.x - px(6),
+      rect.x + rect.w + px(4),
+      px(6),
+    );
+    // one row along the front of the ring, the captain's plate a step lower like the captain
+    const row = Math.max(...across.map((f) => f.y)) + px(8);
+    return placed.map((p, i) => ({ ...p, ...plateText(across[i].id, owned, p.width), top: row + (across[i].id === ids[0] ? px(4) : 0), id: across[i].id }));
+    // the plates follow the figures, which follow the layout
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rect, marks, owned]);
+
   return (
-    <View style={styles.stage} ref={area} onLayout={measure}>
-      <Animated.View style={[styles.fill, cardStyle]}>
-        <Pressable
-          style={styles.cards}
-          accessibilityRole="button"
-          accessibilityLabel="Your squad. Tap to change it."
-          onPress={() => {
-            tapFeedback();
-            onPress();
-          }}>
-          <View style={styles.floor} />
-          <View style={styles.figures}>
-            {order.map((id, i) => (
-              <Figure key={id} id={id} lead={id === ids[0]} clock={clock} beat={i * 0.37} />
-            ))}
-          </View>
-        </Pressable>
-      </Animated.View>
-      {showLive && rect && (
-        <Animated.View style={[styles.live, { left: -rect.x, top: -rect.y, width: glW, height: glH }, liveStyle]}>
-          <StageView
-            key={ids.join(',')}
-            setup={setup}
-            focus={focus}
-            onReady={ready}
-            onError={fail}
-            onPressEmpty={() => {
-              tapFeedback();
-              onPress();
-            }}
-            style={styles.fill}
-          />
-        </Animated.View>
+    <View style={styles.corner} ref={area} onLayout={measure}>
+      {rect && marks && ring && (
+        <View pointerEvents="box-none" style={[styles.room, { left: -rect.x, top: -rect.y, width: window.width, height: glH }]}>
+          <HoopSign width={px(92)} style={[styles.at, { left: rect.x + px(4), top: rect.y + px(16) }, styles.sign]} />
+          <StarSign size={px(40)} style={[styles.at, { left: rect.x + rect.w - px(54), top: rect.y + px(22) }, styles.sign]} />
+          <Spotlight width={rx * 2.08} height={cy - rect.y + px(4)} style={[styles.at, { left: cx - rx * 1.04, top: rect.y - px(6) }]} />
+          <Floor style={[styles.at, { left: 0, right: 0, top: cy - ry - px(12), bottom: 0 }]} />
+          <StageRing width={(rx + px(10)) * 2} height={(ry + px(4)) * 2} style={[styles.at, { left: cx - rx - px(10), top: cy - ry - px(4) }]} />
+
+          <Animated.View style={[styles.at, { left: 0, top: 0, width: glW, height: glH }, cardStyle]}>
+            <Pressable
+              style={styles.fill}
+              accessibilityRole="button"
+              accessibilityLabel="Your squad. Tap to change it."
+              onPress={() => {
+                tapFeedback();
+                onPress();
+              }}>
+              {/* back to front: the side players stand a step behind the captain */}
+              {[...feet].reverse().map((f, i) => {
+                const h = unit * 1.57 * 1.32;
+                const w = h * (440 / 560);
+                return <Figure key={f.id} id={f.id} clock={clock} beat={i * 0.37} style={{ left: f.x - w / 2, top: f.y - h * 0.955, width: w, height: h }} />;
+              })}
+            </Pressable>
+          </Animated.View>
+          {showLive && (
+            <Animated.View style={[styles.at, { left: 0, top: 0, width: glW, height: glH }, liveStyle]}>
+              <StageView
+                key={ids.join(',')}
+                setup={setup}
+                focus={focus}
+                onReady={ready}
+                onError={fail}
+                onPressEmpty={() => {
+                  tapFeedback();
+                  onPress();
+                }}
+                style={styles.fill}
+              />
+            </Animated.View>
+          )}
+
+          {plates.map((p) => {
+            const tb = rarityPaint[mustPlayer(p.id).rarity].tube;
+            return (
+              <View key={p.id} pointerEvents="none" style={[styles.at, styles.plateBox, { left: p.x - p.width / 2, top: p.top, width: p.width }]}>
+                <Plate tube={tb}>
+                  <Print face="bold" size={p.size} track="normal" lines={1}>
+                    {p.name}
+                  </Print>
+                  <Print face="bold" size="tiny" color={tube[tb].soft} track="normal">
+                    {p.ovr}
+                  </Print>
+                </Plate>
+              </View>
+            );
+          })}
+        </View>
       )}
     </View>
   );
@@ -162,6 +282,10 @@ export default function Home() {
   const fresh = useSave((s) => s.fresh);
   const missions = useSave((s) => s.missions);
   const freePackDay = useSave((s) => s.freePackDay);
+  const coins = useSave((s) => s.coins);
+  const ladder = useSave((s) => s.ladder);
+  const tour = useSave((s) => s.tour);
+  const homeTeam = useSave((s) => s.homeTeam);
 
   if (!onboarded || squad.length === 0) return <Redirect href="/welcome" />;
 
@@ -170,164 +294,110 @@ export default function Home() {
   const freePack = freePackDay !== today;
   const toClaim = missionsToClaim(currentMissions(missions, today));
   const have = countOwned(owned, ALL_IDS);
-  const squadOvr = Math.round(squad.reduce((a, id) => a + playerOverall(mustPlayer(id), levelOf(owned[id] ?? 1)), 0) / squad.length);
   const go = (href: Href) => () => router.push(href);
 
+  // where PLAY leads: the next stop on the tour the Tour screen opens on, or the ladder once every court is beaten
+  const tier = tierProgress(ladder.points).tier;
+  const current = preferredTour(toursFor(homeTeam), tour, leagueOf(homeTeam));
+  const next = nextTourGame(tour, current);
+  const nextStage = next ? current.stages[next.stage] : null;
+  const stop = nextStage?.team.name.toUpperCase();
+  const playSub = fitLine(stop !== undefined ? [`TOUR · NEXT STOP: ${stop}`, `TOUR · NEXT: ${stop}`, `NEXT: ${stop}`, stop] : [`LADDER · ${tier.name.toUpperCase()}`], PLAY_ROOM);
+  const tierLight = color[tier.color];
+
+  const packSub = freePack ? (packCount > 0 ? `Free pack + ${packCount} more` : '1 free pack today') : packCount > 0 ? `${packCount} to open` : 'Card shop';
+
   return (
-    <Screen
+    <ArcadeScreen
       back={false}
-      headerOnTop
-      left={
-        // the squad warms up behind the name: a hop or a tossed ball passes under it, and a tap on it reaches them
-        <View pointerEvents="none">
-          <StickerText size="title" color="sun">
-            BUCKET SQUAD
-          </StickerText>
-        </View>
-      }
-      right={<IconButton name="gear" label="Settings" onPress={go('/settings')} />}>
-      <View style={styles.row}>
-        <View style={styles.left}>
-          <SquadStage ids={squad} onPress={go('/squad')} />
-          <Pressable
-            style={styles.squadPill}
-            accessibilityRole="button"
-            accessibilityLabel={`Your squad, ${squadOvr} overall. Tap to change it.`}
-            onPress={() => {
-              tapFeedback();
-              go('/squad')();
-            }}>
-            <Sticker fill="paper" round="pill" raise="low" face={styles.squadPillFace}>
-              <Icon name="crown" size={sizes.iconSmall} color="sun" />
-              <Txt font="display" size="body">
-                YOUR SQUAD
-              </Txt>
-              <Tag label={`${squadOvr} OVR`} fill="ink" textColor="white" style={styles.center} />
-            </Sticker>
-          </Pressable>
-        </View>
-        <View style={styles.right}>
-          <StickerButton fill="coral" round="xl" raise="high" onPress={go('/play')} accessibilityLabel="Play" face={styles.playFace}>
-            <Icon name="play" size={sizes.iconHuge} color="white" />
-            <StickerText size="big" color="white">
-              PLAY
-            </StickerText>
-          </StickerButton>
-          <View style={styles.grid}>
-            <Tile label="PACKS" sub={packCount > 0 ? `${packCount} to open` : 'Card shop'} icon="pack" fill="grape" count={packCount} tag={freePack ? 'FREE PACK!' : undefined} onPress={go('/packs')} />
-            <Tile label="SHELF" sub={`${have} of ${ALL_IDS.length} players`} icon="cards" fill="mint" count={fresh.length} onPress={go('/shelf')} />
+      coins={false}
+      left={<Logo />}
+      right={
+        <>
+          <View accessible accessibilityLabel={`Ladder: ${tier.name}`}>
+            <Chip>
+              <Print face="bold" size="small" color="textFaint" track="wider">
+                LADDER
+              </Print>
+              <Print face="bold" size="small" color={blend(tierLight, night.white, 0.72)} track="wider" glow={blend(tierLight, night.white, 0.4)} upper>
+                {tier.name}
+              </Print>
+            </Chip>
           </View>
-          <View style={styles.grid}>
-            <Tile label="SQUAD" sub="Pick your three" icon="swap" fill="orange" onPress={go('/squad')} />
-            <Tile label="MISSIONS" sub={toClaim > 0 ? 'Prizes waiting!' : 'New every day'} icon="target" fill="sunDeep" count={toClaim} onPress={go('/missions')} />
+          <CoinChip coins={coins} />
+          <RoundButton icon="gear" label="Settings" onPress={go('/settings')} />
+        </>
+      }>
+      <View style={styles.row}>
+        <SquadCorner ids={squad} owned={owned} onPress={go('/squad')} />
+        <View style={styles.menu}>
+          <GoldButton size="big" label="PLAY" sub={playSub} icon="play" onPress={go('/play')} accessibilityLabel={`Play. ${playSub}`} />
+          <View style={styles.tiles}>
+            <View style={styles.tileRow}>
+              <BreathingTile delay={0} tube="pink" icon="pack" title="PACKS" sub={packSub} badge={packCount + (freePack ? 1 : 0)} onPress={go('/packs')} />
+              <BreathingTile delay={900} tube="cyan" icon="grid" title="COLLECTION" sub={`${have} of ${ALL_IDS.length} players`} badge={fresh.length} onPress={go('/shelf')} />
+            </View>
+            <View style={styles.tileRow}>
+              <BreathingTile delay={1800} tube="violet" icon="squad" title="SQUAD" sub="Pick your three" onPress={go('/squad')} />
+              <BreathingTile delay={2700} tube="green" icon="target" title="MISSIONS" sub={toClaim > 0 ? 'Prizes waiting!' : 'New every day'} badge={toClaim} onPress={go('/missions')} />
+            </View>
           </View>
         </View>
       </View>
-    </Screen>
+    </ArcadeScreen>
   );
 }
 
 const styles = StyleSheet.create({
+  logo: {
+    flexDirection: 'row',
+    gap: px(9),
+  },
   row: {
     flex: 1,
     flexDirection: 'row',
-    gap: space.lg,
+    gap: px(18),
   },
-  left: {
-    flex: 1.05,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  stage: {
+  corner: {
     flex: 1,
-    alignSelf: 'stretch',
   },
-  cards: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  live: {
+  room: {
     position: 'absolute',
   },
-  floor: {
+  at: {
     position: 'absolute',
-    bottom: space.xs,
-    width: '86%',
-    height: space.huge,
-    borderRadius: space.huge,
-    backgroundColor: color.scrimSoft,
   },
-  figures: {
-    flex: 1,
-    alignSelf: 'stretch',
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    paddingBottom: space.md,
+  sign: {
+    opacity: 0.85,
   },
   figure: {
-    width: '48%',
+    position: 'absolute',
     transformOrigin: 'bottom',
-  },
-  figureLead: {
-    height: '100%',
-    zIndex: 2,
-    marginHorizontal: '-17%',
-  },
-  figureSide: {
-    height: '86%',
-    zIndex: 1,
   },
   fill: {
     width: '100%',
     height: '100%',
   },
-  squadPill: {
-    marginTop: -space.md,
-    marginBottom: space.xs,
-  },
-  squadPillFace: {
-    flexDirection: 'row',
+  plateBox: {
     alignItems: 'center',
-    gap: space.sm,
-    paddingHorizontal: space.md,
-    paddingVertical: space.xs,
   },
-  center: {
-    alignSelf: 'center',
-  },
-  right: {
-    flex: 1,
-    gap: space.sm,
+  menu: {
+    width: MENU_W,
     justifyContent: 'center',
-    paddingBottom: space.xs,
+    gap: px(22),
+    paddingBottom: px(4),
   },
-  playFace: {
-    minHeight: sizes.buttonLarge + space.md,
-    gap: space.md,
+  tiles: {
+    gap: px(14),
   },
-  grid: {
+  tileRow: {
     flexDirection: 'row',
-    gap: space.sm,
+    gap: px(12),
   },
   tile: {
     flex: 1,
   },
   tileFace: {
-    justifyContent: 'flex-start',
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-    minHeight: sizes.buttonLarge,
-    gap: space.sm,
-  },
-  tileText: {
-    flex: 1,
-  },
-  tileTag: {
-    position: 'absolute',
-    top: -space.sm,
-    left: space.sm,
-    transform: [{ rotate: '-4deg' }],
+    height: px(84),
   },
 });

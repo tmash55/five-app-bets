@@ -1,25 +1,40 @@
-/** The card shop: packs waiting to be opened, the free daily pack, and packs to buy with coins. */
+/** The pack shop: a prize machine's window of packs to buy with coins, and the packs waiting to be opened beside it. */
 
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
 import { playSfx } from '@/audio/sound';
+import { teamById } from '@/data/roster';
 import { RARITIES, RARITY_LABEL } from '@/data/types';
+import { tapFeedback } from '@/fx/feedback';
 import { SHOP_PACKS, packById, type PackDef } from '@/meta/packs';
 import { dayKey } from '@/meta/rng';
 import { useSave } from '@/state/save';
-import { px, size as sizes, space } from '@/theme/tokens';
-import { RARITY_COLOR, Tag } from '@/ui/Bits';
-import { Icon } from '@/ui/Icon';
-import { Overlay, Panel } from '@/ui/Overlay';
-import { PackArt } from '@/ui/PackArt';
-import { Screen } from '@/ui/Screen';
-import { IconButton, Sticker, StickerButton } from '@/ui/Sticker';
-import { StickerText, Txt } from '@/ui/Txt';
+import { arcade, blend, fade, night, rarityPaint, tube, type Tube } from '@/theme/arcade';
+import { px, space } from '@/theme/tokens';
+import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
+import { GhostButton, GoldButton, PriceButton } from '@/ui/arcade/Buttons';
+import { Gems } from '@/ui/arcade/Card';
+import { FOIL_RATIO, FoilPack, foilFor } from '@/ui/arcade/Foil';
+import { LineIcon } from '@/ui/arcade/LineIcon';
+import { Popup } from '@/ui/arcade/Popup';
+import { Bulbs } from '@/ui/arcade/Room';
+import { CountBadge, NeonPanel, Well } from '@/ui/arcade/Surface';
+import { Glow, Print } from '@/ui/arcade/Type';
+import { useAfter } from '@/ui/hooks';
 
-const ART_W = sizes.cardSmall;
-const CARD_W = sizes.card + space.xxl;
+/** the right-hand panel of packs waiting to be opened */
+const READY_W = px(236);
+/** the room for a waiting pack's name: the panel less its padding, the well's, and the small pack beside it */
+const WELL_WORDS = READY_W - px(22) - px(4) - px(18) - px(36) - px(10) - px(4);
+/** the marquee bulbs swap every so often: a slow chase, never a flash */
+const CHASE_MS = 900;
+/** the strip of bulbs along the top of the machine's window */
+const STRIP_H = px(18);
+/** everything in a shop column but the pack: the gaps, the name, the line under it, the price and the note */
+const COLUMN_REST = px(150);
 
 function percent(p: number): string {
   const v = p * 100;
@@ -34,58 +49,130 @@ function safePack(id: string): PackDef | null {
   }
 }
 
-function PackCard({ pack, tag, tagFill, note, onOdds, children }: { pack: PackDef; tag?: string; tagFill?: 'coral' | 'sun'; note?: string; onOdds: () => void; children: React.ReactNode }) {
+/** The tube a pack's name is lit in: its foil's own light. */
+function packTube(pack: PackDef): Tube {
+  const f = foilFor(pack);
+  return { glass: f.glow, tint: blend(f.glow, night.white, 0.86), soft: f.ink };
+}
+
+/** What is inside, in plain words from the pack's own odds. */
+function inside(pack: PackDef): string {
+  if (pack.team) return `${pack.cards} ${teamById(pack.team).name} players`;
+  return pack.guarantee ? `1 ${RARITY_LABEL[pack.guarantee]} or better inside` : 'Any rarity inside';
+}
+
+/** A small round "what is inside" button. */
+function OddsButton({ pack, onPress }: { pack: PackDef; onPress: () => void }) {
   return (
-    <Sticker fill="paper" round="lg" raise="mid" style={styles.card} face={styles.cardFace}>
-      <View>
-        <PackArt pack={pack} width={ART_W} />
-        {tag !== undefined && <Tag label={tag} fill={tagFill ?? 'coral'} textColor={tagFill === 'sun' ? 'ink' : 'white'} style={styles.tag} />}
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`What is inside the ${pack.name}`}
+      hitSlop={space.sm}
+      onPress={() => {
+        tapFeedback();
+        onPress();
+      }}
+      style={({ pressed }) => [styles.odds, pressed && styles.pressed]}>
+      <View style={styles.oddsDot}>
+        <LineIcon name="help" size={px(15)} color={night.textDim} weight={2.6} />
       </View>
-      <Txt font="display" size="body" center lines={1}>
-        {pack.name}
-      </Txt>
-      <Txt size="tiny" color="inkSoft" center lines={2} style={styles.tagline}>
-        {note ?? pack.tagline}
-      </Txt>
-      {children}
-      <View style={styles.odds}>
-        <IconButton name="help" label={`What is inside the ${pack.name}`} diameter={sizes.badgeSmall + space.xs} fill="white" iconColor="grape" onPress={onOdds} />
-      </View>
-    </Sticker>
+    </Pressable>
   );
 }
 
-function OddsOverlay({ pack, onClose }: { pack: PackDef; onClose: () => void }) {
+/** One lit column in the machine's window: the pack, its name, what is inside and its price. */
+function ShopColumn({ pack, coins, packW, onBuy, onOdds }: { pack: PackDef; coins: number; packW: number; onBuy: () => void; onOdds: () => void }) {
+  const short = pack.price - coins;
+  const [width, setWidth] = useState(0);
+  const tb = packTube(pack);
   return (
-    <Overlay onDismiss={onClose}>
-      <Panel width={sizes.panelMax - px(80)} face={styles.oddsPanel}>
-        <View style={styles.oddsHead}>
-          <PackArt pack={pack} width={sizes.avatarLarge} />
-          <View style={styles.oddsText}>
-            <StickerText size="title" color="sun">
-              {pack.name.toUpperCase()}
-            </StickerText>
-            <Txt size="small" color="inkSoft">
-              {`${pack.cards} players in every pack. Each one has these chances:`}
-            </Txt>
-          </View>
+    <View style={styles.column} onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}>
+      <LinearGradient colors={[fade(foilFor(pack).glow, 0.22), fade(night.panel, 0)]} locations={[0, 0.58]} style={[StyleSheet.absoluteFill, styles.columnLight]} />
+      <FoilPack pack={pack} width={packW} />
+      <Glow face="sign" size="large" tube={tb} track="close" center room={width > 0 ? width - px(14) : undefined} style={styles.packName}>
+        {pack.name.toUpperCase()}
+      </Glow>
+      <Print face="body" size="tiny" color="textMuted" center room={width > 0 ? width - px(12) : undefined} style={styles.packInside}>
+        {inside(pack)}
+      </Print>
+      <PriceButton price={pack.price} can={short <= 0} quiet onPress={onBuy} accessibilityLabel={`Buy the ${pack.name} for ${pack.price} coins`} style={styles.price} />
+      <View style={styles.noteBox}>
+        {short > 0 && (
+          <Print face="bold" size="micro" color={tube.pink.soft} track="normal" center room={width > 0 ? width - px(8) : undefined}>
+            {`${short.toLocaleString('en-US')} MORE TO GO`}
+          </Print>
+        )}
+      </View>
+      <OddsButton pack={pack} onPress={onOdds} />
+    </View>
+  );
+}
+
+/** One kind of pack waiting to be opened: a small pack, its name, a line about it, and its button. */
+function ReadyWell({ pack, line, onOdds, children }: { pack: PackDef; line: string; onOdds: () => void; children: React.ReactNode }) {
+  return (
+    <Well style={styles.well}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`What is inside the ${pack.name}`}
+        onPress={() => {
+          tapFeedback();
+          onOdds();
+        }}
+        style={({ pressed }) => [styles.wellHead, pressed && styles.pressed]}>
+        <FoilPack pack={pack} width={px(36)} flat />
+        <View style={styles.wellWords}>
+          <Print face="bold" size="body" track="tight" lines={1} room={WELL_WORDS}>
+            {pack.name}
+          </Print>
+          <Print face="medium" size="tiny" color="textDim" lines={1} room={WELL_WORDS}>
+            {line}
+          </Print>
         </View>
-        <View style={styles.oddsRow}>
-          {RARITIES.map((r) => (
-            <View key={r} style={styles.oddsCell}>
-              <Tag label={RARITY_LABEL[r]} fill={RARITY_COLOR[r].deep} textColor="white" style={styles.centerSelf} />
-              <Txt font="display" size="large" center>
+        <View style={styles.wellHelp}>
+          <LineIcon name="help" size={px(12)} color={night.textFaint} weight={2.6} />
+        </View>
+      </Pressable>
+      {children}
+    </Well>
+  );
+}
+
+function OddsPopup({ pack, onClose }: { pack: PackDef; onClose: () => void }) {
+  return (
+    <Popup onDismiss={onClose} tube={packTube(pack)} width={px(470)} style={styles.oddsPanel}>
+      <View style={styles.oddsHead}>
+        <FoilPack pack={pack} width={px(56)} />
+        <View style={styles.grow}>
+          <Glow face="sign" size="sign" tube={packTube(pack)} track="close" room={px(330)}>
+            {pack.name.toUpperCase()}
+          </Glow>
+          <Print face="medium" size="small" color="textMuted" style={styles.oddsLead}>
+            {`${pack.cards} players in every pack. Each one has these chances:`}
+          </Print>
+        </View>
+      </View>
+      <View style={styles.oddsRow}>
+        {RARITIES.map((r) => {
+          const tb = tube[rarityPaint[r].tube];
+          return (
+            <Well key={r} style={[styles.oddsCell, { borderColor: fade(tb.glass, 0.5) }]}>
+              <Gems rarity={r} size={px(9)} />
+              <Print face="bold" size="tiny" color={tb.tint} track="wide" upper>
+                {RARITY_LABEL[r]}
+              </Print>
+              <Print face="display" size="sign" color={tb.soft}>
                 {percent(pack.odds[r])}
-              </Txt>
-            </View>
-          ))}
-        </View>
-        <Txt size="small" color="inkSoft" center>
-          {`${pack.guarantee ? `One player is always ${RARITY_LABEL[pack.guarantee]} or better. ` : ''}Players you do not have yet turn up more often. Coins come from playing: nothing in this game costs real money.`}
-        </Txt>
-        <StickerButton label="GOT IT" fill="mint" textSize="body" onPress={onClose} />
-      </Panel>
-    </Overlay>
+              </Print>
+            </Well>
+          );
+        })}
+      </View>
+      <Print face="medium" size="tiny" color="textDim" center>
+        {`${pack.guarantee ? `One player is always ${RARITY_LABEL[pack.guarantee]} or better. ` : ''}Players you do not have yet turn up more often. Coins come from playing: nothing in this game costs real money.`}
+      </Print>
+      <GoldButton size="small" label="GOT IT" onPress={onClose} style={styles.gotIt} />
+    </Popup>
   );
 }
 
@@ -97,13 +184,28 @@ export default function Packs() {
   const buyPack = useSave((s) => s.buyPack);
   const claimFreePack = useSave((s) => s.claimFreePack);
   const [odds, setOdds] = useState<PackDef | null>(null);
+  const [phase, setPhase] = useState(0);
+  const [stripW, setStripW] = useState(0);
+  const [row, setRow] = useState({ w: 0, h: 0 });
+  const after = useAfter();
+
+  // the marquee's slow chase
+  useEffect(() => {
+    const tick = () => {
+      setPhase((p) => p + 1);
+      after(CHASE_MS, tick);
+    };
+    after(CHASE_MS, tick);
+  }, [after]);
 
   const free = freePackDay !== dayKey();
   const mine = Object.keys(packs)
     .filter((id) => packs[id] > 0)
     .map((id) => safePack(id))
     .filter((p): p is PackDef => p !== null);
+  const waiting = mine.reduce((n, p) => n + packs[p.id], 0) + (free ? 1 : 0);
   const open = (id: string) => router.push({ pathname: '/open', params: { pack: id } });
+  const playground = packById('playground');
 
   const buy = (pack: PackDef) => {
     if (!buyPack(pack.id)) return;
@@ -117,48 +219,60 @@ export default function Packs() {
     open('playground');
   };
 
+  // the packs grow with the room the window has: as wide as a column allows, as tall as leaves room for the rest
+  const gaps = px(8) * (SHOP_PACKS.length - 1);
+  const colW = row.w > 0 ? (row.w - gaps) / SHOP_PACKS.length : 0;
+  const packW = row.h > 0 ? Math.round(Math.max(px(64), Math.min(colW * 0.7, (row.h - COLUMN_REST) / FOIL_RATIO))) : px(100);
+
   return (
     <View style={styles.root}>
-      <Screen title="PACKS" tone="grape">
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-          <View style={styles.group}>
-            <Txt font="display" size="body" color="white" shadow>
-              YOUR PACKS
-            </Txt>
-            <View style={styles.cards}>
-              <PackCard pack={packById('playground')} tag={free ? 'FREE!' : undefined} note={free ? 'A free pack every day. Come and get it!' : 'You got today’s free pack. Come back tomorrow!'} onOdds={() => setOdds(packById('playground'))}>
-                <StickerButton label={free ? 'GET IT!' : 'TOMORROW'} icon={free ? 'gift' : undefined} iconColor="white" fill={free ? 'coral' : 'paperDim'} textColor={free ? 'white' : 'inkFaint'} textSize="body" height={sizes.buttonSmall} disabled={!free} quiet onPress={claim} style={styles.action} />
-              </PackCard>
-              {mine.map((p) => (
-                <PackCard key={p.id} pack={p} tag={`x${packs[p.id]}`} tagFill="sun" onOdds={() => setOdds(p)}>
-                  <StickerButton label="OPEN" icon="pack" iconColor="white" fill="mint" textSize="body" height={sizes.buttonSmall} onPress={() => open(p.id)} style={styles.action} />
-                </PackCard>
+      <ArcadeScreen title="PACKS" tube="pink" style={styles.body}>
+        <View style={styles.panels}>
+          <NeonPanel tube="cyan" style={styles.machine}>
+            <View style={styles.strip} onLayout={(e) => setStripW(e.nativeEvent.layout.width)}>
+              {stripW > 0 && <Bulbs width={stripW - px(16)} phase={phase} />}
+            </View>
+            <View style={styles.columns} onLayout={(e) => setRow({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
+              {SHOP_PACKS.map((p) => (
+                <ShopColumn key={p.id} pack={p} coins={coins} packW={packW} onBuy={() => buy(p)} onOdds={() => setOdds(p)} />
               ))}
             </View>
-          </View>
-          <View style={styles.group}>
-            <Txt font="display" size="body" color="white" shadow>
-              CARD SHOP
-            </Txt>
-            <View style={styles.cards}>
-              {SHOP_PACKS.map((p) => {
-                const short = p.price - coins;
-                return (
-                  <PackCard key={p.id} pack={p} note={short > 0 ? `${short.toLocaleString('en-US')} more coins to go. Play games to earn them!` : undefined} onOdds={() => setOdds(p)}>
-                    <StickerButton fill="sun" height={sizes.buttonSmall} disabled={short > 0} quiet onPress={() => buy(p)} accessibilityLabel={`Buy the ${p.name} for ${p.price} coins`} style={styles.action}>
-                      <Icon name="coin" color="sun" size={sizes.icon} />
-                      <Txt font="display" size="body">
-                        {p.price.toLocaleString('en-US')}
-                      </Txt>
-                    </StickerButton>
-                  </PackCard>
-                );
-              })}
+          </NeonPanel>
+
+          <NeonPanel tube="pink" style={styles.ready}>
+            <View style={styles.readyHead}>
+              <Glow face="sign" size={px(18)} tube="pink" track="close">
+                READY TO OPEN
+              </Glow>
+              <CountBadge count={waiting} tube="pink" />
             </View>
-          </View>
-        </ScrollView>
-      </Screen>
-      {odds && <OddsOverlay pack={odds} onClose={() => setOdds(null)} />}
+            <ScrollView style={styles.grow} contentContainerStyle={styles.wells} showsVerticalScrollIndicator={false}>
+              <ReadyWell pack={playground} line={free ? 'Free every day' : 'Free again tomorrow'} onOdds={() => setOdds(playground)}>
+                {free ? (
+                  <GoldButton size="small" label="OPEN" quiet onPress={claim} accessibilityLabel="Open today's free Playground Pack" />
+                ) : (
+                  <GhostButton label="TOMORROW" lit={false} disabled accessibilityLabel="The next free pack comes tomorrow" />
+                )}
+              </ReadyWell>
+              {mine.map((p) => (
+                <ReadyWell key={p.id} pack={p} line={packs[p.id] > 1 ? `${packs[p.id]} to open` : p.team ? inside(p) : `${p.cards} players inside`} onOdds={() => setOdds(p)}>
+                  <GoldButton size="small" label={packs[p.id] > 1 ? `OPEN  x${packs[p.id]}` : 'OPEN'} onPress={() => open(p.id)} accessibilityLabel={`Open the ${p.name}`} />
+                </ReadyWell>
+              ))}
+              {/* with nothing else waiting, say where the next pack comes from instead of leaving the panel empty */}
+              {mine.length === 0 && (
+                <View style={styles.none}>
+                  <LineIcon name="pack" size={px(26)} color={night.lineLit} weight={2} />
+                  <Print face="body" size="small" color="textFaint" center>
+                    Packs you get wait here until you open them.
+                  </Print>
+                </View>
+              )}
+            </ScrollView>
+          </NeonPanel>
+        </View>
+      </ArcadeScreen>
+      {odds && <OddsPopup pack={odds} onClose={() => setOdds(null)} />}
     </View>
   );
 }
@@ -167,59 +281,131 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  // a few packs sit in the middle of the screen; a long row scrolls from the left
-  scroll: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    gap: space.xl,
-    paddingRight: space.lg,
+  body: {
+    paddingTop: px(12),
+    paddingBottom: px(12),
+  },
+  grow: {
+    flex: 1,
+  },
+  none: {
     alignItems: 'center',
+    gap: px(8),
+    paddingTop: px(14),
+    paddingHorizontal: px(10),
   },
-  group: {
-    gap: space.xs,
-  },
-  cards: {
+  panels: {
+    flex: 1,
     flexDirection: 'row',
-    gap: space.md,
+    gap: px(16),
   },
-  card: {
-    width: CARD_W,
+  machine: {
+    flex: 1,
   },
-  cardFace: {
+  strip: {
+    height: STRIP_H,
     alignItems: 'center',
-    gap: space.hair,
-    paddingHorizontal: space.sm,
-    paddingTop: space.sm,
-    paddingBottom: space.sm,
+    justifyContent: 'center',
+    backgroundColor: night.well,
+    borderBottomWidth: arcade.hairline,
+    borderBottomColor: night.line,
+    borderTopLeftRadius: arcade.rPanel - arcade.outline,
+    borderTopRightRadius: arcade.rPanel - arcade.outline,
   },
-  tag: {
-    position: 'absolute',
-    top: space.sm,
-    right: -space.md,
-    transform: [{ rotate: '8deg' }],
+  columns: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: px(8),
+    padding: px(8),
   },
-  tagline: {
-    minHeight: space.xxl - space.xs,
+  column: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: px(4),
+    borderRadius: arcade.rWell,
+    borderWidth: arcade.hairline,
+    borderColor: night.line,
   },
-  action: {
-    alignSelf: 'stretch',
-    marginTop: space.xs,
+  columnLight: {
+    borderRadius: arcade.rWell,
+  },
+  packName: {
+    marginTop: px(9),
+  },
+  packInside: {
+    marginTop: px(3),
+  },
+  price: {
+    marginTop: px(8),
+    width: '88%',
+    maxWidth: px(146),
+  },
+  noteBox: {
+    marginTop: px(5),
+    height: px(14),
+    justifyContent: 'center',
   },
   odds: {
     position: 'absolute',
-    top: space.xs,
-    left: space.xs,
+    top: px(4),
+    right: px(4),
+  },
+  oddsDot: {
+    width: px(26),
+    height: px(26),
+    borderRadius: px(13),
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: night.pit,
+    borderWidth: arcade.hairline,
+    borderColor: night.line,
+  },
+  pressed: {
+    transform: [{ scale: 0.95 }],
+  },
+  ready: {
+    width: READY_W,
+    paddingTop: px(11),
+    paddingHorizontal: px(11),
+  },
+  readyHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+  },
+  wells: {
+    gap: px(9),
+    paddingTop: px(9),
+    paddingBottom: px(11),
+  },
+  well: {
+    gap: px(8),
+  },
+  wellHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: px(10),
+  },
+  wellWords: {
+    flex: 1,
+    gap: px(2),
+  },
+  wellHelp: {
+    position: 'absolute',
+    right: -px(4),
+    top: -px(4),
   },
   oddsPanel: {
-    gap: space.sm,
+    gap: space.md,
   },
   oddsHead: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
   },
-  oddsText: {
-    flex: 1,
+  oddsLead: {
+    marginTop: space.xs,
   },
   oddsRow: {
     flexDirection: 'row',
@@ -227,9 +413,12 @@ const styles = StyleSheet.create({
   },
   oddsCell: {
     flex: 1,
-    gap: space.hair,
+    alignItems: 'center',
+    gap: px(3),
+    paddingVertical: space.sm,
   },
-  centerSelf: {
+  gotIt: {
     alignSelf: 'center',
+    minWidth: px(160),
   },
 });

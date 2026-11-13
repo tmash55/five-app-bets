@@ -42,7 +42,7 @@ if (upto !== 'pack') {
     js(`location.pathname`);
     mark('results'); rec(7.5);
     if (upto !== 'results') {
-      tap('HOME'); rec(1.8); tap('SHELF'); rec(2.0); tap('Nia Brooks'); rec(2.8); tap('Back'); rec(0.7); tap('Back'); rec(0.7); tap('PACKS'); rec(2.6);
+      tap('HOME'); rec(1.8); tap('COLLECTION'); rec(2.0); tap('Nia Brooks'); rec(2.8); tap('Back'); rec(0.7); tap('PACKS'); rec(2.6);
     }
   }
 }
