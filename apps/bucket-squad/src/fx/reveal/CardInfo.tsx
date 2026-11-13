@@ -5,8 +5,8 @@
  * now has, and the yellow button on to the next card.
  */
 
-import { memo } from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { memo, useState } from 'react';
+import { StyleSheet, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 
 import { RARITIES, RARITY_LABEL } from '@/data/types';
@@ -32,13 +32,13 @@ import { INFO } from './times';
 const PIECE_SLIDE = px(28);
 const LETTER_FALL = px(40);
 
-function Piece({ clock, at, children, style, touch }: { clock: SharedValue<number>; at: number; children: React.ReactNode; style?: StyleProp<ViewStyle>; touch?: boolean }) {
+function Piece({ clock, at, children, style, touch, onLayout }: { clock: SharedValue<number>; at: number; children: React.ReactNode; style?: StyleProp<ViewStyle>; touch?: boolean; onLayout?: (e: LayoutChangeEvent) => void }) {
   const anim = useAnimatedStyle(() => {
     const u = span(clock.value, at, at + INFO.piece);
     return { opacity: u, transform: [{ translateX: (1 - easeOut(u)) * PIECE_SLIDE }] };
   });
   return (
-    <Animated.View pointerEvents={touch ? 'box-none' : 'none'} style={[style, anim]}>
+    <Animated.View pointerEvents={touch ? 'box-none' : 'none'} style={[style, anim]} onLayout={onLayout}>
       {children}
     </Animated.View>
   );
@@ -101,13 +101,14 @@ function RaritySign({ plan, clock, size }: { plan: CardPlan; clock: SharedValue<
 
 /**
  * How big the rarity sign can be: it shares its line with the tag and the card's number, and a long tag
- * ("LEVEL UP! LV 3") must not push the number off the side, so the sign gives way.
+ * ("LEVEL UP! LV 3") must not push the number off the side, so the sign gives way. The tag and the number are
+ * measured once they are laid out; until then their widths are worked out from their words.
  */
-function signSize(plan: CardPlan, number: string, width: number): number {
-  const tag = widthOf(plan.label.text, 'display', neonText.body, track.close) + px(9) * 2;
-  const chip = widthOf(number, 'bold', px(12.5), track.wide) + px(9) * 2;
+function signSize(plan: CardPlan, number: string, width: number, sides: { tag: number; chip: number }): number {
+  const tag = sides.tag || widthOf(plan.label.text, 'display', neonText.body, track.close) + px(9) * 2 + px(8);
+  const chip = sides.chip || widthOf(number, 'bold', px(12.5), track.wide) + px(9) * 2 + px(8);
   const gems = (RARITIES.indexOf(plan.rarity) + 1) * GEM * 1.25 + px(8);
-  const room = width - tag - chip - gems - GAP * 2 - px(16);
+  const room = width - tag - chip - gems - GAP * 2 - px(6);
   const word = RARITY_LABEL[plan.rarity].toUpperCase();
   return plan.rarity === 'legend' ? fitTo(word, 'sign', neonText.big, room - (word.length - 1) * px(3), 0, MIN_FIT_LABEL) : fitTo(word, 'sign', neonText.big, room, track.widest, MIN_FIT_LABEL);
 }
@@ -153,16 +154,21 @@ export const CardInfo = memo(function CardInfo({ plan, clock, lamps, pips, count
   const nick = player.nickname ? ` · “${player.nickname.toUpperCase()}”` : '';
   const copy = !gain.isNew;
   const number = `NO. ${plan.number.number} OF ${plan.number.of}`;
+  const [sides, setSides] = useState({ tag: 0, chip: 0 });
+  const measure = (key: 'tag' | 'chip') => (e: LayoutChangeEvent) => {
+    const w = Math.ceil(e.nativeEvent.layout.width);
+    setSides((was) => (was[key] === w ? was : { ...was, [key]: w }));
+  };
   return (
     <View pointerEvents="box-none" style={[styles.root, { width }]}>
       <View pointerEvents="none" style={styles.top}>
-        <Piece clock={clock} at={INFO.tag}>
+        <Piece clock={clock} at={INFO.tag} onLayout={measure('tag')}>
           <Tag label={plan.label.text} tube={plan.label.tube} />
         </Piece>
         <Piece clock={clock} at={INFO.sign - 60} style={styles.shrink}>
-          <RaritySign plan={plan} clock={clock} size={signSize(plan, number, width)} />
+          <RaritySign plan={plan} clock={clock} size={signSize(plan, number, width, sides)} />
         </Piece>
-        <Piece clock={clock} at={INFO.chip} style={styles.push}>
+        <Piece clock={clock} at={INFO.chip} style={styles.push} onLayout={measure('chip')}>
           <Chip small>
             <Print face="bold" size={px(12.5)} color="textDim" track="wide" lines={1}>
               {number}
