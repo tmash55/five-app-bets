@@ -311,6 +311,8 @@ uniform vec4 uCourt2;     // cornerZ, keyHalfW, ftDist, centreR
 uniform vec4 uShadows[SHADOWS];  // x, z, radius, strength
 uniform vec4 uRings[RINGS];      // x, z, radius, alpha
 uniform vec3 uRingCol[RINGS];
+uniform vec4 uHot[RINGS];        // hot streak 0..1 (fades over its last seconds), shockwave left 1..0 (0: none)
+uniform vec3 uHotCol[4];         // white-hot, gold, orange, hot pink
 uniform float uTime;
 in vec3 vWorld;
 in float vShade;
@@ -420,6 +422,47 @@ void main() {
   sh = 1.0 - (1.0 - sh) * vShade;
   c *= mix(vec3(1.0), vec3(0.44, 0.47, 0.62), sh);
 
+  // --- a hot streak: a ring of light on the court round the player, drawn over the shadows because it shines.
+  // It starts with a shockwave rolling out across the floor.
+  for (int i = 0; i < RINGS; i++) {
+    vec4 h = uHot[i];
+    if (h.x <= 0.0 && h.y <= 0.0) continue;
+    vec2 dv = p - uRings[i].xy;
+    float d = length(dv);
+    if (h.y > 0.0) {
+      float k = 1.0 - h.y;
+      float R = mix(0.45, 3.1, 1.0 - h.y * h.y);
+      float e = abs(d - R);
+      float wv = mix(0.15, 0.04, k);
+      float wave = (1.0 - smoothstep(wv - aa, wv + aa, e)) + 0.6 * exp(-e * 7.0);
+      float left = h.y * h.y;
+      c += mix(uHotCol[0], uHotCol[3], k) * wave * left * 1.1;
+      // and a flash on the floor inside it
+      c += uHotCol[1] * (1.0 - smoothstep(0.0, R, d)) * left * h.y * 0.55;
+    }
+    if (h.x <= 0.0 || d > 1.9) continue;
+    float lv = h.x;
+    float pulse = sin(uTime * 5.5 + float(i) * 1.7);
+    // it shrinks and thins as the streak runs out
+    float R = (0.5 + 0.36 * lv) * (1.0 + 0.03 * pulse);
+    float hw = 0.03 + 0.085 * lv;
+    float e = abs(d - R);
+    float band = 1.0 - smoothstep(hw - aa, hw + aa, e);
+    // gold in the middle of the band, orange at its edges, and three white-hot spots chasing round it
+    float chase = smoothstep(0.4, 1.0, cos(atan(dv.y, dv.x) * 3.0 - uTime * 4.2 - float(i)));
+    vec3 core = mix(uHotCol[1], uHotCol[2], smoothstep(0.4, 1.0, e / hw));
+    core = mix(core, uHotCol[0], chase * 0.85);
+    // a soft halo from orange to hot pink, and a warm pool of light inside
+    float off = max(e - hw, 0.0);
+    vec3 halo = mix(uHotCol[2], uHotCol[3], smoothstep(0.0, 0.25, off)) * exp(-off * 6.0) * (0.6 + 0.15 * pulse);
+    float pool = (1.0 - smoothstep(R - hw - 0.4, R - hw, d)) * 0.16;
+    // a thin ripple runs out from the ring, again and again
+    float ph = fract(uTime * 1.3 + float(i) * 0.37);
+    float rip = (1.0 - smoothstep(0.025 - aa, 0.025 + aa, abs(d - R - hw - ph * 0.7))) * (1.0 - ph) * (1.0 - ph) * 0.8;
+    c = mix(c, c + uHotCol[1] * pool + halo + uHotCol[3] * rip, lv);
+    c = mix(c, core * (1.0 + 0.1 * pulse), band * min(1.0, lv * 1.6));
+  }
+
   float fog = smoothstep(uFogNear, uFogFar, length(cameraPosition - vWorld));
   fragColor = vec4(mix(c, uFogCol, fog), 1.0);
 }
@@ -510,7 +553,7 @@ uniform mat4 projectionMatrix;
 in vec3 position;   // particle centre (world)
 in vec4 color;
 in vec3 corner;     // xy = corner in -1..1, z = size
-in vec2 spin;       // angle, shape (0 soft disc, 1 square, 2 sparkle, 3 flame)
+in vec2 spin;       // angle, shape (0 soft disc, 1 square, 2 sparkle)
 out vec4 vColor;
 out vec2 vCorner;
 out float vShape;
@@ -541,28 +584,11 @@ void main() {
     a = 1.0 - smoothstep(0.45, 1.0, r);
   } else if (vShape < 1.5) {
     a = 1.0;
-  } else if (vShape < 2.5) {
+  } else {
     // four-point sparkle
     float arms = 1.0 - smoothstep(0.015, 0.07, abs(vCorner.x * vCorner.y));
     float core = 1.0 - smoothstep(0.1, 0.34, r);
     a = max(arms * (1.0 - smoothstep(0.55, 1.0, r)), core);
-  } else {
-    // flame tongue: a round base low in the quad, narrowing to a point at the top
-    vec2 q = vCorner;
-    const float base = -0.48;
-    const float rad = 0.5;
-    float d;
-    if (q.y < base) {
-      d = length(vec2(q.x, q.y - base)) / rad;
-    } else {
-      float u = clamp((q.y - base) / (1.0 - base), 0.0, 1.0);
-      float hw = rad * pow(1.0 - u, 1.15) + 0.001;
-      d = abs(q.x) / hw;
-    }
-    a = 1.0 - smoothstep(0.82, 1.0, d);
-    // a pale heart low in the tongue
-    float heart = (1.0 - smoothstep(0.25, 0.6, d)) * (1.0 - smoothstep(-0.3, 0.4, q.y));
-    col = mix(col, vec3(1.0), 0.5 * heart);
   }
   if (a * vColor.a < 0.01) discard;
   fragColor = vec4(col, vColor.a * a);

@@ -282,5 +282,5 @@ export const layer = {
 /** palette used for confetti and sparkles in a match */
 export const party = ['#FF5D5D', '#FFD23F', '#3DDC97', '#3FA9F5', '#B388FF', '#FF8FD0', '#FFFFFF'] as const;
 export const sparkle = ['#FFFFFF', '#FFE66D', '#FFD23F'] as const;
-/** a player on fire and the ball they hold: pale yellow heart, then sun, orange and coral tongues */
-export const flame = ['#FFF3B0', '#FFD23F', '#FF8A3D', '#FF5D5D'] as const;
+/** a player on a hot streak (their ring of light on the court, their glow, the trail of their shots): white-hot, gold, orange, hot pink */
+export const hot = ['#FFF6D6', '#FFD23F', '#FF8A3D', '#FF4FA0'] as const;
