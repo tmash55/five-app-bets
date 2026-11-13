@@ -10,7 +10,7 @@ import { PLAYERS, cardArt, leagueOf, mustPlayer, playerOverall } from '@/data/ro
 import { tapFeedback } from '@/fx/feedback';
 import { StageView } from '@/game/StageView';
 import type { StageFocus, StageMarks, StagePaint } from '@/game/render/stage';
-import { STAGE_BASE_R, STAGE_GROUP_W, stageMarks } from '@/game/render/stage';
+import { STAGE_BASE_R, groupWidth, stageMarks } from '@/game/render/stage';
 import { squadStage } from '@/game/stage/cast';
 import { countOwned, levelOf } from '@/meta/collection';
 import { tierProgress } from '@/meta/ladder';
@@ -38,7 +38,9 @@ const FADE_MS = 280;
 /** the squad stands on the arcade's own floor: the 3D base is only their contact shadows */
 const FLOOR_PAINT: StagePaint = { shadow: night.pit, strength: 0.62 };
 /** the lit ring they stand in, as a share of the 3D base: a little wider than the squad */
-const RING = 1.32;
+const RING = 1.5;
+/** the three stand further apart than on a plinth, so every face is clear of its neighbours' */
+const SPREAD = 1.55;
 /** where the front of the base sits, as a share of the way from the top of the corner to the bottom of the screen */
 const BASE_FRONT = 0.885;
 /** the right-hand column: the big button and the four signs */
@@ -137,7 +139,7 @@ function SquadCorner({ ids, owned, onPress }: { ids: string[]; owned: Record<str
   const area = useRef<ComponentRef<typeof View>>(null);
   const window = useWindowDimensions();
   const live = useSharedValue(0);
-  const setup = useMemo(() => squadStage(ids, FLOOR_PAINT), [ids]);
+  const setup = useMemo(() => squadStage(ids, FLOOR_PAINT, SPREAD), [ids]);
   useFocusEffect(
     useCallback(() => {
       return () => live.set(0);
@@ -170,7 +172,7 @@ function SquadCorner({ ids, owned, onPress }: { ids: string[]; owned: Record<str
     const top = rect.y + px(30);
     const front = rect.y + (glH - rect.y) * BASE_FRONT;
     // the squad is framed to the box's width when that is what holds it back: narrow it until the ring and its glow fit the corner
-    const wide = Math.min(rect.w - px(32), ((rect.w + px(8) - px(20)) / (2 * RING * STAGE_BASE_R)) * STAGE_GROUP_W);
+    const wide = Math.min(rect.w - px(32), ((rect.w + px(8) - px(20)) / (2 * RING * STAGE_BASE_R)) * groupWidth(SPREAD));
     return { x: (rect.x + (rect.w - wide) / 2) / glW, y: top / glH, w: wide / glW, h: (front - top) / glH };
   }, [rect, glW, glH]);
   const marks = useMemo<StageMarks | null>(() => (rect ? stageMarks(setup, focus, glW, glH, RING) : null), [rect, setup, focus, glW, glH]);

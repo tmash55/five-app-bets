@@ -86,6 +86,8 @@ export interface StageSetup {
   seed: number;
   /** left out: the court on a plinth */
   paint?: StagePaint;
+  /** how far apart the figures stand, as a share of the usual: wider keeps every face clear of its neighbours' (1 when left out) */
+  spread?: number;
 }
 
 /** Where on the view the group should sit, as fractions of its width and height. */
@@ -107,8 +109,6 @@ const PITCH = 0.105;
 const CAPTAIN_SHARE = 0.64;
 /** how much room a group needs: across, and from the bottom of the base to the tops of the heads (arms and a tossed ball may go higher) */
 const GROUP_W = 2.5;
-/** how wide one group is framed, for a screen working out how big the stage will be */
-export const STAGE_GROUP_W = GROUP_W;
 const GROUP_H = 1.98;
 const GROUP_MID_Y = 0.94;
 const SHADOWS = 16;
@@ -124,6 +124,18 @@ const SPOTS = [
   { x: -0.8, z: -0.4, turn: 0.32, side: -1 },
   { x: 0.8, z: -0.4, turn: -0.32, side: 1 },
 ] as const;
+
+/** A figure's spot with the group spread wider: the side players step out to the sides and a little forward. */
+function spotOf(mi: number, spread: number): { x: number; z: number; turn: number; side: number } {
+  const spot = SPOTS[mi % SPOTS.length];
+  if (spread === 1 || spot.side === 0) return spot;
+  return { ...spot, x: spot.x * spread, z: spot.z + (spread - 1) * 0.3 };
+}
+
+/** How wide a group is framed, with its figures this far apart. */
+export function groupWidth(spread = 1): number {
+  return GROUP_W + 2 * Math.abs(SPOTS[1].x) * (spread - 1);
+}
 
 interface Actor {
   group: number;
@@ -172,6 +184,8 @@ export class StageRenderer {
   private captainH = FIGURE_H;
   /** where the figures' feet are: the top of the base, which is the floor itself when the screen paints it */
   private readonly floorY: number;
+  /** how wide one group is framed */
+  private readonly groupW: number;
 
   private readonly tmpV = new THREE.Vector3();
   private readonly tmpQ = new THREE.Quaternion();
@@ -186,6 +200,7 @@ export class StageRenderer {
     this.groups = setup.groups;
     const paint = setup.paint;
     this.floorY = paint ? 0 : -BASE_H;
+    this.groupW = groupWidth(setup.spread ?? 1);
     this.three = wrapContext(gl, true);
     this.three.sortObjects = true;
     this.scene.matrixAutoUpdate = false;
@@ -227,7 +242,7 @@ export class StageRenderer {
       const cg = Math.cos(g.turn);
       const sg = Math.sin(g.turn);
       g.members.forEach((m, mi) => {
-        const spot = SPOTS[mi % SPOTS.length];
+        const spot = spotOf(mi, setup.spread ?? 1);
         const fig = new FigureView(m.look, L);
         const anim = new FigureAnimator(fig.data.build, fig.data.hairPivotA, fig.data.hairPivotB, variant);
         variant += 3;
@@ -412,7 +427,7 @@ export class StageRenderer {
   }
 
   private frameCamera(): void {
-    const span = this.groups.length > 1 ? GROUP_W * this.groups.length : GROUP_W;
+    const span = this.groups.length > 1 ? this.groupW * this.groups.length : this.groupW;
     this.dist = aimCamera(this.camera, this.width, this.height, this.focus, span, this.captainH, this.midX, this.midZ, this.floorY, this.tmpV);
   }
 
@@ -695,7 +710,8 @@ export function stageMarks(setup: StageSetup, focus: StageFocus, width: number, 
   }
   mx /= Math.max(1, groups.length);
   mz /= Math.max(1, groups.length);
-  const span = groups.length > 1 ? GROUP_W * groups.length : GROUP_W;
+  const one = groupWidth(setup.spread ?? 1);
+  const span = groups.length > 1 ? one * groups.length : one;
   const floorY = setup.paint ? 0 : -BASE_H;
   const dist = aimCamera(cam, W, H, focus, span, captainH, mx, mz, floorY, tmp);
   const onView = (x: number, y: number, z: number) => {
@@ -723,7 +739,7 @@ export function stageMarks(setup: StageSetup, focus: StageFocus, width: number, 
     const cg = Math.cos(g.turn);
     const sg = Math.sin(g.turn);
     g.members.forEach((_, mi) => {
-      const spot = SPOTS[mi % SPOTS.length];
+      const spot = spotOf(mi, setup.spread ?? 1);
       feet.push(onView(g.x + spot.x * cg + spot.z * sg, 0, g.z - spot.x * sg + spot.z * cg));
     });
   }
