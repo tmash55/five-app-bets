@@ -28,6 +28,8 @@ const config: ExpoConfig = {
     bundleIdentifier: identity.iosBundleIdentifier,
     supportsTablet: true,
     requireFullScreen: true,
+    // Sign in with Apple, for the optional account that keeps the save (src/account)
+    usesAppleSignIn: true,
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
       UIStatusBarHidden: true,
@@ -70,6 +72,7 @@ const config: ExpoConfig = {
     'expo-font',
     'expo-asset',
     'expo-image',
+    'expo-apple-authentication',
   ],
   experiments: {
     typedRoutes: true,

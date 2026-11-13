@@ -37,7 +37,8 @@ interface SaveActions {
 
 export type SaveStore = SaveData & SaveActions;
 
-function dataOf(s: SaveStore): SaveData {
+/** The save itself, without the store's actions. */
+export function dataOf(s: SaveStore): SaveData {
   return {
     version: s.version,
     onboarded: s.onboarded,

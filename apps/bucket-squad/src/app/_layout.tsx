@@ -14,12 +14,14 @@ import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { startAccount } from '@/account';
 import { setMusicEnabled, setSoundEnabled, warmSounds } from '@/audio/sound';
 import { exposeForTooling } from '@/dev/expose';
 import { DevInsets } from '@/dev/insets';
 import { setHapticsEnabled } from '@/fx/feedback';
 import { useSave, useSaveReady } from '@/state/save';
 import { night } from '@/theme/arcade';
+import { SaveChoice } from '@/ui/arcade/Account';
 import { Boot } from '@/ui/arcade/Boot';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -56,6 +58,11 @@ export default function RootLayout() {
     if (ready) warmSounds(['tap', 'back']);
   }, [ready]);
 
+  // the account (when this build has one) starts once the device save is loaded, and reads the account first
+  useEffect(() => {
+    if (saveReady) startAccount();
+  }, [saveReady]);
+
   if (!ready) return null;
 
   return (
@@ -64,6 +71,7 @@ export default function RootLayout() {
         <StatusBar hidden />
         {/* no swipe-back: in landscape it would fight the game pad's stick */}
         <Stack screenOptions={{ headerShown: false, animation: 'fade', gestureEnabled: false, contentStyle: { backgroundColor: night.wallTop } }} />
+        <SaveChoice />
         {opening && <Boot onShown={() => SplashScreen.hideAsync().catch(() => {})} onDone={() => setOpening(false)} />}
       </DevInsets>
     </SafeAreaProvider>
