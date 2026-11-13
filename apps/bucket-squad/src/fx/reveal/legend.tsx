@@ -8,12 +8,14 @@
 import { memo, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 
 import { fade, night, tube } from '@/theme/arcade';
 import { px } from '@/theme/tokens';
 import { CardBack } from '@/ui/arcade/Card';
 import { Bloom } from '@/ui/arcade/Room';
+import { bulbSpots } from './marquee';
 import { bump, easeIn, easeInOut, easeOut, lerp, restTilt, span, wobble } from './motion';
 import { Beam, Confetti, Ring, Sides, Sparks, Starburst, around, cardRound } from './pieces';
 import { REVEAL_TIMES } from './times';
@@ -52,26 +54,6 @@ function chaseAt(t: number): number {
   return p;
 }
 
-/** Where the bulbs go: round the screen just inside its edge, clockwise from the top-left corner. */
-function bulbSpots(width: number, height: number): { x: number; y: number }[] {
-  const inset = px(11);
-  const pitch = px(25);
-  const x0 = inset;
-  const y0 = inset;
-  const x1 = width - inset;
-  const y1 = height - inset;
-  const out: { x: number; y: number }[] = [];
-  const side = (ax: number, ay: number, bx: number, by: number) => {
-    const n = Math.max(1, Math.round(Math.hypot(bx - ax, by - ay) / pitch));
-    for (let i = 0; i < n; i++) out.push({ x: ax + ((bx - ax) * i) / n, y: ay + ((by - ay) * i) / n });
-  };
-  side(x0, y0, x1, y0);
-  side(x1, y0, x1, y1);
-  side(x1, y1, x0, y1);
-  side(x0, y1, x0, y0);
-  return out;
-}
-
 const Bulbs = memo(function Bulbs({ spots, width, height, lit }: { spots: { x: number; y: number }[]; width: number; height: number; lit: boolean }) {
   const r = px(4.2);
   return (
@@ -103,7 +85,8 @@ function BulbGroup({ clock, k, spots, width, height }: { clock: SharedValue<numb
 
 /** Marquee bulbs round the edge of the screen: every third one lit, the lit ones stepping on, so the light runs round. */
 function Marquee({ clock, width, height }: { clock: SharedValue<number>; width: number; height: number }) {
-  const spots = useMemo(() => bulbSpots(width, height), [width, height]);
+  const safe = useSafeAreaInsets();
+  const spots = useMemo(() => bulbSpots(width, height, safe), [width, height, safe]);
   const groups = useMemo(() => [0, 1, 2].map((k) => spots.filter((_, i) => i % 3 === k)), [spots]);
   const base = useAnimatedStyle(() => ({ opacity: span(clock.value, CHASE - 120, CHASE + 200) * (1 - span(clock.value, T.length, T.length + 900)) }));
   return (
