@@ -196,7 +196,7 @@ function Room() {
  * Bumped before each look at the game on a phone or simulator. A picture of this page then proves which
  * code the phone is really running: a phone that kept an older copy shows an older mark.
  */
-const MARK = 'R4';
+const MARK = 'R5';
 
 export default function KitScreen() {
   const { page } = useLocalSearchParams<{ page?: string }>();
