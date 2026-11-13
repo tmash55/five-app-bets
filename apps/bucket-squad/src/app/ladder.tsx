@@ -1,25 +1,36 @@
 /** The Ladder: ranked games against computer squads, eight tiers from Rookie to Legend. */
 
 import { useRouter } from 'expo-router';
+import { useRef, type ComponentRef } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { TIERS, tierProgress } from '@/meta/ladder';
 import { packById } from '@/meta/packs';
 import { startLadder } from '@/state/play';
 import { useSave } from '@/state/save';
-import { color, size as sizes, space, stroke } from '@/theme/tokens';
-import { ProgressBar, Tag } from '@/ui/Bits';
-import { Icon } from '@/ui/Icon';
-import { Segmented, type Choice } from '@/ui/Inputs';
-import { PackArt } from '@/ui/PackArt';
-import { CoinAmount } from '@/ui/Rewards';
-import { Screen } from '@/ui/Screen';
-import { Sticker, StickerButton } from '@/ui/Sticker';
-import { StickerText, Txt } from '@/ui/Txt';
+import { arcade, halo, inner, night, tube } from '@/theme/arcade';
+import { px, space } from '@/theme/tokens';
+import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
+import { GoldButton } from '@/ui/arcade/Buttons';
+import { PickRow, SignHead, type Choice } from '@/ui/arcade/Controls';
+import { FoilPack } from '@/ui/arcade/Foil';
+import { LineIcon } from '@/ui/arcade/LineIcon';
+import { TierMedal, tierTube } from '@/ui/arcade/Medal';
+import { Arrive, Breathe } from '@/ui/arcade/Motion';
+import { CoinAmount } from '@/ui/arcade/Rewards';
+import { Bloom, Rays } from '@/ui/arcade/Room';
+import { SegBar } from '@/ui/arcade/SegBar';
+import { Chip, NeonPanel, Tag } from '@/ui/arcade/Surface';
+import { Glow, Print } from '@/ui/arcade/Type';
+
+/** the page's own tube */
+const TUBE = tube.indigo;
+const MEDAL = px(84);
+const RAYS = px(230);
 
 const FORMATS: readonly Choice<2 | 3>[] = [
-  { value: 2, label: '2 on 2' },
-  { value: 3, label: '3 on 3' },
+  { value: 2, label: '2 on 2', lamps: 2 },
+  { value: 3, label: '3 on 3', lamps: 3 },
 ];
 
 export default function Ladder() {
@@ -28,74 +39,137 @@ export default function Ladder() {
   const format = useSave((s) => s.settings.format);
   const setSetting = useSave((s) => s.setSetting);
   const tp = tierProgress(ladder.points);
+  const here = tierTube(tp.index);
+  const ahead = tp.next ? tierTube(tp.index + 1) : here;
+  const list = useRef<ComponentRef<typeof ScrollView>>(null);
+  const listHeight = useRef(0);
 
   const play = () => {
     startLadder();
     router.push('/versus');
   };
 
+  // the ladder is drawn the way it is climbed, Legend at the top
+  const tiers = TIERS.map((t, i) => ({ t, i })).reverse();
+
   return (
-    <Screen title="LADDER" tone="grape">
+    <ArcadeScreen title="LADDER" tube="indigo" style={styles.body}>
       <View style={styles.row}>
         <View style={styles.left}>
           <View style={styles.now}>
-            <View style={[styles.medal, { backgroundColor: color[tp.tier.color] }]}>
-              <Icon name="trophy" size={sizes.iconHuge} color="white" />
+            <View>
+              <Rays size={RAYS} color={here.glass} alpha={0.3} count={18} fill={0.32} fadeAt={[0.2, 0.9]} style={styles.rays} />
+              <Bloom size={RAYS * 0.8} color={here.glass} alpha={0.5} style={styles.bloom} />
+              <Arrive delay={60}>
+                <TierMedal index={tp.index} size={MEDAL} />
+              </Arrive>
             </View>
             <View style={styles.grow}>
-              <StickerText size="big" color="white">
+              <Print face="bold" size="tiny" color="textFaint" track="widest">
+                YOUR TIER
+              </Print>
+              <Glow face="sign" size="big" tube={here} track="wider">
                 {tp.tier.name.toUpperCase()}
-              </StickerText>
-              <Txt font="display" size="body" color="white" shadow>{`${ladder.points} points  ·  ${ladder.wins} wins in ${ladder.games} games`}</Txt>
+              </Glow>
+              <View style={styles.chips}>
+                <Chip small>
+                  <Print face="bold" size="small" color={TUBE.tint} track="wide">{`${ladder.points} POINTS`}</Print>
+                </Chip>
+                <Chip small>
+                  <LineIcon name="trophy" size={px(14)} tube="gold" />
+                  <Print face="bold" size="small" color="textSoft" track="wide">{`${ladder.wins} WINS IN ${ladder.games} GAMES`}</Print>
+                </Chip>
+              </View>
             </View>
           </View>
+
           {tp.next ? (
-            <View style={styles.bar}>
-              <ProgressBar value={tp.span > 0 ? tp.have / tp.span : 1} fill={tp.next.color} height={sizes.barThick} />
-              <Txt size="small" color="white" shadow>{`${tp.span - tp.have} more points to reach ${tp.next.name}. A loss never drops you below ${tp.tier.name}.`}</Txt>
+            <View style={styles.climb}>
+              <View style={styles.climbRow}>
+                <TierMedal index={tp.index} size={px(30)} />
+                <SegBar value={tp.span > 0 ? (tp.have / tp.span) * 100 : 100} tube={ahead} style={styles.grow} />
+                <TierMedal index={tp.index + 1} size={px(30)} lit={false} />
+              </View>
+              <Print face="medium" size="small" color="textDim">{`${tp.span - tp.have} more points to reach ${tp.next.name}. A loss never drops you below ${tp.tier.name}.`}</Print>
             </View>
           ) : (
-            <Txt size="small" color="white" shadow>
+            <Print face="medium" size="small" color="textDim">
               You are at the very top of the Ladder!
-            </Txt>
+            </Print>
           )}
+
           <View style={styles.playRow}>
-            <Segmented options={FORMATS} value={format} onChange={(v) => setSetting('format', v)} style={styles.format} />
-            <StickerButton label="PLAY!" icon="play" iconColor="white" fill="mint" textSize="title" raise="high" height={sizes.buttonLarge} onPress={play} style={styles.grow} />
+            <PickRow options={FORMATS} value={format} onChange={(v) => setSetting('format', v)} tube="indigo" style={styles.format} />
+            <GoldButton label="PLAY!" icon="play" onPress={play} style={styles.grow} />
           </View>
-          <Txt size="tiny" color="white" center>
+          <Print face="medium" size="tiny" color="textFaint" center>
             Ladder games are against computer squads that get tougher as you climb.
-          </Txt>
+          </Print>
         </View>
 
-        <ScrollView style={styles.tiers} contentContainerStyle={styles.tiersBody} showsVerticalScrollIndicator={false}>
-          {TIERS.map((t, i) => {
-            const reached = i <= ladder.bestTier;
-            const here = i === tp.index;
-            return (
-              <Sticker key={t.name} fill={here ? 'sun' : reached ? 'white' : 'paper'} round="md" raise={here ? 'low' : 'none'} border={stroke.thin} face={styles.tier}>
-                <View style={[styles.tierMedal, { backgroundColor: color[t.color] }]}>
-                  <Icon name="trophy" size={sizes.iconSmall} color="white" />
-                </View>
-                <View style={styles.grow}>
-                  <Txt font="display" size="body" lines={1}>
-                    {t.name}
-                  </Txt>
-                  <Txt size="tiny" color="inkSoft">{`${t.floor} points`}</Txt>
-                </View>
-                {t.reward.coins > 0 && <CoinAmount coins={t.reward.coins} size="small" />}
-                {t.reward.pack !== undefined && <PackArt pack={packById(t.reward.pack)} width={sizes.badgeTiny} />}
-                {here ? <Tag label="You" fill="ink" textColor="white" style={styles.centerSelf} /> : reached ? <Icon name="check" size={sizes.iconSmall} color="mint" /> : <Icon name="lock" size={sizes.iconSmall} color="paper" ink="inkFaint" />}
-              </Sticker>
-            );
-          })}
-        </ScrollView>
+        <Arrive delay={120} from="right" style={styles.right}>
+          <NeonPanel tube="indigo" style={styles.panel}>
+            <SignHead title="THE LADDER" tube="indigo" />
+            <ScrollView
+              ref={list}
+              style={styles.grow}
+              contentContainerStyle={styles.tiers}
+              showsVerticalScrollIndicator={false}
+              onLayout={(e) => {
+                listHeight.current = e.nativeEvent.layout.height;
+              }}>
+              {tiers.map(({ t, i }) => {
+                const reached = i <= ladder.bestTier;
+                const now = i === tp.index;
+                const tb = tierTube(i);
+                return (
+                  <View
+                    key={t.name}
+                    onLayout={
+                      now
+                        ? (e) => {
+                            // start with your own tier in the middle of the list
+                            const { y, height } = e.nativeEvent.layout;
+                            list.current?.scrollTo({ y: Math.max(0, y + height / 2 - listHeight.current / 2), animated: false });
+                          }
+                        : undefined
+                    }
+                    style={[styles.tier, now && { borderColor: tb.glass, backgroundColor: night.tile, boxShadow: [halo(tb.glass, 10, 0.6), inner(tb.glass, 14, 0.3)] }]}>
+                    <TierMedal index={i} size={px(32)} lit={reached} />
+                    <View style={styles.grow}>
+                      <Print face="bold" size="body" color={reached ? 'text' : 'textFaint'} lines={1}>
+                        {t.name}
+                      </Print>
+                      <Print face="medium" size="tiny" color="textFaint" lines={1}>{`${t.floor} points`}</Print>
+                    </View>
+                    {t.reward.coins > 0 && <CoinAmount coins={t.reward.coins} size="small" dim={!reached && !now} />}
+                    {t.reward.pack !== undefined && <FoilPack pack={packById(t.reward.pack)} width={px(18)} flat />}
+                    <View style={styles.state}>
+                      {now ? (
+                        <Breathe depth={0.25}>
+                          <Tag label="YOU" tube={tb} small />
+                        </Breathe>
+                      ) : reached ? (
+                        <LineIcon name="check" size={px(18)} tube="green" weight={3} />
+                      ) : (
+                        <LineIcon name="lock" size={px(16)} color={night.lineLit} />
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </NeonPanel>
+        </Arrive>
       </View>
-    </Screen>
+    </ArcadeScreen>
   );
 }
 
 const styles = StyleSheet.create({
+  body: {
+    paddingTop: space.md,
+  },
   row: {
     flex: 1,
     flexDirection: 'row',
@@ -104,60 +178,76 @@ const styles = StyleSheet.create({
   left: {
     flex: 1.25,
     justifyContent: 'center',
-    gap: space.sm,
+    gap: space.md,
   },
   now: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.md,
+    gap: space.lg,
+    paddingLeft: space.sm,
   },
-  medal: {
-    width: sizes.avatarLarge + space.md,
-    height: sizes.avatarLarge + space.md,
-    borderRadius: (sizes.avatarLarge + space.md) / 2,
-    borderWidth: stroke.thick,
-    borderColor: color.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
+  rays: {
+    position: 'absolute',
+    left: (MEDAL - RAYS) / 2,
+    top: (MEDAL - RAYS) / 2,
+  },
+  bloom: {
+    position: 'absolute',
+    left: (MEDAL - RAYS * 0.8) / 2,
+    top: (MEDAL - RAYS * 0.8) / 2,
   },
   grow: {
     flex: 1,
   },
-  bar: {
-    gap: space.xs,
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.sm,
+    marginTop: px(6),
+  },
+  climb: {
+    gap: px(6),
+  },
+  climbRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
   },
   playRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     gap: space.md,
   },
   format: {
-    width: sizes.cardLarge,
+    width: px(180),
   },
-  tiers: {
+  right: {
     flex: 1,
   },
-  tiersBody: {
-    gap: space.xs,
+  panel: {
+    flex: 1,
+    paddingTop: px(10),
+    paddingHorizontal: px(10),
+    gap: space.sm,
+    overflow: 'hidden',
+  },
+  tiers: {
+    gap: px(5),
     paddingBottom: space.md,
   },
   tier: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    paddingHorizontal: space.sm,
-    paddingVertical: space.xs,
+    paddingHorizontal: px(8),
+    paddingVertical: px(5),
+    borderRadius: arcade.rWell,
+    borderWidth: arcade.hairline,
+    borderColor: night.line,
+    backgroundColor: night.well,
   },
-  tierMedal: {
-    width: sizes.badgeSmall + space.xs,
-    height: sizes.badgeSmall + space.xs,
-    borderRadius: (sizes.badgeSmall + space.xs) / 2,
-    borderWidth: stroke.thin,
-    borderColor: color.ink,
+  state: {
+    width: px(38),
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  centerSelf: {
-    alignSelf: 'center',
   },
 });
