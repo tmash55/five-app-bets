@@ -160,19 +160,35 @@ export class PadModel {
     return best;
   }
 
+  /** The closest spot to (x, y) where the whole stick still fits on the screen. */
+  private onScreen(x: number, y: number): [number, number] {
+    const { width, height } = this.layout;
+    const m = pad.stick / 2 + 6;
+    return [Math.max(m, Math.min(width - m, x)), Math.max(m, Math.min(height - m, y))];
+  }
+
   private moveStick(tr: Tracked, x: number, y: number): void {
     const R = pad.stick / 2;
     let dx = x - tr.ox;
     let dy = y - tr.oy;
-    const len = Math.hypot(dx, dy);
+    let len = Math.hypot(dx, dy);
     if (len > R) {
       // drag the base along so a thumb that wanders never runs out of stick
       const pull = len - R;
-      tr.ox += (dx / len) * pull;
-      tr.oy += (dy / len) * pull;
+      const [ox, oy] = this.onScreen(tr.ox + (dx / len) * pull, tr.oy + (dy / len) * pull);
+      if (ox !== tr.ox || oy !== tr.oy) {
+        tr.ox = ox;
+        tr.oy = oy;
+        this.view?.base(ox, oy, false);
+      }
       dx = x - tr.ox;
       dy = y - tr.oy;
-      this.view?.base(tr.ox, tr.oy, false);
+      len = Math.hypot(dx, dy);
+      if (len > R) {
+        // the base is against the edge of the screen: the knob stops at the rim
+        dx *= R / len;
+        dy *= R / len;
+      }
     }
     this.view?.knob(dx, dy, false);
     const m = Math.min(1, Math.hypot(dx, dy) / R);
@@ -188,15 +204,15 @@ export class PadModel {
 
   start(touches: readonly PadTouch[]): void {
     if (!this.enabled) return;
-    const { width, height, lefty } = this.layout;
+    const { width, lefty } = this.layout;
     for (const t of touches) {
       const stickSide = lefty ? t.x > width * 0.5 : t.x < width * 0.5;
       if (stickSide) {
         let has = false;
         for (const tr of this.touches.values()) if (tr.kind === 'stick') has = true;
         if (has) continue;
-        const R = pad.stick / 2;
-        const tr: Tracked = { kind: 'stick', ox: Math.max(R + 6, Math.min(width - R - 6, t.x)), oy: Math.max(R + 6, Math.min(height - R - 6, t.y)), on: null, turbo: false };
+        const [ox, oy] = this.onScreen(t.x, t.y);
+        const tr: Tracked = { kind: 'stick', ox, oy, on: null, turbo: false };
         this.touches.set(t.id, tr);
         this.view?.base(tr.ox, tr.oy, false);
         this.view?.live(true);

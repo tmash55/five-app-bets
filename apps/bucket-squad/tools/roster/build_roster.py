@@ -311,16 +311,16 @@ P("bjorn-iversen", "Bjorn Iversen", "Avalanche", "yetis", 45, "epic", "Big", (68
 P("suki-aoki", "Suki Aoki", "Snowflake", "yetis", 18, "rare", "Sharpshooter", (78, 93, 50, 80, 66, 46),
   L("porcelain", "long", "black", eyes="tall", nose="small", acc=("beanie", "lashes"), hatColor="#58C4FF"),
   "No two of her shots are alike. All of them go in.")
-P("tuck-whitlock", "Tuck Whitlock", "Mittens", "yetis", 31, "common", "Lockdown", (70, 58, 60, 60, 82, 78),
+P("tuck-whitlock", "Tuck Whitlock", "Mittens", "yetis", 31, "common", "Lockdown", (66, 56, 56, 58, 82, 78),
   L("light", "bowl", "ginger", eyes="round", brows="raised", mouth="tooth", acc=("freckles", "sweatband")),
   "Plays in mittens all winter. Still gets the steal.")
 P("ana-petrova", "Ana Petrova", "Ice", "yetis", 19, "rare", "All-Around", (80, 82, 70, 80, 76, 70),
   L("porcelain", "braids", "lightblonde", mouth="flat", nose="small", acc=("lashes",)),
   "Never smiles before the buzzer. Always smiles after.")
-P("nuka-olsen", "Nuka Olsen", "Sled Dog", "yetis", 27, "common", "Speedster", (88, 62, 60, 74, 70, 48),
+P("nuka-olsen", "Nuka Olsen", "Sled Dog", "yetis", 27, "common", "Speedster", (88, 58, 52, 72, 66, 44),
   L("tan", "short", "black", brows="raised", mouth="bigsmile", acc=("headband",)),
   "Outruns the snowplow on the way to school.")
-P("pearl-jackson", "Pearl Jackson", "Frosty", "yetis", 33, "common", "High Flyer", (72, 56, 86, 60, 58, 74),
+P("pearl-jackson", "Pearl Jackson", "Frosty", "yetis", 33, "common", "High Flyer", (68, 52, 86, 56, 54, 70),
   L("cocoa", "afro", "jet", eyes="round", brows="raised", mouth="bigsmile", acc=("headband", "lashes"), highSocks=True),
   "Jumps so high she comes down with snow in her hair.")
 
@@ -338,10 +338,10 @@ P("hank-dooley", "Hank Dooley", "Tumbleweed", "coyotes", 40, "common", "Big", (5
   L("honey", "bigafro", "lightbrown", eyes="wide", brows="thick", mouth="bigsmile", nose="wide",
     build={"height": 1.08, "bulk": 1.1}),
   "His hair has its own rebounding stats.")
-P("ike-onyango", "Ike Onyango", "Spike", "coyotes", 29, "common", "Lockdown", (74, 56, 70, 60, 80, 84),
+P("ike-onyango", "Ike Onyango", "Spike", "coyotes", 29, "common", "Lockdown", (70, 52, 62, 58, 80, 84),
   L("espresso", "toplocs", "jet", brows="fierce", mouth="flat", acc=("sleeveR", "wristbandL")),
   "Prickly on defense, just like a cactus.")
-P("dot-finnegan", "Dot Finnegan", "Rattler", "coyotes", 28, "common", "High Flyer", (76, 58, 84, 64, 66, 62),
+P("dot-finnegan", "Dot Finnegan", "Rattler", "coyotes", 28, "common", "High Flyer", (74, 54, 84, 60, 60, 56),
   L("light", "bob", "ginger", eyes="wide", brows="fierce", mouth="grin", acc=("bandana", "freckles", "lashes")),
   "You hear the rim rattle before you see her.")
 

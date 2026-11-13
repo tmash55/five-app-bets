@@ -8,7 +8,7 @@ import { mustPlayer } from '@/data/roster';
 import { COURTS } from '@/game/render/court';
 import type { Owned } from '@/meta/collection';
 import { packById } from '@/meta/packs';
-import { STARS_PER_GAME, TOURS, gameKey, gameOpen, nextTourGame, stageOpen, stageStars, tourStars, type Tour, type TourGame, type TourProgress } from '@/meta/tour';
+import { STARS_PER_GAME, gameKey, gameOpen, nextTourGame, stageOpen, stageStars, tourStars, toursFor, type Tour, type TourGame, type TourProgress } from '@/meta/tour';
 import { startTour } from '@/state/play';
 import { useSave } from '@/state/save';
 import { color, opacity, size as sizes, space, stroke } from '@/theme/tokens';
@@ -114,8 +114,9 @@ export default function TourScreen() {
   const progress = useSave((s) => s.tour);
   const owned = useSave((s) => s.owned);
   const starPacks = useSave((s) => s.starPacks);
-  const [tourId, setTourId] = useState(() => (TOURS.find((t) => nextTourGame(progress, t) !== null) ?? TOURS[0]).id);
-  const tour = TOURS.find((t) => t.id === tourId) ?? TOURS[0];
+  const tours = toursFor(useSave((s) => s.homeTeam));
+  const [tourId, setTourId] = useState(() => (tours.find((t) => nextTourGame(progress, t) !== null) ?? tours[0]).id);
+  const tour = tours.find((t) => t.id === tourId) ?? tours[0];
   const stars = tourStars(progress, tour);
   const scroller = useRef<ComponentRef<typeof ScrollView>>(null);
   const next = nextTourGame(progress, tour);
@@ -134,7 +135,7 @@ export default function TourScreen() {
 
   return (
     <Screen title="TOUR" tone="mint" right={<Tag label={`${stars.have} / ${stars.all}`} fill="paper" icon="star" style={styles.centerSelf} />}>
-      {TOURS.length > 1 && <Segmented options={TOURS.map((t) => ({ value: t.id, label: t.name }))} value={tour.id} onChange={setTourId} style={styles.tours} />}
+      {tours.length > 1 && <Segmented options={tours.map((t) => ({ value: t.id, label: t.name }))} value={tour.id} onChange={setTourId} style={styles.tours} />}
       <ScrollView ref={scroller} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {tour.stages.map((_, i) => (
           <StageCard key={`${tour.id}${i}`} tour={tour} index={i} progress={progress} owned={owned} packDone={starPacks[`${tour.id}/${i}`] === true} onPlay={(g) => play(i, g)} />

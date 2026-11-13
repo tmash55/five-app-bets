@@ -110,7 +110,7 @@ function GainInfo({ gain, copies }: { gain: Gain; copies: number }) {
         <View style={styles.level}>
           <ProgressBar value={prog.have / prog.need} fill={RARITY_COLOR[player.rarity].fill} height={sizes.barThick} />
           <Txt size="small" color="white" shadow>
-            {`${prog.have} of ${prog.need} copies to Level ${prog.level + 1}`}
+            {`${prog.need - prog.have} more ${prog.need - prog.have === 1 ? 'copy' : 'copies'} to reach Level ${prog.level + 1}`}
           </Txt>
         </View>
       )}

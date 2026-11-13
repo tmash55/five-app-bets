@@ -7,7 +7,7 @@ import { useSave } from './save';
 import { useSession } from './session';
 
 export function prefsFrom(data: SaveData): Prefs {
-  return { squad: squadLevels(data), quarterSeconds: data.settings.quarterSeconds, easyShots: data.settings.easyShots };
+  return { squad: squadLevels(data), quarterSeconds: data.settings.quarterSeconds, easyShots: data.settings.easyShots, homeTeam: data.homeTeam };
 }
 
 export function startQuick(options: QuickOptions): void {
@@ -39,7 +39,7 @@ export function startNext(): boolean {
   }
   if (last.mode === 'tour' && last.tour) {
     const data = useSave.getState();
-    const tour = tourById(last.tour.tourId);
+    const tour = tourById(last.tour.tourId, data.homeTeam);
     const next = session.summary?.won ? nextTourGame(data.tour, tour) : null;
     return next ? startTour(tour.id, next.stage, next.game) : startTour(tour.id, last.tour.stage, last.tour.game);
   }

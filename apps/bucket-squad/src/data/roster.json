@@ -1113,10 +1113,10 @@
    "era": "now",
    "role": "Lockdown",
    "ratings": {
-    "speed": 70,
-    "shot": 58,
-    "dunk": 60,
-    "handle": 60,
+    "speed": 66,
+    "shot": 56,
+    "dunk": 56,
+    "handle": 58,
     "steal": 82,
     "block": 78
    },
@@ -1180,11 +1180,11 @@
    "role": "Speedster",
    "ratings": {
     "speed": 88,
-    "shot": 62,
-    "dunk": 60,
-    "handle": 74,
-    "steal": 70,
-    "block": 48
+    "shot": 58,
+    "dunk": 52,
+    "handle": 72,
+    "steal": 66,
+    "block": 44
    },
    "look": {
     "skin": "#D9A066",
@@ -1211,12 +1211,12 @@
    "era": "now",
    "role": "High Flyer",
    "ratings": {
-    "speed": 72,
-    "shot": 56,
+    "speed": 68,
+    "shot": 52,
     "dunk": 86,
-    "handle": 60,
-    "steal": 58,
-    "block": 74
+    "handle": 56,
+    "steal": 54,
+    "block": 70
    },
    "look": {
     "skin": "#5C3A26",
@@ -1380,10 +1380,10 @@
    "era": "now",
    "role": "Lockdown",
    "ratings": {
-    "speed": 74,
-    "shot": 56,
-    "dunk": 70,
-    "handle": 60,
+    "speed": 70,
+    "shot": 52,
+    "dunk": 62,
+    "handle": 58,
     "steal": 80,
     "block": 84
    },
@@ -1413,12 +1413,12 @@
    "era": "now",
    "role": "High Flyer",
    "ratings": {
-    "speed": 76,
-    "shot": 58,
+    "speed": 74,
+    "shot": 54,
     "dunk": 84,
-    "handle": 64,
-    "steal": 66,
-    "block": 62
+    "handle": 60,
+    "steal": 60,
+    "block": 56
    },
    "look": {
     "skin": "#F3C9A8",

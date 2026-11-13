@@ -111,6 +111,8 @@ export const useSave = create<SaveStore>()(
       version: logic.SAVE_VERSION,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => dataOf(s),
+      // every version of the save goes through the same repair, so an update never throws a save away
+      migrate: (persisted) => logic.repairSave(persisted),
       merge: (persisted, current) => ({ ...current, ...logic.repairSave(persisted) }),
     },
   ),

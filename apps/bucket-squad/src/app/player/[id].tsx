@@ -8,7 +8,7 @@ import { boosted, levelBonus, playerById, teamById } from '@/data/roster';
 import type { PlayerDef } from '@/data/types';
 import { RATING_KEYS, RATING_LABELS } from '@/game/sim/ratings';
 import { levelProgress } from '@/meta/collection';
-import { TOURS } from '@/meta/tour';
+import { toursFor } from '@/meta/tour';
 import { useSave } from '@/state/save';
 import { size as sizes, space } from '@/theme/tokens';
 import { ProgressBar, RARITY_COLOR, RarityTag, Tag, TeamBadge } from '@/ui/Bits';
@@ -19,7 +19,7 @@ import { Txt } from '@/ui/Txt';
 
 /** The tour stop where this player is the prize, if there is one. */
 function tourStop(id: string): string | null {
-  for (const tour of TOURS) {
+  for (const tour of toursFor(null)) {
     for (const stage of tour.stages) {
       if (stage.games.some((g) => g.unlock === id)) return stage.team.name;
     }

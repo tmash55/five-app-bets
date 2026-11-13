@@ -103,6 +103,7 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
   const packs = useSave((s) => s.packs);
   const tourProgress = useSave((s) => s.tour);
   const owned = useSave((s) => s.owned);
+  const homeTeam = useSave((s) => s.homeTeam);
   const [lines] = useState<RewardLine[]>(() => {
     const all = [...outcome.rewards.lines];
     if (outcome.tour && outcome.tour.coins > 0) all.push({ label: 'First win here', coins: outcome.tour.coins });
@@ -149,7 +150,7 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
   const away = teamById(setup.away.kitTeam);
   const packIds = Object.keys(packs).filter((id) => packs[id] > 0);
   const packCount = packIds.reduce((a, id) => a + packs[id], 0);
-  const tour = setup.mode === 'tour' && setup.tour ? tourById(setup.tour.tourId) : null;
+  const tour = setup.mode === 'tour' && setup.tour ? tourById(setup.tour.tourId, homeTeam) : null;
   const hasNext = tour !== null && summary.won && nextTourGame(tourProgress, tour) !== null;
   const tp = outcome.ladder ? tierProgress(outcome.ladder.after) : null;
   const ladderGain = outcome.ladder ? outcome.ladder.after - outcome.ladder.before : 0;

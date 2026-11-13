@@ -85,26 +85,61 @@ function buildStage(team: TeamDef, index: number, count: number, starId: string 
   };
 }
 
-function buildTour(id: string, name: string, teams: TeamDef[], stars: Record<string, string>): Tour {
+/** How far along a tour your own home court comes, as a share of its length. */
+const HOME_STOP = 0.6;
+
+/**
+ * Your home team's court is never an early stop: you start out with three of
+ * its players, so the trip begins on other courts and comes home later.
+ */
+function placeHome(teams: TeamDef[], homeTeam: string | null): TeamDef[] {
+  const at = teams.findIndex((t) => t.id === homeTeam);
+  if (at < 0) return teams;
+  const rest = teams.filter((_, i) => i !== at);
+  const to = Math.min(rest.length, Math.max(at, Math.round(teams.length * HOME_STOP)));
+  return [...rest.slice(0, to), teams[at], ...rest.slice(to)];
+}
+
+function buildTour(id: string, name: string, teams: TeamDef[], stars: Record<string, string>, homeTeam: string | null): Tour {
   const stages: TourStage[] = [];
-  teams.forEach((team, i) => {
-    const stage = buildStage(team, i, teams.length, stars[team.id]);
+  const order = placeHome(
+    teams.filter((t) => teamPlayers(t.id).length >= 2),
+    homeTeam,
+  );
+  order.forEach((team, i) => {
+    const stage = buildStage(team, i, order.length, stars[team.id]);
     if (stage) stages.push(stage);
   });
   return { id, name, stages };
 }
 
-export const TOURS: readonly Tour[] = ROSTER_PACKS.map((pack) => {
-  if (pack.id === 'neighborhood') {
-    const teams = NEIGHBORHOOD_ORDER.map((id) => pack.teams.find((t) => t.id === id)).filter((t): t is TeamDef => !!t);
-    return buildTour(pack.id, 'Neighborhood Tour', teams, NEIGHBORHOOD_STARS);
-  }
-  const teams = [...pack.teams].sort((a, b) => strength(a) - strength(b));
-  return buildTour(pack.id, `${pack.name} Tour`, teams, {});
-});
+function buildTours(homeTeam: string | null): readonly Tour[] {
+  return ROSTER_PACKS.map((pack) => {
+    if (pack.id === 'neighborhood') {
+      const teams = NEIGHBORHOOD_ORDER.map((id) => pack.teams.find((t) => t.id === id)).filter((t): t is TeamDef => !!t);
+      return buildTour(pack.id, 'Neighborhood Tour', teams, NEIGHBORHOOD_STARS, homeTeam);
+    }
+    const teams = [...pack.teams].sort((a, b) => strength(a) - strength(b));
+    return buildTour(pack.id, `${pack.name} Tour`, teams, {}, homeTeam);
+  });
+}
 
-export function tourById(id: string): Tour {
-  return TOURS.find((t) => t.id === id) ?? TOURS[0];
+const built = new Map<string, readonly Tour[]>();
+
+/** Every tour, laid out for a player whose home team is `homeTeam`. */
+export function toursFor(homeTeam: string | null): readonly Tour[] {
+  const key = homeTeam ?? '';
+  let tours = built.get(key);
+  if (!tours) {
+    tours = buildTours(homeTeam);
+    built.set(key, tours);
+  }
+  return tours;
+}
+
+export function tourById(id: string, homeTeam: string | null): Tour {
+  const tours = toursFor(homeTeam);
+  return tours.find((t) => t.id === id) ?? tours[0];
 }
 
 /** stars earned, keyed "tour/stage/game" */

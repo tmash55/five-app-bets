@@ -4,7 +4,8 @@
  * which keeps all the rules easy to test.
  */
 
-import { mustPlayer, playerOverall, teamPlayers } from '@/data/roster';
+import { TEAMS, byValue, mustPlayer, playerById, playerOverall, teamPlayers } from '@/data/roster';
+import type { TeamDef } from '@/data/types';
 import { addCopy, levelOf, type Gain, type Owned } from '@/meta/collection';
 import { TIERS, ladderResult, tierIndex, type Tier } from '@/meta/ladder';
 import type { MatchSummary } from '@/meta/match';
@@ -103,6 +104,11 @@ export function newSave(): SaveData {
     settings: { ...DEFAULT_SETTINGS },
     tips: {},
   };
+}
+
+/** Teams you can call home: the ones with enough everyday players to start a squad. */
+export function homeTeamChoices(): TeamDef[] {
+  return TEAMS.filter((t) => teamPlayers(t.id).filter((p) => p.rarity === 'common').length >= SQUAD_SIZE);
 }
 
 /** The three kids you start with: your home team's everyday players. */
@@ -261,7 +267,7 @@ export function finishMatch(data: SaveData, summary: MatchSummary, day: string):
   let tourOutcome: TourOutcome | undefined;
   if (summary.mode === 'tour' && summary.tour) {
     const { tourId, stage, game } = summary.tour;
-    const def = tourById(tourId);
+    const def = tourById(tourId, data.homeTeam);
     const g = def.stages[stage]?.games[game];
     if (g) {
       const key = gameKey(tourId, stage, game);
@@ -330,7 +336,32 @@ export function claimMissionBonus(data: SaveData, day: string): SaveData | null 
   return { ...data, packs: withPack(data.packs, ALL_DONE_PACK), missions: { ...today, bonusClaimed: true } };
 }
 
-/** Bring an older or damaged save up to date without losing what can be kept. */
+function count(v: unknown): number {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
+}
+
+function oneOf<T>(v: unknown, allowed: readonly T[], fallback: T): T {
+  return allowed.includes(v as T) ? (v as T) : fallback;
+}
+
+function flag(v: unknown, fallback: boolean): boolean {
+  return typeof v === 'boolean' ? v : fallback;
+}
+
+function validPack(id: string): boolean {
+  try {
+    packById(id);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Bring an older or damaged save up to date without losing what can be kept.
+ * Whatever comes out is safe to play with: every id in the squad is a player
+ * this build knows, and every setting is one the menus offer.
+ */
 export function repairSave(raw: unknown): SaveData {
   const base = newSave();
   if (!raw || typeof raw !== 'object') return base;
@@ -338,21 +369,69 @@ export function repairSave(raw: unknown): SaveData {
   const owned: Owned = {};
   for (const [id, n] of Object.entries(r.owned ?? {})) {
     // players from a roster pack that is not on this build are kept out of play but not forgotten
-    if (typeof n === 'number' && n > 0) owned[id] = n;
+    if (count(n) > 0) owned[id] = count(n);
   }
+  const playable = (id: unknown): id is string => typeof id === 'string' && playerById(id) !== undefined && (owned[id] ?? 0) > 0;
+
+  // three different players you own; a gap is filled with your best cards
+  const squad: string[] = [];
+  const seat = (id: unknown) => {
+    if (squad.length < SQUAD_SIZE && playable(id) && !squad.includes(id)) squad.push(id);
+  };
+  if (Array.isArray(r.squad)) r.squad.forEach(seat);
+  Object.keys(owned)
+    .filter(playable)
+    .map(mustPlayer)
+    .sort(byValue)
+    .forEach((p) => seat(p.id));
+  const ready = squad.length === SQUAD_SIZE;
+
+  const packs: Record<string, number> = {};
+  for (const [id, n] of Object.entries(r.packs ?? {})) if (count(n) > 0 && validPack(id)) packs[id] = count(n);
+
+  const tour: TourProgress = {};
+  for (const [key, n] of Object.entries(r.tour ?? {})) if (count(n) > 0) tour[key] = Math.min(STARS_PER_GAME, count(n));
+
+  const points = count(r.ladder?.points);
+  const st = { ...base.settings, ...(r.settings ?? {}) };
+  const stats: Stats = { ...base.stats };
+  for (const key of Object.keys(stats) as (keyof Stats)[]) stats[key] = count(r.stats?.[key]);
+  const missions = r.missions && typeof r.missions.day === 'string' && Array.isArray(r.missions.missions) ? r.missions : null;
+
   return {
     ...base,
-    ...r,
     version: SAVE_VERSION,
+    // without a full squad the game starts over at "pick your home team", keeping coins and cards
+    onboarded: r.onboarded === true && ready,
+    homeTeam: typeof r.homeTeam === 'string' && TEAMS.some((t) => t.id === r.homeTeam) ? r.homeTeam : null,
+    coins: count(r.coins),
     owned,
-    fresh: Array.isArray(r.fresh) ? r.fresh : [],
-    squad: Array.isArray(r.squad) ? r.squad : [],
-    packs: { ...(r.packs ?? {}) },
-    ladder: { ...base.ladder, ...(r.ladder ?? {}) },
-    tour: { ...(r.tour ?? {}) },
+    fresh: Array.isArray(r.fresh) ? r.fresh.filter(playable) : [],
+    squad: ready ? squad : [],
+    packs,
+    ladder: {
+      points,
+      games: count(r.ladder?.games),
+      wins: count(r.ladder?.wins),
+      // a tier already reached is never paid for twice
+      bestTier: Math.min(TIERS.length - 1, Math.max(count(r.ladder?.bestTier), tierIndex(points))),
+    },
+    tour,
     starPacks: { ...(r.starPacks ?? {}) },
-    stats: { ...base.stats, ...(r.stats ?? {}) },
-    settings: { ...base.settings, ...(r.settings ?? {}) },
+    missions,
+    freePackDay: typeof r.freePackDay === 'string' ? r.freePackDay : null,
+    firstWinDay: typeof r.firstWinDay === 'string' ? r.firstWinDay : null,
+    stats,
+    settings: {
+      sound: flag(st.sound, base.settings.sound),
+      music: flag(st.music, base.settings.music),
+      haptics: flag(st.haptics, base.settings.haptics),
+      lefty: flag(st.lefty, base.settings.lefty),
+      difficulty: oneOf(st.difficulty, [0, 1, 2] as const, base.settings.difficulty),
+      quarterSeconds: oneOf(st.quarterSeconds, [45, 60, 90] as const, base.settings.quarterSeconds),
+      format: oneOf(st.format, [2, 3] as const, base.settings.format),
+      easyShots: flag(st.easyShots, base.settings.easyShots),
+    },
     tips: { ...(r.tips ?? {}) },
   };
 }

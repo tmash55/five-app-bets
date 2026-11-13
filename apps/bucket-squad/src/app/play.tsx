@@ -5,7 +5,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { tierProgress } from '@/meta/ladder';
 import { DIFFICULTY_NAMES } from '@/meta/setups';
-import { TOURS, nextTourGame, tourStars } from '@/meta/tour';
+import { nextTourGame, tourStars, toursFor } from '@/meta/tour';
 import { useSave } from '@/state/save';
 import { color, size as sizes, space, stroke, type ColorName } from '@/theme/tokens';
 import { ProgressBar, Tag, TeamBadge } from '@/ui/Bits';
@@ -37,16 +37,17 @@ export default function Play() {
   const tour = useSave((s) => s.tour);
   const ladder = useSave((s) => s.ladder);
   const settings = useSave((s) => s.settings);
+  const tours = toursFor(useSave((s) => s.homeTeam));
   const go = (href: Href) => () => router.push(href);
 
   let have = 0;
   let all = 0;
-  for (const t of TOURS) {
+  for (const t of tours) {
     const s = tourStars(tour, t);
     have += s.have;
     all += s.all;
   }
-  const firstOpen = TOURS.map((t) => ({ t, next: nextTourGame(tour, t) })).find((x) => x.next !== null);
+  const firstOpen = tours.map((t) => ({ t, next: nextTourGame(tour, t) })).find((x) => x.next !== null);
   const nextStage = firstOpen && firstOpen.next ? firstOpen.t.stages[firstOpen.next.stage] : null;
   const tp = tierProgress(ladder.points);
 

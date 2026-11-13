@@ -162,15 +162,15 @@ const styles = StyleSheet.create({
     paddingBottom: space.md,
   },
   figure: {
-    width: '36%',
+    width: '48%',
   },
   figureLead: {
     height: '100%',
     zIndex: 2,
-    marginHorizontal: '-7%',
+    marginHorizontal: '-17%',
   },
   figureSide: {
-    height: '84%',
+    height: '86%',
     zIndex: 1,
   },
   fill: {

@@ -4,9 +4,9 @@ import { Redirect, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { TEAMS, mustPlayer, teamById } from '@/data/roster';
+import { mustPlayer, teamById } from '@/data/roster';
 import { playSfx } from '@/audio/sound';
-import { starterIds } from '@/state/logic';
+import { homeTeamChoices, starterIds } from '@/state/logic';
 import { useSave } from '@/state/save';
 import { size as sizes, space } from '@/theme/tokens';
 import { TeamBadge } from '@/ui/Bits';
@@ -20,7 +20,8 @@ export default function Welcome() {
   const router = useRouter();
   const onboarded = useSave((s) => s.onboarded);
   const startCareer = useSave((s) => s.startCareer);
-  const [teamId, setTeamId] = useState(TEAMS[0].id);
+  const [teams] = useState(homeTeamChoices);
+  const [teamId, setTeamId] = useState(teams[0].id);
   const [leaving, setLeaving] = useState(false);
   const team = teamById(teamId);
   const starters = useMemo(() => starterIds(teamId).map(mustPlayer), [teamId]);
@@ -46,7 +47,7 @@ export default function Welcome() {
       }>
       <View style={styles.row}>
         <ScrollView style={styles.teams} contentContainerStyle={styles.teamsBody} showsVerticalScrollIndicator={false}>
-          {TEAMS.map((t) => (
+          {teams.map((t) => (
             <TeamTile key={t.id} team={t} selected={t.id === teamId} onPress={() => setTeamId(t.id)} />
           ))}
         </ScrollView>

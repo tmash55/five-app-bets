@@ -28,6 +28,8 @@ export interface Prefs {
   squad: SidePlayer[];
   quarterSeconds: number;
   easyShots: boolean;
+  /** decides where the home court comes on a tour */
+  homeTeam?: string | null;
 }
 
 function newSeed(rng: Rng): number {
@@ -56,11 +58,11 @@ export function teamSide(team: TeamDef, perTeam: 2 | 3, strength: 0 | 1 | 2, lev
 }
 
 /**
- * You never face the players you are using: anyone on both sides is swapped
- * for the teammate closest in skill, so every figure on the court is one of a kind.
+ * You never face your own squad: anyone on both sides is swapped for the
+ * teammate closest in skill, so every figure on the court is one of a kind.
  */
-export function withoutMirrors(away: Side, home: Side, perTeam: number): Side {
-  const mine = new Set(home.players.slice(0, perTeam).map((p) => p.id));
+export function withoutMirrors(away: Side, home: Side): Side {
+  const mine = new Set(home.players.map((p) => p.id));
   const used = new Set(away.players.map((p) => p.id));
   if (!away.players.some((p) => mine.has(p.id))) return away;
   const players = away.players.map((sp) => {
@@ -93,13 +95,18 @@ export interface QuickOptions {
 
 export function quickSetup(prefs: Prefs, o: QuickOptions, rng: Rng = Math.random): MatchSetup {
   const lv = QUICK_LEVELS[o.difficulty];
-  const team = o.opponent ? teamById(o.opponent) : pick(rng, playableTeams(o.perTeam));
   const home = homeSide(prefs.squad);
+  const mine = new Set(home.players.map((p) => p.id));
+  const sideOf = (t: TeamDef) => teamSide(t, o.perTeam, o.difficulty, lv.level);
+  // a surprise opponent is a team that can field its usual players against you
+  const all = playableTeams(o.perTeam);
+  const clean = all.filter((t) => !sideOf(t).players.some((p) => mine.has(p.id)));
+  const team = o.opponent ? teamById(o.opponent) : pick(rng, clean.length > 0 ? clean : all);
   return {
     mode: 'quick',
     perTeam: o.perTeam,
     home,
-    away: withoutMirrors(teamSide(team, o.perTeam, o.difficulty, lv.level), home, o.perTeam),
+    away: withoutMirrors(sideOf(team), home),
     court: o.court ?? team.court,
     difficulty: lv.difficulty,
     quarters: QUARTERS,
@@ -113,7 +120,7 @@ export function quickSetup(prefs: Prefs, o: QuickOptions, rng: Rng = Math.random
 export function ladderSetup(prefs: Prefs, points: number, perTeam: 2 | 3, rng: Rng = Math.random): MatchSetup {
   const tier = TIERS[tierIndex(points)];
   const home = homeSide(prefs.squad);
-  const away = withoutMirrors(ladderOpponent(points, perTeam, rng), home, perTeam);
+  const away = withoutMirrors(ladderOpponent(points, perTeam, rng, mustPlayer(prefs.squad[0].id).team), home);
   return {
     mode: 'ladder',
     perTeam,
@@ -130,7 +137,7 @@ export function ladderSetup(prefs: Prefs, points: number, perTeam: 2 | 3, rng: R
 }
 
 export function tourSetup(prefs: Prefs, tourId: string, stage: number, game: number, rng: Rng = Math.random): MatchSetup | null {
-  const tour = tourById(tourId);
+  const tour = tourById(tourId, prefs.homeTeam ?? null);
   const st = tour.stages[stage];
   const g = st?.games[game];
   if (!st || !g) return null;
@@ -139,7 +146,7 @@ export function tourSetup(prefs: Prefs, tourId: string, stage: number, game: num
     mode: 'tour',
     perTeam: g.perTeam,
     home,
-    away: withoutMirrors({ name: st.team.name, short: st.team.short, kitTeam: st.team.id, players: g.opponents }, home, g.perTeam),
+    away: withoutMirrors({ name: st.team.name, short: st.team.short, kitTeam: st.team.id, players: g.opponents }, home),
     court: st.team.court,
     difficulty: g.difficulty,
     quarters: QUARTERS,

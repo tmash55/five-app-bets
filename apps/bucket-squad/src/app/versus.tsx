@@ -27,9 +27,9 @@ function clock(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-function modeLine(setup: MatchSetup, ladderPoints: number): string {
+function modeLine(setup: MatchSetup, ladderPoints: number, homeTeam: string | null): string {
   if (setup.mode === 'tour' && setup.tour) {
-    const stage = tourById(setup.tour.tourId).stages[setup.tour.stage];
+    const stage = tourById(setup.tour.tourId, homeTeam).stages[setup.tour.stage];
     return `TOUR  ·  ${stage.games[setup.tour.game].title.toUpperCase()}`;
   }
   if (setup.mode === 'ladder') return `LADDER  ·  ${TIERS[tierIndex(ladderPoints)].name.toUpperCase()}`;
@@ -71,6 +71,7 @@ function Matchup({ setup }: { setup: MatchSetup }) {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
   const ladderPoints = useSave((s) => s.ladder.points);
+  const homeTeam = useSave((s) => s.homeTeam);
   const colors = useMemo(() => buildMatch(setup).colors, [setup]);
   const court = COURTS[setup.court];
   const pop = useSharedValue(0);
@@ -99,7 +100,7 @@ function Matchup({ setup }: { setup: MatchSetup }) {
         </Svg>
       </View>
       <Sunburst strength={0.08} />
-      <Screen title={modeLine(setup, ladderPoints)} coins={false} bare>
+      <Screen title={modeLine(setup, ladderPoints, homeTeam)} coins={false} bare>
         <View style={styles.row}>
           <SideColumn side={setup.home} perTeam={setup.perTeam} cardW={cardW} mine from={-1} />
           <Animated.View style={[styles.middle, vs]}>
