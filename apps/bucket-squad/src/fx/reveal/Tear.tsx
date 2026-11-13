@@ -15,7 +15,7 @@ import { FOIL_RATIO, FoilPack, foilFor } from '@/ui/arcade/Foil';
 import { Bloom, Rays, StageRing } from '@/ui/arcade/Room';
 import { Glow } from '@/ui/arcade/Type';
 import type { OpenLayout, Point } from './layout';
-import { backOut, bump, easeInOut, easeOut, lerp, span, wobble } from './motion';
+import { backOut, easeInOut, easeOut, flashAt, lerp, span, wobble } from './motion';
 import { around } from './pieces';
 import { packTube } from './Sealed';
 import { TEAR } from './times';
@@ -97,7 +97,7 @@ export function Tear({ clock, def, lay, light }: TearProps) {
     return { opacity: span(t, TEAR.rip, TEAR.rip + 120) * (1 - span(t, TEAR.flash, TEAR.flash + 120)), transform: [{ scaleX: backOut(span(t, TEAR.rip, TEAR.rip + 220)) }] };
   });
   const quiet = useAnimatedStyle(() => ({ opacity: 1 - span(clock.value, TEAR.rip, TEAR.flash) }));
-  const flash = useAnimatedStyle(() => ({ opacity: 0.85 * bump(clock.value, TEAR.flash, 50, 420) }));
+  const flash = useAnimatedStyle(() => ({ opacity: 0.9 * flashAt(clock.value, TEAR.flash, 520) }));
   const ringW = pack.width * 1.75;
   const ringH = px(56);
   const bloomSize = px(360);

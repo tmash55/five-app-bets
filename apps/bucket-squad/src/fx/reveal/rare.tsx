@@ -86,16 +86,20 @@ function edgePoint(p: number, w: number, h: number): { x: number; y: number } {
   return { x: -w / 2, y: h / 2 - (d - 2 * w - h) };
 }
 
-function Runner({ clock, k, width, height }: { clock: SharedValue<number>; k: number; width: number; height: number }) {
-  const size = px(8);
+/** four sparks round the edge, each with three fading behind it */
+const RUNNERS = [0, 1, 2, 3].flatMap((k) => [3, 2, 1, 0].map((j) => [k, j] as const));
+
+/** One spark running round the edge; `j` above 0 is one of the fading sparks trailing behind it. */
+function Runner({ clock, k, j, width, height }: { clock: SharedValue<number>; k: number; j: number; width: number; height: number }) {
+  const size = px(8) * (1 - j * 0.2);
   const style = useAnimatedStyle(() => {
     const t = clock.value;
     const on = span(t, CRACKLE.from, CRACKLE.from + 60) * (1 - span(t, CRACKLE.to - 80, CRACKLE.to));
     if (on <= 0) return { opacity: 0 };
     // one and a half times round in the time, every runner a quarter behind the last
-    const p = k / 4 + ((t - CRACKLE.from) / (CRACKLE.to - CRACKLE.from)) * 1.5;
+    const p = k / 4 + ((t - CRACKLE.from) / (CRACKLE.to - CRACKLE.from)) * 1.5 - j * 0.014;
     const at = edgePoint(p, width, height);
-    return { opacity: on * (0.65 + 0.35 * wobble(t, 0.6, k * 2)), transform: [{ translateX: at.x }, { translateY: at.y }, { scale: 0.8 + 0.4 * wobble(t, 0.5, k) }] };
+    return { opacity: on * (1 - j * 0.24) * (0.65 + 0.35 * wobble(t, 0.6, k * 2 + j)), transform: [{ translateX: at.x }, { translateY: at.y }, { scale: 0.8 + 0.4 * wobble(t, 0.5, k) }] };
   });
   return <Animated.View pointerEvents="none" style={[around(size), { borderRadius: size / 2, backgroundColor: night.white, boxShadow: [halo(BLUE.glass, 10, 1, 2), halo(tube.cyan.glass, 22, 0.8)] }, style]} />;
 }
@@ -113,8 +117,8 @@ function Front({ clock, width, height }: StageProps) {
         <Ring key={i} clock={clock} at={at} ms={RING_MS} size={diag * 1.08} color={i === 2 ? BLUE.soft : BLUE.glass} from={2.3} to={1} thick={px(3)} closing />
       ))}
       <Animated.View pointerEvents="none" style={[around(width, height), { borderRadius: cardRound(width), borderWidth: px(2.5), borderColor: tube.cyan.tint, boxShadow: [halo(BLUE.glass, 14, 1), halo(tube.cyan.glass, 6, 1)] }, edge]} />
-      {[0, 1, 2, 3].map((k) => (
-        <Runner key={k} clock={clock} k={k} width={width} height={height} />
+      {RUNNERS.map(([k, j]) => (
+        <Runner key={`${k}-${j}`} clock={clock} k={k} j={j} width={width} height={height} />
       ))}
       <Ring clock={clock} at={T.flipAt} ms={560} size={diag * 0.9} color={BLUE.glass} from={0.8} to={2.9} thick={px(5)} />
       <Sparks clock={clock} at={T.flipAt} ms={480} count={14} reach={width * 0.95} color={BLUE.soft} />
@@ -134,7 +138,7 @@ export const rareReveal: Reveal = {
     { at: T.flipAt, sfx: 'revealRare', buzz: 'medium', stinger: true },
   ],
   shakes: [{ at: T.flipAt, ms: 240, amount: px(3) }],
-  flashes: [{ at: T.flipAt, ms: 280, amount: 0.32 }],
+  flashes: [{ at: T.flipAt, ms: 340, amount: 0.26 }],
   Card,
   Behind,
   Front,

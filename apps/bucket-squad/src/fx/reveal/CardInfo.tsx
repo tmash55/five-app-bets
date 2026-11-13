@@ -6,7 +6,7 @@
  */
 
 import { memo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 
 import { RARITY_LABEL } from '@/data/types';
@@ -24,13 +24,20 @@ import { backOut, easeOut, flicker, span } from './motion';
 import type { CardPlan } from './plan';
 import { INFO } from './times';
 
-/** One piece of the side, fading and sliding in at `at` on the info clock. */
-function Piece({ clock, at, children, style }: { clock: SharedValue<number>; at: number; children: React.ReactNode; style?: object }) {
+/**
+ * One piece of the side, fading and sliding in at `at` on the info clock. Only the button takes touches: a tap
+ * anywhere else on the words goes through to the stage behind and moves on, as a tap anywhere does.
+ */
+function Piece({ clock, at, children, style, touch }: { clock: SharedValue<number>; at: number; children: React.ReactNode; style?: StyleProp<ViewStyle>; touch?: boolean }) {
   const anim = useAnimatedStyle(() => {
     const u = span(clock.value, at, at + INFO.piece);
     return { opacity: u, transform: [{ translateX: (1 - easeOut(u)) * px(28) }] };
   });
-  return <Animated.View style={[style, anim]}>{children}</Animated.View>;
+  return (
+    <Animated.View pointerEvents={touch ? 'box-none' : 'none'} style={[style, anim]}>
+      {children}
+    </Animated.View>
+  );
 }
 
 const SIGN_FLICKER = 560;
@@ -128,8 +135,8 @@ export const CardInfo = memo(function CardInfo({ plan, clock, lamps, pips, count
   const nick = player.nickname ? ` · “${player.nickname.toUpperCase()}”` : '';
   const copy = !gain.isNew;
   return (
-    <View style={[styles.root, { width }]}>
-      <View style={styles.top}>
+    <View pointerEvents="box-none" style={[styles.root, { width }]}>
+      <View pointerEvents="none" style={styles.top}>
         <Piece clock={clock} at={INFO.tag}>
           <Tag label={plan.label.text} tube={plan.label.tube} />
         </Piece>
@@ -145,7 +152,7 @@ export const CardInfo = memo(function CardInfo({ plan, clock, lamps, pips, count
         </Piece>
       </View>
 
-      <View style={styles.block}>
+      <View pointerEvents="none" style={styles.block}>
         <View style={styles.grow}>
           <Piece clock={clock} at={INFO.name}>
             <Print face="display" size={name.size} track="close" lines={1} style={{ lineHeight: Math.round(name.size * 1.08) }}>
@@ -199,7 +206,7 @@ export const CardInfo = memo(function CardInfo({ plan, clock, lamps, pips, count
         <Print face="bold" size={px(12.5)} color={tube.cyan.soft} track="wide" lines={1}>{`${pips} OF ${plan.team.of}`}</Print>
       </Piece>
 
-      <Piece clock={clock} at={INFO.button}>
+      <Piece clock={clock} at={INFO.button} touch>
         <GoldButton label={last ? 'SEE ALL' : 'NEXT PLAYER'} iconAfter="arrow" onPress={onNext} accessibilityLabel={last ? 'See all your new players' : 'Next player'} />
       </Piece>
     </View>

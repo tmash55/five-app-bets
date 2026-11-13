@@ -22,7 +22,7 @@ import { buzz } from '@/fx/feedback';
 import { revealFor, type Cue, type Pulse, type Reveal } from '@/fx/reveal';
 import { CardInfo, lampPlan } from '@/fx/reveal/CardInfo';
 import { openLayout } from '@/fx/reveal/layout';
-import { REST_TILT, bump, easeInOut, lerp, span } from '@/fx/reveal/motion';
+import { REST_TILT, easeInOut, flashAt, lerp, span } from '@/fx/reveal/motion';
 import { Afterglow, around } from '@/fx/reveal/pieces';
 import { bestRarity, demoResult, parseDemo, planPack, type CardPlan } from '@/fx/reveal/plan';
 import { Sealed } from '@/fx/reveal/Sealed';
@@ -145,7 +145,7 @@ export default function OpenPack() {
   const flashStyle = useAnimatedStyle(() => {
     const t = clock.value;
     let a = skipFlash.value;
-    for (const f of pulses.value.flashes) a = Math.max(a, f.amount * bump(t, f.at, 40, f.ms - 40));
+    for (const f of pulses.value.flashes) a = Math.max(a, f.amount * flashAt(t, f.at, f.ms));
     return { opacity: a };
   });
   const spotStyle = useAnimatedStyle(() => ({ transform: [{ translateX: glideX * glide.value }] }));
@@ -400,10 +400,10 @@ export default function OpenPack() {
   return (
     <View style={styles.root}>
       {stage !== 'summary' && (
-        <Pressable style={StyleSheet.absoluteFill} onPress={next} accessibilityRole="button" accessibilityLabel={stage === 'sealed' ? 'Open the pack' : 'Next'}>
-          <Animated.View style={[StyleSheet.absoluteFill, shakeStyle]}>
+        <>
+          {/* everything that only shows, shaken together; the taps go to the stage below it, and only the buttons drawn above that catch their own */}
+          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, shakeStyle]}>
             <StageWall at={wallAt} />
-            {stage === 'sealed' && <Sealed def={def} lay={lay} count={available} onShop={() => router.dismissTo('/packs')} />}
             {stage === 'tear' && result && (
               <>
                 <Tear clock={tearClock} def={def} lay={lay} light={light} />
@@ -413,7 +413,7 @@ export default function OpenPack() {
             {stage === 'cards' && reveal && stageProps && plan && (
               <>
                 {reveal.Room && <reveal.Room {...stageProps} />}
-                <Animated.View pointerEvents="none" style={[styles.point, { left: origin.x, top: origin.y }, spotStyle]}>
+                <Animated.View style={[styles.point, { left: origin.x, top: origin.y }, spotStyle]}>
                   {reveal.Behind && <reveal.Behind {...stageProps} />}
                   <Afterglow clock={clock} from={reveal.flipAt} rarity={plan.rarity} width={lay.card.width} height={lay.card.height} />
                   <Animated.View style={[around(lay.card.width, lay.card.height), arriveStyle]}>
@@ -423,18 +423,13 @@ export default function OpenPack() {
                 </Animated.View>
                 <Slots lay={lay} rarities={rarities} states={slotStates} />
                 {leavingPlan && (
-                  <View pointerEvents="none" style={[styles.point, { left: lay.rest.x, top: lay.rest.y }]}>
+                  <View style={[styles.point, { left: lay.rest.x, top: lay.rest.y }]}>
                     <Animated.View style={[around(lay.card.width, lay.card.height), leaveStyle]}>
                       <ArcadeCard player={leavingPlan.player} level={leavingPlan.level} width={lay.card.width} />
                     </Animated.View>
                   </View>
                 )}
                 {reveal.Over && <reveal.Over {...stageProps} />}
-                {shownInfo && infoFor !== null && (
-                  <Animated.View pointerEvents="box-none" style={[styles.info, { left: lay.info.left, top: lay.info.top, width: lay.info.width, height: lay.info.height }, infoStyle]}>
-                    <CardInfo key={infoFor} plan={shownInfo} clock={info} lamps={lamps} pips={pips} counting={counting} last={infoFor + 1 >= plans.length} onNext={advance} width={lay.info.width} />
-                  </Animated.View>
-                )}
                 <Chip style={[styles.chip, { left: lay.edge.left, top: topBar.top + px(10) }]}>
                   <Print face="bold" size={px(12.5)} color={tube.indigo.soft} track="wide" glow={tube.indigo.glass} lines={1}>
                     {def.name.toUpperCase()}
@@ -444,8 +439,15 @@ export default function OpenPack() {
               </>
             )}
           </Animated.View>
+          <Pressable style={StyleSheet.absoluteFill} onPress={next} accessibilityRole="button" accessibilityLabel={stage === 'sealed' ? 'Open the pack' : 'Next'} />
+          {stage === 'sealed' && <Sealed def={def} lay={lay} count={available} onShop={() => router.dismissTo('/packs')} />}
+          {stage === 'cards' && shownInfo && infoFor !== null && (
+            <Animated.View pointerEvents="box-none" style={[styles.info, { left: lay.info.left, top: lay.info.top, width: lay.info.width, height: lay.info.height }, infoStyle]}>
+              <CardInfo key={infoFor} plan={shownInfo} clock={info} lamps={lamps} pips={pips} counting={counting} last={infoFor + 1 >= plans.length} onNext={advance} width={lay.info.width} />
+            </Animated.View>
+          )}
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.flash, flashStyle]} />
-        </Pressable>
+        </>
       )}
 
       {stage === 'summary' && result && (

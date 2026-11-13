@@ -52,8 +52,8 @@ function chaseAt(t: number): number {
 
 /** Where the bulbs go: round the screen just inside its edge, clockwise from the top-left corner. */
 function bulbSpots(width: number, height: number): { x: number; y: number }[] {
-  const inset = px(9);
-  const pitch = px(22);
+  const inset = px(11);
+  const pitch = px(25);
   const x0 = inset;
   const y0 = inset;
   const x1 = width - inset;
@@ -71,7 +71,7 @@ function bulbSpots(width: number, height: number): { x: number; y: number }[] {
 }
 
 const Bulbs = memo(function Bulbs({ spots, width, height, lit }: { spots: { x: number; y: number }[]; width: number; height: number; lit: boolean }) {
-  const r = px(3.2);
+  const r = px(4.2);
   return (
     <Svg width={width} height={height}>
       {lit && spots.map((s, i) => <Circle key={`h${i}`} cx={s.x} cy={s.y} r={r * 2.6} fill={tube.gold.glass} opacity={0.22} />)}
@@ -89,7 +89,8 @@ function BulbGroup({ clock, k, spots, width, height }: { clock: SharedValue<numb
     if (t < CHASE) return { opacity: 0 };
     const all = t >= IMPACT && t < IMPACT + 380;
     const on = all || Math.floor(chaseAt(t)) % 3 === k;
-    return { opacity: on ? (t > IMPACT + 380 ? 0.85 : 1) : 0 };
+    // once the card has landed the lights go down, so they never sit over what the side says about the player
+    return { opacity: on ? (t > IMPACT + 380 ? 0.85 : 1) * (1 - span(t, T.length, T.length + 900)) : 0 };
   });
   return (
     <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, style]}>
@@ -102,7 +103,7 @@ function BulbGroup({ clock, k, spots, width, height }: { clock: SharedValue<numb
 function Marquee({ clock, width, height }: { clock: SharedValue<number>; width: number; height: number }) {
   const spots = useMemo(() => bulbSpots(width, height), [width, height]);
   const groups = useMemo(() => [0, 1, 2].map((k) => spots.filter((_, i) => i % 3 === k)), [spots]);
-  const base = useAnimatedStyle(() => ({ opacity: span(clock.value, CHASE - 120, CHASE + 200) }));
+  const base = useAnimatedStyle(() => ({ opacity: span(clock.value, CHASE - 120, CHASE + 200) * (1 - span(clock.value, T.length, T.length + 900)) }));
   return (
     <>
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, base]}>
@@ -194,10 +195,14 @@ function Behind({ clock, width }: StageProps) {
     const pool = 0.3 * span(t, BEAM.from + 200, BEAM.from + 600) + 0.4 * span(t, TREMBLE, LAUNCH.from);
     return { opacity: t < IMPACT ? pool * (0.9 + 0.1 * wobble(t, 0.04, 3)) : lerp(1, 0, easeOut(span(t, IMPACT, T.length + 600))) };
   });
+  // the burst of light goes behind the card, so the face it lights up is never crossed out by its rays
   return (
-    <Animated.View pointerEvents="none" style={[around(size), style]}>
-      <Bloom size={size} color={GOLD.soft} />
-    </Animated.View>
+    <>
+      <Animated.View pointerEvents="none" style={[around(size), style]}>
+        <Bloom size={size} color={GOLD.soft} />
+      </Animated.View>
+      <Starburst clock={clock} at={IMPACT} ms={1000} size={width * 4} color={tube.gold.soft} count={20} />
+    </>
   );
 }
 
@@ -205,7 +210,6 @@ function Front({ clock, width, height }: StageProps) {
   const diag = Math.hypot(width, height);
   return (
     <>
-      <Starburst clock={clock} at={IMPACT} ms={1000} size={width * 4} color={tube.gold.soft} count={20} />
       <Ring clock={clock} at={IMPACT} ms={620} size={diag * 0.9} color={night.white} from={0.85} to={3.2} thick={px(6)} />
       <Ring clock={clock} at={IMPACT + 110} ms={700} size={diag * 0.9} color={tube.gold.glass} from={0.85} to={3.6} thick={px(5)} />
       <Ring clock={clock} at={IMPACT + 220} ms={780} size={diag * 0.9} color={GOLD.glass} from={0.85} to={4} thick={px(4)} />
@@ -241,7 +245,7 @@ export const legendReveal: Reveal = {
     { at: LAUNCH.from, ms: 220, amount: px(3) },
     { at: IMPACT, ms: 620, amount: px(13) },
   ],
-  flashes: [{ at: IMPACT, ms: 520, amount: 0.9 }],
+  flashes: [{ at: IMPACT, ms: 500, amount: 0.95 }],
   Card,
   Room,
   Behind,

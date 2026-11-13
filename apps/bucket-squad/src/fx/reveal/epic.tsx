@@ -109,10 +109,14 @@ function Behind({ clock, width }: StageProps) {
     const pool = 0.5 * easeOut(span(t, LAMPS[1] + SWEEP * 0.6, LAMPS[1] + SWEEP + 200));
     return { opacity: t < T.flipAt ? pool : lerp(1, 0, easeOut(span(t, T.flipAt, T.length + 500))) };
   });
+  // the burst of light goes behind the card, so the face it lights up is never crossed out by its rays
   return (
-    <Animated.View pointerEvents="none" style={[around(size), style]}>
-      <Bloom size={size} color={PURPLE.soft} />
-    </Animated.View>
+    <>
+      <Animated.View pointerEvents="none" style={[around(size), style]}>
+        <Bloom size={size} color={PURPLE.soft} />
+      </Animated.View>
+      <Starburst clock={clock} at={T.flipAt} ms={760} size={width * 3.4} color={PURPLE.soft} />
+    </>
   );
 }
 
@@ -120,8 +124,7 @@ function Front({ clock, width, height }: StageProps) {
   const diag = Math.hypot(width, height);
   return (
     <>
-      <Pool clock={clock} from={T.flipAt - 30} to={T.flipAt + 600} size={width * 2.2} color={night.white} peak={0.8} fadeIn={60} fadeOut={500} />
-      <Starburst clock={clock} at={T.flipAt} ms={760} size={width * 3.4} color={PURPLE.soft} />
+      <Pool clock={clock} from={T.flipAt - 30} to={T.flipAt + 600} size={width * 2.2} color={night.white} peak={0.55} fadeIn={60} fadeOut={500} />
       <Ring clock={clock} at={T.flipAt} ms={600} size={diag * 0.9} color={PURPLE.glass} from={0.8} to={3} thick={px(5)} />
       <Ring clock={clock} at={T.flipAt + 120} ms={680} size={diag * 0.9} color={tube.pink.glass} from={0.8} to={3.3} thick={px(4)} />
       <Confetti clock={clock} at={T.flipAt} count={30} colors={CONFETTI} reach={width * 1.5} life={1700} />
@@ -144,7 +147,7 @@ export const epicReveal: Reveal = {
     { at: T.flipAt + 120, buzz: 'heavy' },
   ],
   shakes: [{ at: T.flipAt, ms: 420, amount: px(7) }],
-  flashes: [{ at: T.flipAt, ms: 360, amount: 0.5 }],
+  flashes: [{ at: T.flipAt, ms: 440, amount: 0.42 }],
   Card,
   Room,
   Behind,

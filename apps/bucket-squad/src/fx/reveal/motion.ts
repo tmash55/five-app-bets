@@ -47,6 +47,19 @@ export function bump(t: number, at: number, rise: number, fall: number): number 
 }
 
 /**
+ * A flash of light: up in a blink, then dying away fast at first and slowly at the end, the way a bright light
+ * leaves the eye. A flash that eases out evenly sits on the screen as a grey veil instead.
+ */
+export function flashAt(t: number, at: number, ms: number): number {
+  'worklet';
+  const rise = 40;
+  if (t <= at || t >= at + ms) return 0;
+  if (t < at + rise) return easeOut((t - at) / rise);
+  const u = 1 - (t - at - rise) / (ms - rise);
+  return u * u * u;
+}
+
+/**
  * A card turning over by squeezing it flat and opening it again: the width (`scaleX`) through zero, closing
  * from `at` and open again by `at + close + open`. The face swaps at the moment it is flat.
  */
