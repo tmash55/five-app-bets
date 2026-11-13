@@ -255,6 +255,10 @@ export const HeadCell = memo(function HeadCell({ player, level = 0, selected, fr
   const head = headArt(player.id);
   // the head pictures are square with the face in the middle: show a little more than the cell's width, from just above the hair
   const side = Math.max(width * 1.12, height * 1.5);
+  // a player still to find is a shadow, and a shadow only reads as a person when its whole outline shows: the head
+  // and shoulders smaller, standing on the cell's bottom edge, with the picture's top corners rounded off so a head of
+  // hair cut flat by the picture's own edge still shows as a round top
+  const shadow = Math.min(width, height) * 0.98;
   const body = (
     <View
       style={[
@@ -271,7 +275,11 @@ export const HeadCell = memo(function HeadCell({ player, level = 0, selected, fr
           contentFit="cover"
           transition={0}
           tintColor={owned ? undefined : night.white}
-          style={{ position: 'absolute', left: (width - side) / 2, top: -(side - height) * 0.3, width: side, height: side, opacity: owned ? 1 : 0.1 }}
+          style={
+            owned
+              ? { position: 'absolute', left: (width - side) / 2, top: -(side - height) * 0.3, width: side, height: side }
+              : { position: 'absolute', left: (width - shadow) / 2, top: height - shadow * 0.94, width: shadow, height: shadow, opacity: 0.1, borderTopLeftRadius: shadow * 0.42, borderTopRightRadius: shadow * 0.42 }
+          }
         />
       )}
       {owned && (

@@ -13,12 +13,12 @@ import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { cardArt, playerOverall } from '@/data/roster';
 import { RARITY_LABEL, type PlayerDef } from '@/data/types';
 import { tapFeedback } from '@/fx/feedback';
-import { arcade, night, rarityPaint, tube as tubes } from '@/theme/arcade';
+import { arcade, fade, night, rarityPaint, tube as tubes } from '@/theme/arcade';
 import { px } from '@/theme/tokens';
 import { MIN_FIT_LABEL } from './measure';
 import { Rays, useSvgId } from './Room';
 import { OvrBox } from './Surface';
-import { Glow } from './Type';
+import { Glow, Print } from './Type';
 
 /** the card pictures' height for a width of 1 */
 const ART_RATIO = 560 / 440;
@@ -87,11 +87,25 @@ export const Portrait = memo(function Portrait({ player, level, onPress, style }
               style={{ position: 'absolute', left: w * 0.28 - artW / 2, top: h - s * 1.23, width: artW, height: artH, opacity: found ? 1 : 0.3 }}
             />
           )}
-          <View style={[styles.side, { right: pad, top: stacked ? pad : 0, bottom: stacked ? undefined : 0, flexDirection: stacked ? 'column' : 'row', alignItems: stacked ? 'flex-end' : 'center' }]}>
-            <Glow face="sign" size={stacked ? 'sign' : 'large'} tube={tb} track="widest" tight room={w * 0.5} least={MIN_FIT_LABEL}>
+          {/* the rarity and the rating keep to the right half, clear of the figure: one over the other, and on a short
+              picture the rating as a small chip instead of its box */}
+          <View style={[styles.side, { right: pad, top: stacked ? pad : 0, bottom: stacked ? undefined : 0, justifyContent: 'center', gap: stacked ? px(6) : px(4) }]}>
+            <Glow face="sign" size={stacked ? 'sign' : 'body'} tube={tb} track={stacked ? 'widest' : 'wider'} tight room={w * 0.46 - pad} least={MIN_FIT_LABEL}>
               {word}
             </Glow>
-            {found && <OvrBox value={playerOverall(player, level)} tube={{ ...tb, glass: tb.soft }} small />}
+            {found &&
+              (stacked ? (
+                <OvrBox value={playerOverall(player, level)} tube={{ ...tb, glass: tb.soft }} small />
+              ) : (
+                <View style={[styles.chip, { borderColor: tb.soft }]}>
+                  <Print face="bold" size="micro" color="textDim" track="wide">
+                    OVR
+                  </Print>
+                  <Print face="display" size="large">
+                    {String(playerOverall(player, level))}
+                  </Print>
+                </View>
+              ))}
           </View>
         </>
       )}
@@ -120,8 +134,19 @@ const styles = StyleSheet.create({
   fill: {
     flex: 1,
   },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: px(5),
+    height: px(26),
+    paddingHorizontal: px(7),
+    borderRadius: arcade.rChip,
+    borderWidth: arcade.hairline,
+    backgroundColor: fade(night.pit, 0.82),
+  },
   side: {
     position: 'absolute',
+    alignItems: 'flex-end',
     gap: px(6),
   },
   pressed: {

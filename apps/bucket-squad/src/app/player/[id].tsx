@@ -9,15 +9,16 @@ import { RARITY_LABEL, type PlayerDef } from '@/data/types';
 import { RATING_KEYS } from '@/game/sim/ratings';
 import { levelProgress } from '@/meta/collection';
 import { useSave } from '@/state/save';
-import { arcade, blend, night, rarityPaint, tube as tubes, type Tube } from '@/theme/arcade';
+import { arcade, blend, neonText, night, rarityPaint, track, tube as tubes, type Tube } from '@/theme/arcade';
 import { px, size as sizes, space } from '@/theme/tokens';
 import { ArcadeScreen, useArcadeBody } from '@/ui/arcade/ArcadeScreen';
 import { GhostButton, GoldButton } from '@/ui/arcade/Buttons';
 import { ArcadeCard, Gems } from '@/ui/arcade/Card';
 import { LineIcon, type LineIconName } from '@/ui/arcade/LineIcon';
-import { fitPerson } from '@/ui/arcade/measure';
+import { SPARE } from '@/ui/arcade/fitText';
+import { fitPerson, widthOf } from '@/ui/arcade/measure';
 import { Bloom, Rays } from '@/ui/arcade/Room';
-import { Pips, SegBar, StatRow } from '@/ui/arcade/SegBar';
+import { SegBar, StatRow } from '@/ui/arcade/SegBar';
 import { NeonPanel, Tag, Well, teamLine } from '@/ui/arcade/Surface';
 import { ratingLabel } from '@/ui/arcade/ratingLabel';
 import { Print } from '@/ui/arcade/Type';
@@ -29,8 +30,6 @@ const SPLIT = px(26);
 const PAD = px(14);
 /** the widest the panel gets: on a tablet it stays a readable column */
 const PANEL_MOST = px(480);
-/** one copy's lamp in the level bar: a level that needs one copy gets one short lamp, not one long one */
-const COPY_LAMP = px(26);
 /** below this a rating column uses the small rows */
 const ROOMY_COLUMN = px(210);
 
@@ -81,6 +80,10 @@ function Detail({ player }: { player: PlayerDef }) {
   const name = fitPerson(player.name.toUpperCase(), 'display', nameSize, inside, 0, player.short?.toUpperCase());
   const left = prog.need - prog.have;
   const raysSize = cardH * 1.7;
+  // the level box's columns: the names on the left, the words on the right, and the bars sharing what is between
+  const copiesWords = `${left} MORE ${left === 1 ? 'COPY' : 'COPIES'}`;
+  const levelLabelW = Math.ceil(Math.max(widthOf('LEVEL', 'bold', neonText.tiny, track.wide), widthOf('COPIES', 'bold', neonText.tiny, track.wide)) / SPARE);
+  const levelWordsW = Math.ceil(Math.max(widthOf(`${MAX_LEVEL} OF ${MAX_LEVEL}`, 'display', neonText.body), prog.maxed ? 0 : widthOf(copiesWords, 'bold', neonText.tiny, track.normal)) / SPARE);
 
   return (
     <ArcadeScreen title={team.name.toUpperCase()} tube={teamTube(teamLine(team))}>
@@ -121,25 +124,29 @@ function Detail({ player }: { player: PlayerDef }) {
                   <StatRow key={k} label={ratingLabel(k, small)} value={ratings[k]} tube={k === best ? 'pink' : 'cyan'} small={small} style={{ width: columnW }} />
                 ))}
               </View>
+              {/* two rows on one grid: the level as five lamps and the copies to the next one, their bars starting and ending together */}
               <Well style={styles.level}>
-                <View accessible accessibilityLabel={`Level ${prog.level}`} style={styles.levelHead}>
-                  <Print face="bold" size="tiny" color="textDim" track="wide">
+                <View accessible accessibilityLabel={`Level ${prog.level} of ${MAX_LEVEL}`} style={styles.levelRow}>
+                  <Print face="bold" size="tiny" color="textDim" track="wide" style={{ width: levelLabelW }}>
                     LEVEL
                   </Print>
-                  <Print face="display" size="large" color={tubes.gold.glass}>
-                    {String(prog.level)}
+                  <SegBar lit={prog.level} lamps={MAX_LEVEL} tube="gold" small style={styles.grow} />
+                  <Print face="display" size="body" color={tubes.gold.glass} right style={{ width: levelWordsW }}>
+                    {`${prog.level} OF ${MAX_LEVEL}`}
                   </Print>
-                  <Pips have={prog.level} of={MAX_LEVEL} tube="gold" size={px(9)} />
                 </View>
                 {prog.maxed ? (
-                  <Print face="bold" size="small" color={tubes.gold.soft} style={styles.grow}>
+                  <Print face="bold" size="small" color={tubes.gold.soft}>
                     Top level! Extra copies turn into coins.
                   </Print>
                 ) : (
-                  <View accessible accessibilityLabel={`${left} more ${left === 1 ? 'copy' : 'copies'} to level up`} style={styles.levelBar}>
-                    <SegBar lit={prog.have} lamps={prog.need} tube="gold" small style={{ width: prog.need * COPY_LAMP }} />
-                    <Print face="bold" size="tiny" color="textDim" track="normal">
-                      {`${left} MORE ${left === 1 ? 'COPY' : 'COPIES'} TO LEVEL UP`}
+                  <View accessible accessibilityLabel={`${left} more ${left === 1 ? 'copy' : 'copies'} to level ${prog.level + 1}`} style={styles.levelRow}>
+                    <Print face="bold" size="tiny" color="textDim" track="wide" style={{ width: levelLabelW }}>
+                      COPIES
+                    </Print>
+                    <SegBar lit={prog.have} lamps={prog.need} tube="cyan" small style={styles.grow} />
+                    <Print face="bold" size="tiny" color="textDim" track="normal" right style={{ width: levelWordsW }}>
+                      {copiesWords}
                     </Print>
                   </View>
                 )}
@@ -219,19 +226,13 @@ const styles = StyleSheet.create({
     rowGap: px(6),
   },
   level: {
+    gap: px(6),
+    paddingVertical: px(8),
+  },
+  levelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: px(14),
-    paddingVertical: px(7),
-  },
-  levelHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: px(7),
-  },
-  levelBar: {
-    flex: 1,
-    gap: px(4),
+    gap: px(12),
   },
   hints: {
     gap: px(8),

@@ -34,6 +34,11 @@ const ALL_IDS = PLAYERS.map((p) => p.id);
 const GAP = px(5);
 /** a team's name and count over its column, and the lit line under them */
 const HEAD_H = px(22);
+/** the gaps in the level line, and between its lamps (the kit's `Pips` spacing) */
+const LEVEL_GAP = px(8);
+const PIP_GAP = px(5);
+/** the room the grid keeps above its column heads and below its last row, inside the panel's height beside it */
+const GRID_INSET = px(9);
 /** a column head's padding, left and right, and the size of its count */
 const HEAD_PAD = px(7);
 const HEAD_COUNT = px(11);
@@ -142,10 +147,13 @@ function TeamColumn({ team, owned, fresh, picked, cellW, cellH, onPick }: { team
 }
 
 /** The level as lamps, and the copies still to find for the next one. */
-function LevelLine({ copies, small, room }: { copies: number; small: boolean; room: number }) {
+function LevelLine({ copies, small, inside }: { copies: number; small: boolean; inside: number }) {
   const prog = levelProgress(copies);
   const left = prog.need - prog.have;
   const label = small ? px(11) : px(12.5);
+  const pip = small ? px(8) : px(10);
+  // the words get what the label and the lamps leave of the row, so the three never run into each other
+  const room = inside - widthOf(`LEVEL ${prog.level}`, 'bold', label, track.normal) - (pip * MAX_LEVEL + PIP_GAP * (MAX_LEVEL - 1)) - LEVEL_GAP * 2;
   const words = fitText(firstThatFits(prog.maxed ? ['TOP LEVEL', 'TOP'] : [`${left} MORE ${left === 1 ? 'COPY' : 'COPIES'}`, `${left} MORE`, `+${left}`], 'bold', label, room, 'normal'), 'bold', label, room, 'normal', MIN_FIT_LABEL);
   return (
     <View
@@ -155,7 +163,7 @@ function LevelLine({ copies, small, room }: { copies: number; small: boolean; ro
       <Print face="bold" size={label} color="textDim" track="normal">
         {`LEVEL ${prog.level}`}
       </Print>
-      <Pips have={prog.level} of={MAX_LEVEL} tube="gold" size={small ? px(8) : px(10)} style={styles.grow} />
+      <Pips have={prog.level} of={MAX_LEVEL} tube="gold" size={pip} style={styles.grow} />
       <Print face="bold" size={words.size} color={prog.maxed ? tube.gold.glass : 'textDim'} track="normal" right>
         {words.text}
       </Print>
@@ -197,7 +205,7 @@ function Detail({ player, width, height }: { player: PlayerDef; width: number; h
           {RATING_KEYS.map((k) => (
             <StatRow key={k} label={ratingLabel(k, small)} value={ratings[k]} tube={k === best ? 'pink' : 'cyan'} small={small} style={{ height: small ? ROW_SMALL : ROW }} />
           ))}
-          <LevelLine copies={copies} small={small} room={inside * 0.48} />
+          <LevelLine copies={copies} small={small} inside={inside} />
         </View>
       ) : (
         <Well style={styles.missing}>
@@ -243,14 +251,15 @@ export default function Collection() {
   const panelW = Math.round(Math.min(px(340), Math.max(px(196), body.width * 0.29)));
   const roomW = body.width - panelW - SPLIT;
   const roomH = body.height - EDGE_Y * 2;
+  const gridRoom = roomH - GRID_INSET * 2;
   const fromW = (roomW - GAP * (teams.length - 1)) / teams.length;
-  const fromH = (roomH - HEAD_H - GAP * rows) / rows;
+  const fromH = (gridRoom - HEAD_H - GAP * rows) / rows;
   const cellW = Math.floor(Math.max(CELL_LEAST, Math.min(fromW, fromH * CELL_WIDEST)));
   const cellH = Math.floor(Math.min(fromH, cellW * CELL_TALLEST));
   const gridH = HEAD_H + (cellH + GAP) * rows;
   const gridW = cellW * teams.length + GAP * (teams.length - 1);
-  // the panel stands as tall as the grid, with a floor so its button always has room
-  const panelH = Math.min(roomH, Math.max(gridH, px(300)));
+  // the panel stands as tall as the grid and the room above and below it, with a floor so its button always has room
+  const panelH = Math.min(roomH, Math.max(gridH + GRID_INSET * 2, px(300)));
 
   const pick = (id: string) => {
     setPicked(id);
@@ -341,7 +350,7 @@ const styles = StyleSheet.create({
   level: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: px(8),
+    gap: LEVEL_GAP,
     marginTop: px(2),
   },
   missing: {

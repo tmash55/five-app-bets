@@ -13,7 +13,7 @@ import { SHOP_PACKS, packById, type PackDef } from '@/meta/packs';
 import { dayKey } from '@/meta/rng';
 import { useSave } from '@/state/save';
 import { arcade, blend, fade, neonText, night, rarityPaint, tube, type Tube } from '@/theme/arcade';
-import { px, space } from '@/theme/tokens';
+import { px, size as sizes, space } from '@/theme/tokens';
 import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
 import { GhostButton, GoldButton, PriceButton } from '@/ui/arcade/Buttons';
 import { Gems } from '@/ui/arcade/Card';
@@ -33,6 +33,8 @@ const READY_W = px(236);
 const WELL_WORDS = READY_W - px(22) - px(4) - px(18) - px(36) - px(10);
 /** the corner of a waiting pack's row that its "?" takes from the name */
 const HELP_ROOM = px(14);
+/** the small round "what is inside" button after a shop pack's line; its tap area is the full size of a tap */
+const ODDS_DOT = px(20);
 /** the marquee bulbs swap every so often: a slow chase, never a flash */
 const CHASE_MS = 900;
 /** the strip of bulbs along the top of the machine's window */
@@ -93,14 +95,14 @@ function OddsButton({ pack, onPress }: { pack: PackDef; onPress: () => void }) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`What is inside the ${pack.name}`}
-      hitSlop={space.sm}
+      hitSlop={(sizes.tap - ODDS_DOT) / 2}
       onPress={() => {
         tapFeedback();
         onPress();
       }}
-      style={({ pressed }) => [styles.odds, pressed && styles.pressed]}>
+      style={({ pressed }) => [pressed && styles.pressed]}>
       <View style={styles.oddsDot}>
-        <LineIcon name="help" size={px(15)} color={night.textDim} weight={2.6} />
+        <LineIcon name="help" size={px(12)} color={night.textDim} weight={2.6} />
       </View>
     </Pressable>
   );
@@ -111,19 +113,25 @@ function ShopColumn({ pack, coins, packW, onBuy, onOdds }: { pack: PackDef; coin
   const short = pack.price - coins;
   const [width, setWidth] = useState(0);
   const tb = packTube(pack);
+  // the columns are the same width, so every "inside" line takes the size the longest one needs and the three read alike
+  const insideRoom = (width > 0 ? width : READY_W) - px(12) - ODDS_DOT - px(6);
+  const insideSize = Math.min(...SHOP_PACKS.map((p) => fitText(inside(p), 'body', neonText.tiny, insideRoom).size));
   return (
     <View style={styles.column} onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}>
       <LinearGradient colors={[fade(foilFor(pack).glow, 0.22), fade(night.panel, 0)]} locations={[0, 0.58]} style={[StyleSheet.absoluteFill, styles.columnLight]} />
       <FoilPack pack={pack} width={packW} />
       <GlowLines fit={fitText(pack.name.toUpperCase(), 'sign', neonText.large, width > 0 ? width - px(14) : READY_W, 'close', MIN_FIT_LABEL)} tube={tb} center style={styles.packName} />
-      <PrintFit fit={fitText(inside(pack), 'body', neonText.tiny, width > 0 ? width - px(12) : READY_W)} face="body" color="textMuted" center style={styles.packInside} />
+      {/* what is inside, with the way to the odds right after it: clear of the pack's picture and next to what it explains */}
+      <View style={styles.insideRow}>
+        <PrintFit fit={fitText(inside(pack), 'body', insideSize, insideRoom)} face="body" color="textMuted" center style={styles.shrink} />
+        <OddsButton pack={pack} onPress={onOdds} />
+      </View>
       <PriceButton price={pack.price} can={short <= 0} quiet onPress={onBuy} accessibilityLabel={`Buy the ${pack.name} for ${pack.price} coins`} style={styles.price} />
       <View style={styles.noteBox}>
         {short > 0 && (
           <PrintFit fit={fitText(`${short.toLocaleString('en-US')} MORE TO GO`, 'bold', neonText.micro, width > 0 ? width - px(8) : READY_W, 'normal')} face="bold" color={tube.pink.soft} track="normal" center />
         )}
       </View>
-      <OddsButton pack={pack} onPress={onOdds} />
     </View>
   );
 }
@@ -350,8 +358,14 @@ const styles = StyleSheet.create({
   packName: {
     marginTop: px(9),
   },
-  packInside: {
+  insideRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: px(6),
     marginTop: px(3),
+  },
+  shrink: {
+    flexShrink: 1,
   },
   price: {
     marginTop: px(8),
@@ -363,15 +377,10 @@ const styles = StyleSheet.create({
     height: px(14),
     justifyContent: 'center',
   },
-  odds: {
-    position: 'absolute',
-    top: px(4),
-    right: px(4),
-  },
   oddsDot: {
-    width: px(26),
-    height: px(26),
-    borderRadius: px(13),
+    width: ODDS_DOT,
+    height: ODDS_DOT,
+    borderRadius: ODDS_DOT / 2,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: night.pit,
