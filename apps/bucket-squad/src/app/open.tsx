@@ -14,7 +14,7 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { duckMusic, playSfx } from '@/audio/sound';
@@ -217,7 +217,8 @@ export default function OpenPack() {
     pulses.set({ shakes: r.shakes, flashes: r.flashes });
     glide.set(reduced ? 1 : 0);
     clock.set(-ARRIVE);
-    clock.set(withTiming(r.length + r.tail, { duration: ARRIVE + r.length + r.tail, easing: Easing.linear }));
+    // with less motion asked for the reveal is only a fade, and a fade still plays rather than jumping to its end
+    clock.set(withTiming(r.length + r.tail, { duration: ARRIVE + r.length + r.tail, easing: Easing.linear, reduceMotion: ReduceMotion.Never }));
     playSfx('cardDeal', 0.8);
     after(ARRIVE, () => {
       if (run.current !== my) return;
@@ -303,7 +304,6 @@ export default function OpenPack() {
     infoAlpha.set(withTiming(0, { duration: 180 }));
     after(LEAVE, () => setLeaving((l) => (l === i ? null : l)));
     after(180, () => setInfoFor((f) => (f === i ? null : f)));
-    playSfx('cardDeal', 0.6);
     startCard(plans, i + 1);
   };
 

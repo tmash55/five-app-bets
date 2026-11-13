@@ -9,14 +9,14 @@ import { memo } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 
-import { RARITY_LABEL } from '@/data/types';
+import { RARITIES, RARITY_LABEL } from '@/data/types';
 import { neonText, rarityPaint, track, tube } from '@/theme/arcade';
 import { px } from '@/theme/tokens';
 import { useCountUp } from '@/ui/Bits';
 import { GoldButton } from '@/ui/arcade/Buttons';
 import { Gems } from '@/ui/arcade/Card';
 import { Coin } from '@/ui/arcade/LineIcon';
-import { fitPerson } from '@/ui/arcade/measure';
+import { MIN_FIT_LABEL, fitPerson, fitTo, widthOf } from '@/ui/arcade/measure';
 import { Pips, SegBar, StatRow, lampsFor } from '@/ui/arcade/SegBar';
 import { Chip, OvrBox, Tag } from '@/ui/arcade/Surface';
 import { Glow, Print } from '@/ui/arcade/Type';
@@ -40,19 +40,20 @@ function Piece({ clock, at, children, style, touch }: { clock: SharedValue<numbe
   );
 }
 
+const GEM = px(11);
 const SIGN_FLICKER = 560;
 /** each letter of LEGEND drops in this long after the last */
 const LETTER_GAP = 95;
 const LETTER_DROP = 300;
 
-function Letter({ clock, at, children }: { clock: SharedValue<number>; at: number; children: string }) {
+function Letter({ clock, at, size, children }: { clock: SharedValue<number>; at: number; size: number; children: string }) {
   const style = useAnimatedStyle(() => {
     const u = span(clock.value, at, at + LETTER_DROP);
     return { opacity: Math.min(1, u * 3), transform: [{ translateY: -px(40) * (1 - backOut(u, 2.2)) }] };
   });
   return (
     <Animated.View style={style}>
-      <Glow face="sign" size="big" tube="amber" track="none" tight>
+      <Glow face="sign" size={size} tube="amber" track="none" tight>
         {children}
       </Glow>
     </Animated.View>
@@ -60,7 +61,7 @@ function Letter({ clock, at, children }: { clock: SharedValue<number>; at: numbe
 }
 
 /** The rarity as a lit sign: a tube that stutters on, or for a Legend its letters dropping in one at a time. */
-function RaritySign({ plan, clock }: { plan: CardPlan; clock: SharedValue<number> }) {
+function RaritySign({ plan, clock, size }: { plan: CardPlan; clock: SharedValue<number>; size: number }) {
   const word = RARITY_LABEL[plan.rarity].toUpperCase();
   const tb = rarityPaint[plan.rarity].tube;
   const lit = useAnimatedStyle(() => ({ opacity: flicker(clock.value, INFO.sign, SIGN_FLICKER) }));
@@ -70,28 +71,41 @@ function RaritySign({ plan, clock }: { plan: CardPlan; clock: SharedValue<number
       {plan.rarity === 'legend' ? (
         <View style={styles.letters}>
           {word.split('').map((ch, i) => (
-            <Letter key={i} clock={clock} at={INFO.sign + i * LETTER_GAP}>
+            <Letter key={i} clock={clock} at={INFO.sign + i * LETTER_GAP} size={size}>
               {ch}
             </Letter>
           ))}
         </View>
       ) : (
         <View>
-          <Glow face="sign" size="big" tube={tb} track="widest" tight lit={false}>
+          <Glow face="sign" size={size} tube={tb} track="widest" tight lit={false}>
             {word}
           </Glow>
           <Animated.View style={[StyleSheet.absoluteFill, lit]}>
-            <Glow face="sign" size="big" tube={tb} track="widest" tight>
+            <Glow face="sign" size={size} tube={tb} track="widest" tight>
               {word}
             </Glow>
           </Animated.View>
         </View>
       )}
       <Animated.View style={gems}>
-        <Gems rarity={plan.rarity} size={px(11)} />
+        <Gems rarity={plan.rarity} size={GEM} />
       </Animated.View>
     </View>
   );
+}
+
+/**
+ * How big the rarity sign can be: it shares its line with the tag and the card's number, and a long tag
+ * ("LEVEL UP! LV 3") must not push the number off the side, so the sign gives way.
+ */
+function signSize(plan: CardPlan, number: string, width: number): number {
+  const tag = widthOf(plan.label.text, 'display', neonText.body, track.close) + px(9) * 2;
+  const chip = widthOf(number, 'bold', px(12.5), track.wide) + px(9) * 2;
+  const gems = (RARITIES.indexOf(plan.rarity) + 1) * GEM * 1.25 + px(8);
+  const room = width - tag - chip - gems - GAP * 2 - px(16);
+  const word = RARITY_LABEL[plan.rarity].toUpperCase();
+  return plan.rarity === 'legend' ? fitTo(word, 'sign', neonText.big, room - (word.length - 1) * px(3), 0, MIN_FIT_LABEL) : fitTo(word, 'sign', neonText.big, room, track.widest, MIN_FIT_LABEL);
 }
 
 /** the overall rating box, and the room the name leaves beside it */
@@ -134,19 +148,20 @@ export const CardInfo = memo(function CardInfo({ plan, clock, lamps, pips, count
   const lp = lampPlan(plan);
   const nick = player.nickname ? ` · “${player.nickname.toUpperCase()}”` : '';
   const copy = !gain.isNew;
+  const number = `NO. ${plan.number.number} OF ${plan.number.of}`;
   return (
     <View pointerEvents="box-none" style={[styles.root, { width }]}>
       <View pointerEvents="none" style={styles.top}>
         <Piece clock={clock} at={INFO.tag}>
           <Tag label={plan.label.text} tube={plan.label.tube} />
         </Piece>
-        <Piece clock={clock} at={INFO.sign - 60}>
-          <RaritySign plan={plan} clock={clock} />
+        <Piece clock={clock} at={INFO.sign - 60} style={styles.shrink}>
+          <RaritySign plan={plan} clock={clock} size={signSize(plan, number, width)} />
         </Piece>
         <Piece clock={clock} at={INFO.chip} style={styles.push}>
           <Chip small>
             <Print face="bold" size={px(12.5)} color="textDim" track="wide" lines={1}>
-              {`NO. ${plan.number.number} OF ${plan.number.of}`}
+              {number}
             </Print>
           </Chip>
         </Piece>
@@ -225,6 +240,11 @@ const styles = StyleSheet.create({
   },
   push: {
     marginLeft: 'auto',
+    flexShrink: 0,
+  },
+  shrink: {
+    flexShrink: 1,
+    minWidth: 0,
   },
   sign: {
     flexDirection: 'row',

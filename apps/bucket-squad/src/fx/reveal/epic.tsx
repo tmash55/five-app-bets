@@ -147,7 +147,7 @@ export const epicReveal: Reveal = {
     { at: T.flipAt + 120, buzz: 'heavy' },
   ],
   shakes: [{ at: T.flipAt, ms: 420, amount: px(7) }],
-  flashes: [{ at: T.flipAt, ms: 440, amount: 0.42 }],
+  flashes: [{ at: T.flipAt, ms: 400, amount: 0.32 }],
   Card,
   Room,
   Behind,
