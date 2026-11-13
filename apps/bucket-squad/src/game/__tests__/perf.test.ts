@@ -1,4 +1,4 @@
-import { perfAdd, perfFrame, perfLoad, perfOn, perfReset, perfSound, perfStep, perfSummary } from '../perf';
+import { perfAdd, perfFrame, perfLines, perfLoad, perfOn, perfReset, perfSound, perfStep, perfSummary } from '../perf';
 
 const g = globalThis as { __perfOn?: boolean };
 
@@ -37,5 +37,26 @@ describe('the frame probe', () => {
     expect(s.together['event:bounce']).toBeUndefined();
     expect(s.top[0].gap).toBe(140);
     expect(s.fps).toBeGreaterThan(40);
+    expect(s.avg.draw).toBe(2);
+    expect(s.avg.steps).toBe(1);
+    expect(s.p90.draw).toBe(2);
+  });
+
+  it('splits a long summary into numbered pieces a phone log keeps whole', () => {
+    g.__perfOn = true;
+    for (let i = 0; i < 200; i++) {
+      perfFrame(i % 3 === 0 ? 120 : 16.7);
+      perfStep(['dribble', 'pass', 'catch', 'bounce']);
+      perfSound('dribble');
+    }
+    const s = perfSummary();
+    const lines = perfLines('match', s);
+    expect(lines.length).toBeGreaterThan(1);
+    lines.forEach((l, i) => {
+      expect(l.startsWith(`BSPERF match ${i + 1}/${lines.length} `)).toBe(true);
+      expect(l.length).toBeLessThan(900);
+    });
+    const joined = lines.map((l) => l.replace(/^BSPERF match \d+\/\d+ /, '')).join('');
+    expect(JSON.parse(joined)).toEqual(s);
   });
 });

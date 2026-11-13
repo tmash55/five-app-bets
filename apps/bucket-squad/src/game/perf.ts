@@ -4,8 +4,9 @@
  * Off unless the bundle is started with EXPO_PUBLIC_BS_PERF=1 (any build, release included) or a development
  * build sets `globalThis.__perfOn = true` before the match. When on, every display frame of a match is noted with
  * how long it waited for the GL thread, how long the simulation and the drawing took in JS, what happened in the
- * game that frame and which sounds started or were loaded. At the end of the match one line starting with BSPERF
- * goes to the console with the slow frames and what they had in common, so a device log shows it.
+ * game that frame and which sounds started or were loaded. At the end of the match a few lines starting with BSPERF
+ * go to the console with the average cost of each part, the slow frames and what they had in common, so a device
+ * log shows it. iOS cuts each log message at about 1,000 bytes, so the summary is split into numbered pieces.
  */
 
 const ENV_ON = process.env.EXPO_PUBLIC_BS_PERF === '1';
@@ -76,6 +77,10 @@ export interface PerfSummary {
   /** frames at or over 100 ms */
   stalls: number;
   worst: number;
+  /** mean ms per frame of waiting for the GL thread, simulation and drawing, and mean simulation steps per frame */
+  avg: { wait: number; sim: number; draw: number; steps: number };
+  /** the 90th-percentile ms of each part, so a steady cost and a spiky one can be told apart */
+  p90: { wait: number; sim: number; draw: number };
   /** of the slow frames, how many had each thing happen in them, against how often it happens in any frame */
   together: Record<string, { slow: number; all: number }>;
   /** the slowest frames with what happened in them */
@@ -83,6 +88,17 @@ export interface PerfSummary {
 }
 
 const round = (n: number) => Math.round(n * 10) / 10;
+
+const mean = (xs: number[]) => (xs.length ? round(xs.reduce((a, x) => a + x, 0) / xs.length) : 0);
+
+function p90(xs: number[]): number {
+  if (!xs.length) return 0;
+  const sorted = [...xs].sort((a, b) => a - b);
+  return round(sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.9))]);
+}
+
+/** iOS's log cuts a message at about 1,000 bytes, so a long summary goes out in pieces this long */
+const CHUNK = 800;
 
 export function perfSummary(): PerfSummary {
   // the first frames build the scene and are not part of play
@@ -104,15 +120,26 @@ export function perfSummary(): PerfSummary {
     slow: slow.length,
     stalls: play.filter((f) => f.gap >= 100).length,
     worst: round(Math.max(0, ...play.map((f) => f.gap))),
+    avg: { wait: mean(play.map((f) => f.wait)), sim: mean(play.map((f) => f.sim)), draw: mean(play.map((f) => f.draw)), steps: mean(play.map((f) => f.steps)) },
+    p90: { wait: p90(play.map((f) => f.wait)), sim: p90(play.map((f) => f.sim)), draw: p90(play.map((f) => f.draw)) },
     together,
     top,
   };
 }
 
-/** Log the summary in one line a device log can be searched for, and start over. */
+/** Split the summary into lines short enough for a device log: `BSPERF <label> <i>/<n> <piece>`. */
+export function perfLines(label: string, summary: PerfSummary): string[] {
+  const json = JSON.stringify(summary);
+  const n = Math.max(1, Math.ceil(json.length / CHUNK));
+  const lines: string[] = [];
+  for (let i = 0; i < n; i++) lines.push(`BSPERF ${label} ${i + 1}/${n} ${json.slice(i * CHUNK, (i + 1) * CHUNK)}`);
+  return lines;
+}
+
+/** Log the summary in lines a device log can be searched for (join the pieces in order), and start over. */
 export function perfReport(label: string): void {
   if (!perfOn() || frames.length === 0) return;
-  console.log(`BSPERF ${label} ${JSON.stringify(perfSummary())}`);
+  for (const line of perfLines(label, perfSummary())) console.log(line);
   frames.length = 0;
   current = null;
 }
