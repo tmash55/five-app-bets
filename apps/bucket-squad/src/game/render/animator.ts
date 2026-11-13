@@ -294,6 +294,8 @@ const YAW_DV = 5;
 const ROOT_DV = 1.2;
 /** match: seconds a caught ball takes into the hands, and the most speed (m/s) it keeps from its flight */
 const CATCH_T = 0.1;
+/** match: the fastest a free hand the guard pushed out of the body comes back (m/s) */
+const HAND_PUSH_RATE = 3;
 const CATCH_VMAX = 10;
 const CATCH_KEEP = 0.25;
 const CATCH_IN = 0.32;
@@ -529,6 +531,7 @@ export class FigureAnimator {
     this.offV.fill(0);
     this.curV.fill(0);
     this.fresh = true;
+    this.handPushInit = false;
     this.sq = 0;
     this.sqV = 0;
   }
@@ -1328,6 +1331,7 @@ export class FigureAnimator {
   update(f: AnimFrame, bones: Float32Array): void {
     const p = f.p;
     const dt = Math.min(0.05, Math.max(0, f.dt));
+    this.frameDt = dt;
     this.time = f.time + this.variant * 0.37;
     this.t = Math.max(0, p.t - f.lag);
     // a new state, or the same one started again
@@ -1648,6 +1652,7 @@ export class FigureAnimator {
 
     this.shadow = 1 + 0.25 * Math.abs(c[RPITCH]) + (c[RY] < -0.2 ? 0.3 : 0);
     this.writeBones(bones, lid, floorY);
+    this.drawnOnce = true;
     if (inert && dt > 0) {
       // how fast the drawn pose moves (the guard's pushes on the hands included), for the next change of pose
       const l = this.last;
@@ -1661,6 +1666,10 @@ export class FigureAnimator {
 
   /** match: the drawn pose of the last frame is not there yet (no speed to carry) */
   private fresh = true;
+  /** match: how far the guard has moved each free hand (figure space, left then right), and this frame's time step */
+  private readonly handPush = new Float64Array(6);
+  private handPushInit = false;
+  private frameDt = 1 / 60;
 
   // --- the warm-up stage ------------------------------------------------------------
   //
@@ -1682,6 +1691,8 @@ export class FigureAnimator {
   contact = 0;
   /** which feet the act says are flat on the floor: 1 left, 2 right */
   planted = 0;
+  /** the figure has been drawn at least once: `hands`, `ankles` and the world placement are there */
+  drawnOnce = false;
   /** hands as drawn, figure space: wrist xyz, pointing direction xyz, thickness; left then right */
   readonly hands = new Float64Array(14);
   /** ankles as drawn, figure space: left xyz, then right xyz */
@@ -3080,6 +3091,9 @@ export class FigureAnimator {
       if (this.guard) {
         // the elbow, the middle of the upper arm and of the forearm stay out of the body: move the elbow out (and a free hand with the forearm), solve again
         const free = ((this.grip | this.onBall) & (side > 0 ? 1 : 2)) === 0;
+        const t0x = tx;
+        const t0y = ty;
+        const t0z = tz;
         for (let it = 0; it < 2; it++) {
           let ex = 0;
           let ey = 0;
@@ -3122,6 +3136,32 @@ export class FigureAnimator {
           py = limb.my + ey - sy;
           pz = limb.mz + ez - sz;
           solveLimb(sx, sy, sz, tx, ty, tz, l1, l2, px, py, pz, 1, ARM_MAX_STRETCH, limb);
+        }
+        if (this.match) {
+          // in the match a free hand the guard has pushed out of the body comes back at a hand's speed: a pose that folds the
+          // arm into the body for a frame or two would otherwise flick the hand out and straight back. It goes out at once.
+          const hp = this.handPush;
+          const o = side > 0 ? 0 : 3;
+          const nx = free ? tx - t0x : 0;
+          const ny = free ? ty - t0y : 0;
+          const nz = free ? tz - t0z : 0;
+          const dx = nx - hp[o];
+          const dy = ny - hp[o + 1];
+          const dz = nz - hp[o + 2];
+          const dl = Math.hypot(dx, dy, dz);
+          const max = HAND_PUSH_RATE * this.frameDt;
+          const back = Math.hypot(nx, ny, nz) < Math.hypot(hp[o], hp[o + 1], hp[o + 2]);
+          const k = dl > max && back && this.handPushInit ? max / dl : 1;
+          hp[o] += dx * k;
+          hp[o + 1] += dy * k;
+          hp[o + 2] += dz * k;
+          if (k < 1) {
+            tx = t0x + hp[o];
+            ty = t0y + hp[o + 1];
+            tz = t0z + hp[o + 2];
+            solveLimb(sx, sy, sz, tx, ty, tz, l1, l2, px, py, pz, 1, ARM_MAX_STRETCH, limb);
+          }
+          if (side < 0) this.handPushInit = true;
         }
       }
       const st = limb.stretch;

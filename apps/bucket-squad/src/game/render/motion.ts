@@ -6,7 +6,7 @@
 
 import { COURT, DT } from '../sim/constants';
 import { attackSign, heldBallPos, hoopXOf } from '../sim/core';
-import { clamp, clamp01, lerp } from '../sim/math';
+import { clamp, clamp01, lerp, smooth } from '../sim/math';
 import type { MatchState, PlayerSim } from '../sim/types';
 import { DrawnBall, FigureAnimator, type AnimFrame, type Mood } from './animator';
 import type { FigureBuild } from './figure';
@@ -18,6 +18,11 @@ const SLIDE_DV = 3;
 const SLIDE_W = 14;
 /** a move bigger than this in one tick (m) is a cut to a new spot, not a move */
 const CUT = 2;
+/** how far through a pass (0-1) its drawn flight starts to bend into the receiver's hands */
+const PASS_BEND = 0.55;
+/** from a wrist along the hand to the middle of the palm (m, figure space) */
+const PALM = 0.08;
+const W3 = new Float64Array(3);
 const VIEW_H = 7.4;
 const MIN_VIEW_W = 13.6;
 
@@ -351,6 +356,23 @@ export class MatchMotion {
       bx = ball.x - (1 - a) * (p.x - this.prev[o]) + this.slide[holder * 2];
       by = ball.y - (1 - a) * (p.y - this.prev[o + 1]);
       bz = ball.z - (1 - a) * (p.z - this.prev[o + 2]) + this.slide[holder * 2 + 1];
+    }
+    if (ball.state === 'pass' && ball.passDur > 0 && m.players[ball.to].state !== 'oop') {
+      // the simulation flies a pass into the middle of the receiver's chest and then puts it in the hands: drawn, the end of
+      // the flight bends into the hands that reach for it (as they were drawn last frame), so the catch has no jump
+      const s = clamp01(ball.s - ((1 - a) * DT) / ball.passDur);
+      const w = s > PASS_BEND ? smooth((s - PASS_BEND) / (1 - PASS_BEND)) : 0;
+      const an = this.anims[ball.to];
+      if (w > 0 && an.drawnOnce) {
+        const h = an.hands;
+        const px = (h[0] + h[7]) * 0.5 + (h[3] + h[10]) * 0.5 * PALM;
+        const py = (h[1] + h[8]) * 0.5 + (h[4] + h[11]) * 0.5 * PALM;
+        const pz = (h[2] + h[9]) * 0.5 + (h[5] + h[12]) * 0.5 * PALM;
+        an.toWorld(px, py, pz, W3);
+        bx = lerp(bx, W3[0], w);
+        by = lerp(by, W3[1], w);
+        bz = lerp(bz, W3[2], w);
+      }
     }
     this.ballLerp[0] = bx;
     this.ballLerp[1] = by;
