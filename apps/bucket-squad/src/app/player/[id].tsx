@@ -99,7 +99,7 @@ function Detail({ player }: { player: PlayerDef }) {
             </Print>
             <View style={styles.line}>
               <Print face="bold" size="small" color={tubes.cyan.soft} track="wide" upper lines={1} style={styles.shrink}>
-                {`${team.place} ${team.name} · ${player.role}`}
+                {`${team.name} · ${player.role}`}
               </Print>
               <View style={styles.rarity}>
                 <Gems rarity={player.rarity} size={px(10)} />
