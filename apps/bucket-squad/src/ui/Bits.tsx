@@ -8,7 +8,8 @@ import { headArt, playerById, teamById } from '@/data/roster';
 import type { Rarity, TeamDef } from '@/data/types';
 import { RARITY_LABEL } from '@/data/types';
 import { luminance } from '@/game/kit/look';
-import { color, radius, size as sizes, space, stroke, type ColorName } from '@/theme/tokens';
+import { color, radius, size as sizes, space, stroke, text, type ColorName } from '@/theme/tokens';
+import { MIN_FIT_LABEL, fitSize } from './fitName';
 import { Icon, type IconName } from './Icon';
 import { Sticker } from './Sticker';
 import { Txt, resolveColor } from './Txt';
@@ -30,11 +31,15 @@ export function TeamBadge({ team, diameter = sizes.badge, style }: { team: TeamD
   const small = diameter < sizes.avatarSmall;
   const edge = small ? stroke.thin : stroke.regular;
   const inner = diameter - edge * 2 - Math.round(diameter * 0.16);
+  const size = diameter >= sizes.badgeLarge ? 'large' : diameter >= sizes.badge ? 'small' : 'tiny';
+  // the letters have to fit across the inner circle whatever they are ("WAV" is nearly twice as wide as "ILL"):
+  // a phone breaks a word that is too wide onto a second line
+  const px = fitSize(team.short, text[size], inner - stroke.thin * 2, MIN_FIT_LABEL);
   return (
     <View style={[styles.badge, { width: diameter, height: diameter, borderRadius: diameter / 2, borderWidth: edge, backgroundColor: team.color2 }, style]}>
       <View style={[styles.badgeInner, { width: inner, height: inner, borderRadius: inner / 2, backgroundColor: team.color }, small && styles.badgeInnerSmall]}>
         {!small && (
-          <Txt font="display" size={diameter >= sizes.badgeLarge ? 'large' : diameter >= sizes.badge ? 'small' : 'tiny'} color={readableOn(team.color)}>
+          <Txt font="display" size={size} lines={1} color={readableOn(team.color)} style={{ fontSize: px, lineHeight: Math.round(px * 1.12) }}>
             {team.short}
           </Txt>
         )}

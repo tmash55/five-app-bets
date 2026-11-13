@@ -11,9 +11,13 @@
  */
 
 import { Dimensions, PixelRatio } from 'react-native';
+import { initialWindowMetrics } from 'react-native-safe-area-context';
 
 /** the screen every size below is written for */
 export const design = { width: 844, height: 390 } as const;
+/** the gaps every screen keeps at its edges anyway (ui/Screen), on the design screen: at the ends of its long side, and of its short side */
+const EDGE_LONG = 16;
+const EDGE_SHORT = 8;
 
 /** the whole look never gets smaller or bigger than this, whatever the screen */
 const SCALE_MIN = 0.8;
@@ -30,13 +34,45 @@ export function scaleFor(width: number, height: number): number {
   return Math.max(SCALE_MIN, Math.min(SCALE_MAX, long / design.width, short / design.height));
 }
 
+export interface ScreenEdges {
+  frame: { width: number; height: number };
+  insets: { top: number; right: number; bottom: number; left: number };
+}
+
+/**
+ * The screen as the layouts get it. A camera island, a notch or a home bar takes room at an edge. Every screen keeps
+ * a gap at its edges anyway, so only what they take beyond that gap is lost. The layouts are drawn and checked for
+ * plain screens: this hands them the plain screen with the same room, so a phone with an island gets a layout that
+ * was checked instead of one squeezed into less room than it was made for.
+ */
+export function usableScreen(width: number, height: number, edges: ScreenEdges | null | undefined): { long: number; short: number } {
+  const long = Math.max(width, height);
+  const short = Math.min(width, height);
+  if (!edges || !(short > 0)) return { long, short };
+  // the insets belong to the frame they were measured with, whichever way up that was
+  const tall = edges.frame.height > edges.frame.width;
+  const i = edges.insets;
+  const ends = tall ? [i.top, i.bottom] : [i.left, i.right];
+  const sides = tall ? [i.left, i.right] : [i.top, i.bottom];
+  let out = { long, short };
+  // the gap grows with the scale and the scale with the room, so go round a few times: it settles at once
+  for (let n = 0; n < 4; n++) {
+    const k = scaleFor(out.long, out.short);
+    const lost = (taken: number[], gap: number) => taken.reduce((sum, v) => sum + Math.max(0, (v > 0 ? v : 0) - gap * k), 0);
+    out = { long: Math.max(1, long - lost(ends, EDGE_LONG)), short: Math.max(1, short - lost(sides, EDGE_SHORT)) };
+  }
+  return out;
+}
+
 const screen = Dimensions.get('window');
+const usable = usableScreen(screen.width, screen.height, initialWindowMetrics);
 /**
  * This screen's scale. Worked out once, as the app starts: the game is locked
  * to landscape and fills the screen, so it does not change while it runs.
  */
-export const uiScale = scaleFor(screen.width, screen.height);
-const padScale = Math.max(PAD_SCALE_MIN, Math.min(PAD_SCALE_MAX, uiScale));
+export const uiScale = scaleFor(usable.long, usable.short);
+/** the game pad follows the size of the screen itself: an island takes room from the menus, not from the thumbs */
+const padScale = Math.max(PAD_SCALE_MIN, Math.min(PAD_SCALE_MAX, scaleFor(screen.width, screen.height)));
 
 /** A design size on this screen, snapped to whole pixels. For the few sizes that are not tokens. */
 export function px(n: number): number {
