@@ -126,3 +126,16 @@ export function Bump({ children, beat, amount = 0.12, style, pointerEvents }: Bu
     </Animated.View>
   );
 }
+
+/** a bouncier spring than the pop: something that has just been found jumps a little past its size and back */
+const FOUND = { damping: 9, stiffness: 210, mass: 0.7 } as const;
+
+/** Something new that has just been found: it springs up from small when the page opens, a beat after the page itself. */
+export function Found({ children, delay = 260, style }: { children?: React.ReactNode; delay?: number; style?: StyleProp<ViewStyle> }) {
+  const t = useSharedValue(0);
+  useEffect(() => {
+    t.set(withDelay(delay, withSpring(1, FOUND)));
+  }, [t, delay]);
+  const anim = useAnimatedStyle(() => ({ opacity: Math.min(1, t.value * 2), transform: [{ scale: 0.55 + 0.45 * t.value }] }));
+  return <Animated.View style={[style, anim]}>{children}</Animated.View>;
+}
