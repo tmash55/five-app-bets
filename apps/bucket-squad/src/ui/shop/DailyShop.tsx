@@ -14,7 +14,7 @@ import { uniformById, type UniformDef } from '@/data/uniforms';
 import { tapFeedback } from '@/fx/feedback';
 import { MAX_COPIES, levelOf, levelProgress, type Gain } from '@/meta/collection';
 import { dayKey } from '@/meta/rng';
-import { clock, msToMidnight, shortBy, shortClock, type ShopSlot } from '@/meta/shop';
+import { MONTH_NAMES, clock, msToMidnight, shortBy, shortClock, type ShopSlot } from '@/meta/shop';
 import type { slotBlock } from '@/state/logic';
 import { RIM_STOPS, arcade, fade, halo, inner, neonText, night, rarityPaint, track, tube, type Tube } from '@/theme/arcade';
 import { px, size as sizes, space } from '@/theme/tokens';
@@ -70,6 +70,11 @@ export function slotTube(slot: ShopSlot): Tube {
 
 function slotUniform(slot: ShopSlot): UniformDef | undefined {
   return slot.item.kind === 'uniform' ? uniformById(slot.item.id) : undefined;
+}
+
+/** The LIMITED tag's word: the holiday's name for a holiday uniform ("HALLOWEEN"). */
+function limitedLabel(slot: ShopSlot): string {
+  return slotUniform(slot)?.holiday?.toUpperCase() ?? 'LIMITED';
 }
 
 function slotName(slot: ShopSlot): string {
@@ -255,7 +260,7 @@ export function SlotCard({ slot, block, coins, copies, number, width, height, on
           {limited ? (
             <>
               <LineIcon name="spark" size={px(13)} color={LIMITED_TUBE.soft} />
-              <Tag label="LIMITED" tube="pink" small style={styles.limitedTag} />
+              <Tag label={limitedLabel(slot)} tube="pink" small style={styles.limitedTag} />
               <LineIcon name="spark" size={px(13)} color={LIMITED_TUBE.soft} />
             </>
           ) : (
@@ -413,15 +418,15 @@ export function ShopDetail({ slot, block, coins, copies, number, bought, onBuy, 
     );
   }
 
-  const kind = uniform ? 'Limited-edition uniform' : player ? `${teamById(player.team).place} ${teamById(player.team).name} · ${RARITY_LABEL[player.rarity]}` : '';
-  const about = uniform ? `${uniform.blurb ?? ''} Sold only in the Daily Shop, and only on its day.`.trim() : slot.limited ? 'Featured today: pick exactly who you get.' : 'A daily deal: pick this player instead of hoping for them in a pack.';
+  const kind = uniform?.holiday ? `${uniform.holiday} uniform` : uniform ? 'Limited-edition uniform' : player ? `${teamById(player.team).place} ${teamById(player.team).name} · ${RARITY_LABEL[player.rarity]}` : '';
+  const about = uniform?.month !== undefined ? `${uniform.blurb ?? ''} Sold only in the Daily Shop, and only in ${MONTH_NAMES[uniform.month - 1]}.`.trim() : uniform ? `${uniform.blurb ?? ''} Sold only in the Daily Shop, and only on its day.`.trim() : slot.limited ? 'Featured today: pick exactly who you get.' : 'A daily deal: pick this player instead of hoping for them in a pack.';
   return (
     <Popup onDismiss={onClose} tube={tb} width={px(560)} style={styles.detail}>
       <View style={styles.detailRow}>
         <View style={styles.detailArt}>{art}</View>
         <View style={styles.detailWords}>
           <View style={styles.detailHead}>
-            {slot.limited ? <Tag label="LIMITED" tube="pink" small /> : player && <Gems rarity={player.rarity} size={px(11)} />}
+            {slot.limited ? <Tag label={limitedLabel(slot)} tube="pink" small /> : player && <Gems rarity={player.rarity} size={px(11)} />}
             <Print face="bold" size="tiny" color={tb.soft} track="wide" upper room={WORDS - px(110)} least={MIN_FIT_LABEL}>
               {slot.limited ? 'Only today' : 'Daily deal'}
             </Print>

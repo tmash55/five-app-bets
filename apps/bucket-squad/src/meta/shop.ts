@@ -4,6 +4,10 @@
  * - One LIMITED slot. On even days it is a limited-edition uniform (sold nowhere else), on odd days a featured
  *   Epic or Legend player at a premium. Both take turns through a shuffled cycle: a limited uniform comes back only
  *   after every other one has had its day, and never two cycles back to back.
+ * - Holiday uniforms are sold only in their own month (Halloween in October, Christmas in December, ...). There they
+ *   take every other uniform day, starting with the month's first, and the limited editions share the rest, keeping
+ *   their cycle: the holiday days are simply not counted as their turns. Outside its month a holiday uniform never
+ *   shows.
  * - Three DEAL slots: player cards you could also pull from packs, priced by rarity, leaning toward players you do
  *   not have yet or that one more copy would level up. Each can be bought once a day, then it is SOLD.
  *
@@ -18,7 +22,7 @@
 
 import { PLAYERS, playerById } from '@/data/roster';
 import { RARITIES, type PlayerDef, type Rarity } from '@/data/types';
-import { LIMITED_UNIFORMS, type UniformDef } from '@/data/uniforms';
+import { HOLIDAY_UNIFORMS, LIMITED_UNIFORMS, type UniformDef } from '@/data/uniforms';
 import { LEVEL_COPIES, MAX_COPIES, type Owned } from './collection';
 import { hashSeed, seededRng, shuffled, type Rng } from './rng';
 
@@ -155,15 +159,83 @@ export interface ShopSlot {
 
 export const LIMITED_SLOT = 'limited';
 
-/** The LIMITED slot for a day: the same for everyone. Even days a limited uniform, odd days a featured player. */
-export function limitedSlot(day: string, uniforms: readonly UniformDef[] = LIMITED_UNIFORMS, pool: readonly PlayerDef[] = PLAYERS): ShopSlot | null {
+// ---------------------------------------------------------------------------
+// Holiday months
+// ---------------------------------------------------------------------------
+
+/**
+ * The first month holiday uniforms are sold in. Days before it keep the rotation they always had: the holiday days
+ * are counted from here on.
+ */
+export const HOLIDAY_START = '2026-11-01';
+
+/** Month names for the words around holiday uniforms, January first. */
+export const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] as const;
+
+/** The month of a day key, 1 for January. */
+export function monthOf(day: string): number {
+  return Number(day.slice(5, 7));
+}
+
+/** The holiday uniforms sold in a month (none in most). */
+export function holidaysIn(month: number, holidays: readonly UniformDef[] = HOLIDAY_UNIFORMS): UniformDef[] {
+  return holidays.filter((u) => u.month === month);
+}
+
+/** Day numbers of the first and last day of a month (month 1 to 12). */
+function monthSpan(year: number, month: number): [number, number] {
+  const first = Math.round(Date.UTC(year, month - 1, 1) / 86400000);
+  const last = Math.round(Date.UTC(year, month, 0) / 86400000);
+  return [first, last];
+}
+
+/** The first even day number at or after `n`: uniform days are the even ones. */
+const firstEven = (n: number) => n + (((n % 2) + 2) % 2);
+
+/** How many of a month's uniform days before its `upTo`-th (all of them when left out) are holiday days. */
+function holidayDaysOf(year: number, month: number, upTo = Infinity): number {
+  const [first, last] = monthSpan(year, month);
+  const total = Math.floor((last - firstEven(first)) / 2) + 1;
+  return Math.ceil(Math.min(total, upTo) / 2);
+}
+
+/**
+ * Where a uniform day (an even day number) stands: the holiday uniform it sells, or else its turn in the limited
+ * editions' cycle, which skips the holiday days since `HOLIDAY_START`.
+ */
+export function uniformTurn(day: string, holidays: readonly UniformDef[] = HOLIDAY_UNIFORMS): { holiday: UniformDef } | { turn: number } {
+  const n = dayNumber(day);
+  const turn = Math.floor(n / 2);
+  if (day < HOLIDAY_START) return { turn };
+  const year = Number(day.slice(0, 4));
+  const month = monthOf(day);
+  // the uniform day's place in its month: the first, second, ...
+  const place = (n - firstEven(monthSpan(year, month)[0])) / 2;
+  const here = holidaysIn(month, holidays);
+  if (here.length > 0 && place % 2 === 0) return { holiday: here[(place / 2) % here.length] };
+  // every holiday day from the start up to this one is a turn the limited editions did not take
+  let skipped = here.length > 0 ? holidayDaysOf(year, month, place) : 0;
+  const startYear = Number(HOLIDAY_START.slice(0, 4));
+  const startMonth = monthOf(HOLIDAY_START);
+  for (let y = startYear, m = startMonth; y < year || (y === year && m < month); m === 12 ? ((m = 1), y++) : m++) {
+    if (holidaysIn(m, holidays).length > 0) skipped += holidayDaysOf(y, m);
+  }
+  return { turn: turn - skipped };
+}
+
+/**
+ * The LIMITED slot for a day: the same for everyone. Even days a limited uniform (a holiday one on every other uniform
+ * day of its month), odd days a featured player.
+ */
+export function limitedSlot(day: string, uniforms: readonly UniformDef[] = LIMITED_UNIFORMS, pool: readonly PlayerDef[] = PLAYERS, holidays: readonly UniformDef[] = HOLIDAY_UNIFORMS): ShopSlot | null {
   const n = dayNumber(day);
   const players = featuredPool(pool);
   const uniformDay = n % 2 === 0;
   const turn = Math.floor(n / 2);
-  if ((uniformDay || players.length === 0) && uniforms.length > 0) {
-    const u = cyclePick(uniforms, turn, 'limited-uniform');
-    return { id: LIMITED_SLOT, limited: true, item: { kind: 'uniform', id: u.id }, price: coins(u.price ?? 0) };
+  if (uniformDay || players.length === 0) {
+    const at = uniformDay ? uniformTurn(day, holidays) : { turn };
+    const u = 'holiday' in at ? at.holiday : uniforms.length > 0 ? cyclePick(uniforms, at.turn, 'limited-uniform') : null;
+    if (u) return { id: LIMITED_SLOT, limited: true, item: { kind: 'uniform', id: u.id }, price: coins(u.price ?? 0) };
   }
   if (players.length === 0) return null;
   const p = cyclePick(players, turn, 'featured-player');

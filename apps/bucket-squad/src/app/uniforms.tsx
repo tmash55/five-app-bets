@@ -1,6 +1,6 @@
 /**
  * Uniforms: what the whole squad wears. The captain's team's colours to start with, special designs bought with
- * coins, limited editions sold only on their day in the Daily Shop, and every team's own uniform, which unlocks once three of its players are in the collection. Beside the
+ * coins (plain and printed), limited and holiday editions sold only on their days in the Daily Shop, and every team's own uniform, which unlocks once three of its players are in the collection. Beside the
  * grid, the uniform the squad wears now, up close.
  */
 
@@ -11,10 +11,10 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { playSfx } from '@/audio/sound';
 import { LEAGUES, leagueOf, mustPlayer, teamById } from '@/data/roster';
 import { RARITY_LABEL, type TeamDef } from '@/data/types';
-import { LIMITED_UNIFORMS, SPECIAL_UNIFORMS, TEAM_UNIFORMS, teamWear, wearOf, type UniformDef, type Wear } from '@/data/uniforms';
+import { COIN_UNIFORMS, SHOP_ONLY_UNIFORMS, TEAM_UNIFORMS, teamWear, wearOf, type UniformDef, type Wear } from '@/data/uniforms';
 import { tapFeedback } from '@/fx/feedback';
 import { dayKey } from '@/meta/rng';
-import { limitedSlot } from '@/meta/shop';
+import { MONTH_NAMES, limitedSlot } from '@/meta/shop';
 import { squadUniform, uniformProgress, type UniformProgress } from '@/state/logic';
 import { useSave } from '@/state/save';
 import { arcade, fade, halo, inner, neonText, night, tube, type Tube } from '@/theme/arcade';
@@ -93,6 +93,11 @@ function limitedToday(): string | null {
   return item?.kind === 'uniform' ? item.id : null;
 }
 
+/** The month a holiday uniform is sold in, in words ("October"), or null for any other uniform. */
+function monthOfEntry(entry: Entry): string | null {
+  return entry?.month !== undefined ? MONTH_NAMES[entry.month - 1] : null;
+}
+
 /** The line at the foot of a tile: worn, yours, how many players still to find, or the price. */
 function TileFoot({ entry, state, coins }: { entry: Entry; state: EntryState; coins: number }) {
   if (state.wearing) return <Tag label="WEARING" tube={ON} small />;
@@ -106,13 +111,14 @@ function TileFoot({ entry, state, coins }: { entry: Entry; state: EntryState; co
       </View>
     );
   if (entry?.limited) {
-    // a limited edition is never bought here: today's shows it is in the shop, the others where to look for them
+    // a limited edition is never bought here: today's shows it is in the shop, the others where to look for them (a holiday one, in which month)
     if (limitedToday() === entry.id) return <Tag label="TODAY!" tube="gold" small />;
+    const month = monthOfEntry(entry);
     return (
       <View style={styles.footRow}>
-        <LineIcon name="tag" size={px(13)} color={night.textFaint} weight={2.4} />
+        <LineIcon name={month ? 'clock' : 'tag'} size={px(13)} color={night.textFaint} weight={2.4} />
         <Print face="bold" size="micro" color="textFaint" track="wide">
-          SHOP
+          {month ? month.slice(0, 3).toUpperCase() : 'SHOP'}
         </Print>
       </View>
     );
@@ -146,7 +152,7 @@ function Tile({ entry, state, coins, number, width, height, onPress }: { entry: 
   const room = width - TILE_PAD * 2 - arcade.outline * 2;
   const jerseyW = Math.min(room * 0.7, (height - TILE_TOP - TILE_NAME - TILE_FOOT - TILE_PAD * 2 - arcade.outline * 2) / JERSEY_RATIO);
   const team = entry === null ? null : state.team;
-  const label = `${state.name}. ${state.wearing ? 'Wearing it' : state.progress.unlocked ? 'Yours: tap to wear' : entry?.limited ? 'Only in the Daily Shop' : entry?.kind === 'special' ? `${entry.price} coins` : `${state.progress.have} of ${state.progress.need} players`}`;
+  const label = `${state.name}. ${state.wearing ? 'Wearing it' : state.progress.unlocked ? 'Yours: tap to wear' : entry?.limited ? `Only in the Daily Shop${entry.month !== undefined ? ` in ${monthOfEntry(entry)}` : ''}` : entry?.kind === 'special' ? `${entry.price} coins` : `${state.progress.have} of ${state.progress.need} players`}`;
   return (
     <Pressable
       accessibilityRole="button"
@@ -191,7 +197,7 @@ function Wearing({ entry, state, squad, number, width, height }: { entry: Entry;
   const face = Math.min(px(34), Math.floor((inside - space.sm * 2) / 3));
   const jerseyW = Math.max(px(50), Math.min(inside * 0.72, (height - px(150) - face) / JERSEY_FULL_RATIO));
   const name = fitText(state.name.toUpperCase(), 'display', neonText.sign, inside, 'close', MIN_FIT_LABEL);
-  const kind = entry === null ? `${state.team?.name ?? ''} · CAPTAIN’S TEAM` : entry.kind === 'team' ? 'TEAM UNIFORM' : entry.limited ? 'LIMITED EDITION' : `SPECIAL · ${RARITY_LABEL[entry.rarity]}`;
+  const kind = entry === null ? `${state.team?.name ?? ''} · CAPTAIN’S TEAM` : entry.kind === 'team' ? 'TEAM UNIFORM' : entry.holiday ? `${entry.holiday} EDITION` : entry.limited ? 'LIMITED EDITION' : `SPECIAL · ${RARITY_LABEL[entry.rarity]}`;
   return (
     <NeonPanel tube={tb} style={[styles.wearing, { width, height }]}>
       <Print face="bold" size="tiny" color="textFaint" track="wider" center>
@@ -236,6 +242,9 @@ function Detail({ entry, state, coins, number, onWear, onBuy, onClose }: { entry
   if (entry === null) {
     kind = `${state.team?.name ?? ''} · your captain’s team`;
     about = 'The whole squad wears your captain’s team uniform. Pick a new captain on the Squad page and it changes with them.';
+  } else if (entry.holiday !== undefined) {
+    kind = `${entry.holiday} edition · Daily Shop in ${monthOfEntry(entry)}`;
+    about = `${entry.blurb ?? ''} ${unlocked ? 'It is yours to wear any time.' : limitedToday() === entry.id ? 'It is in the Daily Shop today!' : `It is only sold in the Daily Shop, on its days in ${monthOfEntry(entry)}.`}`.trim();
   } else if (entry.limited) {
     kind = 'Limited edition · Daily Shop only';
     about = `${entry.blurb ?? ''} ${unlocked ? 'It is yours to wear any time.' : limitedToday() === entry.id ? 'It is in the Daily Shop today!' : 'It is only sold in the Daily Shop, on its day. Look in again soon.'}`.trim();
@@ -371,10 +380,10 @@ export default function Uniforms() {
   const tileH = Math.round(tileW * 0.52 * JERSEY_RATIO + TILE_TOP + TILE_NAME + TILE_FOOT + TILE_PAD * 2 + arcade.outline * 2);
   const height = body.height - space.sm;
 
-  const specials: Entry[] = [null, ...SPECIAL_UNIFORMS];
+  const specials: Entry[] = [null, ...COIN_UNIFORMS];
   const teams: Entry[] = TEAM_UNIFORMS.filter((u) => u.league === league);
-  const boughtCount = SPECIAL_UNIFORMS.filter((u) => uniforms.includes(u.id)).length;
-  const limitedCount = LIMITED_UNIFORMS.filter((u) => uniforms.includes(u.id)).length;
+  const boughtCount = COIN_UNIFORMS.filter((u) => uniforms.includes(u.id)).length;
+  const limitedCount = SHOP_ONLY_UNIFORMS.filter((u) => uniforms.includes(u.id)).length;
   const teamCount = TEAM_UNIFORMS.filter((u) => uniformProgress({ owned, uniforms }, u).unlocked).length;
 
   const grid = (entries: Entry[]) => (
@@ -403,7 +412,7 @@ export default function Uniforms() {
                   <View style={styles.headRight}>
                     <Coin size={px(14)} />
                     <Print face="bold" size="tiny" color="textFaint" track="wider">
-                      {`BUY WITH COINS · ${boughtCount} OF ${SPECIAL_UNIFORMS.length}`}
+                      {`BUY WITH COINS · ${boughtCount} OF ${COIN_UNIFORMS.length}`}
                     </Print>
                   </View>
                 }
@@ -417,12 +426,12 @@ export default function Uniforms() {
                   <View style={styles.headRight}>
                     <LineIcon name="clock" size={px(14)} color={night.textFaint} weight={2.4} />
                     <Print face="bold" size="tiny" color="textFaint" track="wider">
-                      {`ONLY IN THE DAILY SHOP · ${limitedCount} OF ${LIMITED_UNIFORMS.length}`}
+                      {`ONLY IN THE DAILY SHOP · ${limitedCount} OF ${SHOP_ONLY_UNIFORMS.length}`}
                     </Print>
                   </View>
                 }
               />
-              {grid([...LIMITED_UNIFORMS])}
+              {grid([...SHOP_ONLY_UNIFORMS])}
               <SignHead
                 title="TEAM UNIFORMS"
                 tube="cyan"

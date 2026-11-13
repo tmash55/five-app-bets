@@ -7,7 +7,7 @@ import { seededRng } from '@/meta/rng';
 import { STARS_PER_GAME, gameKey, tourById } from '@/meta/tour';
 import { summary, totals } from '@/testing/summary';
 
-import { teamUniformId, uniformById, type UniformDef } from '@/data/uniforms';
+import { HOLIDAY_UNIFORMS, PRINTED_UNIFORMS, teamUniformId, uniformById, type UniformDef } from '@/data/uniforms';
 
 import { DEFAULT_SETTINGS, SQUAD_SIZE, STARTING_COINS, buyPack, buyUniform, claimFreePack, claimMission, claimMissionBonus, finishMatch, hasUniform, homeTeamChoices, markSeen, newSave, openOwnedPack, repairSave, setSquad, squadLevels, squadUniform, startCareer, starterIds, uniformProgress, wearUniform, type SaveData } from '../logic';
 
@@ -508,6 +508,30 @@ describe('uniforms', () => {
     // and a save with them keeps them
     const dressed = wearUniform(buyUniform(rich(), 'glow-stick') as SaveData, 'glow-stick') as SaveData;
     expect(repairSave(JSON.parse(JSON.stringify(dressed)))).toEqual(dressed);
+  });
+
+  it('sells the printed specials like the others, and the holiday ones only in the Daily Shop', () => {
+    for (const u of PRINTED_UNIFORMS) {
+      const bought = buyUniform(rich(), u.id) as SaveData;
+      expect(bought.coins).toBe(5000 - (u.price ?? 0));
+      const dressed = wearUniform(bought, u.id) as SaveData;
+      expect(squadUniform(dressed).wear.kit.print).toBe(u.kit.print);
+    }
+    for (const u of HOLIDAY_UNIFORMS) expect(buyUniform(rich(), u.id)).toBeNull();
+  });
+
+  it('loads a save from before the prints, and one wearing a print, as they were', () => {
+    // a save as the last update wrote it: a plain special bought and worn
+    const before = wearUniform(buyUniform(rich(), 'lava-flow') as SaveData, 'lava-flow') as SaveData;
+    const loaded = repairSave(JSON.parse(JSON.stringify(before)));
+    expect(loaded).toEqual(before);
+    expect(squadUniform(loaded).wear.kit.print).toBeUndefined();
+    // and one wearing a printed special and a holiday one it bought in the shop
+    const printed = { ...wearUniform(buyUniform(rich(), 'starry-galaxy') as SaveData, 'starry-galaxy'), uniforms: ['starry-galaxy', 'haunted-hoops'] } as SaveData;
+    const again = repairSave(JSON.parse(JSON.stringify(printed)));
+    expect(again).toEqual(printed);
+    expect(hasUniform(again, 'haunted-hoops')).toBe(true);
+    expect(squadUniform(again).wear.kit.print?.style).toBe('galaxy');
   });
 
   it('drops malformed uniforms and keeps ones this build cannot find', () => {

@@ -1,9 +1,10 @@
 /**
  * Uniforms the whole squad can wear. Every team has its own, which you earn by collecting its players, and a
- * few special designs are made up for the game and bought with coins. A uniform is a set of colours only:
- * the shapes (tank top, shorts, shoes) come from the kit renderer as they always have.
+ * few special designs are made up for the game and bought with coins. A uniform is a set of colours (and maybe a
+ * print): the shapes (tank top, shorts, shoes) come from the kit renderer as they always have.
  *
- * A few more are limited editions, sold only on the days the Daily Shop features them.
+ * A few more are limited editions, sold only on the days the Daily Shop features them, and a few holiday ones the Daily
+ * Shop sells only in their own month. Some designs carry a printed pattern (`KitColors.print`) over their colours.
  *
  * Team uniforms come from `TEAMS`, so a family build's extra league brings its teams' uniforms with it and
  * nothing about those teams is ever written here.
@@ -35,6 +36,10 @@ export interface UniformDef {
   blurb?: string;
   /** a limited edition: sold only on the days the Daily Shop features it, never on the Uniforms page */
   limited?: boolean;
+  /** a holiday edition (limited too): the month it is sold in, 1 for January to 12 for December */
+  month?: number;
+  /** the holiday it is for, in words ("Halloween") */
+  holiday?: string;
 }
 
 /** What a side wears: the colours, and the team it belongs to when it is a team's own uniform. */
@@ -198,10 +203,178 @@ export const LIMITED_UNIFORMS: readonly UniformDef[] = [
   ),
 ];
 
+/**
+ * Printed specials: bought with coins on the Uniforms page like the others, priced by rarity. The colour wheel was full
+ * before them, so each is told apart by its print (no other design has that print in those colours), and every
+ * number stands out from its jersey and from the print, which calms down behind it (see the uniforms tests).
+ */
+export const PRINTED_UNIFORMS: readonly UniformDef[] = [
+  special(
+    'tie-dye-swirl',
+    'Tie-Dye Swirl',
+    'rare',
+    '#FF2D95',
+    {
+      jersey: '#FF2D95',
+      trim: '#FFE600',
+      number: '#1A0B3A',
+      shorts: '#FF2D95',
+      shortsTrim: '#FFE600',
+      shoe: '#FFFFFF',
+      shoeAccent: '#00C8FF',
+      sole: '#F4F1EA',
+      sock: '#FFFFFF',
+      band: '#00C8FF',
+      print: { style: 'tieDye', colors: ['#FFE600', '#00C8FF', '#8A2BFF'] },
+    },
+    'Pink, yellow, blue and purple, swirled like a summer camp shirt.',
+  ),
+  special(
+    'sugar-stripes',
+    'Sugar Stripes',
+    'rare',
+    '#FF3D8B',
+    {
+      jersey: '#FFF4F8',
+      trim: '#FF3D8B',
+      number: '#8A0040',
+      shorts: '#FF3D8B',
+      shortsTrim: '#FFF4F8',
+      shoe: '#FFFFFF',
+      shoeAccent: '#2ED3B7',
+      sole: '#F4F1EA',
+      sock: '#FFFFFF',
+      band: '#2ED3B7',
+      print: { style: 'candy', colors: ['#FF3D8B', '#2ED3B7', '#FF3D8B'] },
+    },
+    'Candy stripes in bubblegum pink and mint.',
+  ),
+  special(
+    'lightning-strike',
+    'Lightning Strike',
+    'epic',
+    '#3D6BFF',
+    {
+      jersey: '#1238FF',
+      trim: '#FFE600',
+      number: '#FFFFFF',
+      shorts: '#0A1A66',
+      shortsTrim: '#FFE600',
+      shoe: '#0A1A66',
+      shoeAccent: '#FFE600',
+      sole: '#FFE600',
+      sock: '#FFFFFF',
+      band: '#FFE600',
+      print: { style: 'lightning', colors: ['#FFE600', '#8CF6FF'] },
+    },
+    'Electric blue with bolts of yellow lightning. Zap!',
+  ),
+  special(
+    'starry-galaxy',
+    'Starry Galaxy',
+    'legend',
+    '#9B3DFF',
+    {
+      jersey: '#1C0B4A',
+      trim: '#4DF0FF',
+      number: '#FFFFFF',
+      shorts: '#1C0B4A',
+      shortsTrim: '#FF3DB8',
+      shoe: '#1C0B4A',
+      shoeAccent: '#4DF0FF',
+      sole: '#9B3DFF',
+      sock: '#FFFFFF',
+      band: '#FF3DB8',
+      print: { style: 'galaxy', colors: ['#9B3DFF', '#FF3DB8', '#4DF0FF'] },
+    },
+    'Purple and pink star clouds with stars all over. Out of this world.',
+  ),
+];
+
+function holiday(id: string, name: string, month: number, day: string, color: string, kit: KitColors, blurb: string): UniformDef {
+  return { ...limited(id, name, color, kit, blurb), month, holiday: day };
+}
+
+/**
+ * Holiday editions: limited, sold only in the Daily Shop and only in their own month, where they take every other
+ * limited-uniform day (see meta/shop). Each one wears a print, which tells it apart on the full colour wheel.
+ */
+export const HOLIDAY_UNIFORMS: readonly UniformDef[] = [
+  holiday(
+    'haunted-hoops',
+    'Haunted Hoops',
+    10,
+    'Halloween',
+    '#FF7A00',
+    {
+      jersey: '#FF7A00',
+      trim: '#1A1024',
+      number: '#1A1024',
+      shorts: '#3D1466',
+      shortsTrim: '#7CFF3B',
+      shoe: '#1A1024',
+      shoeAccent: '#FF7A00',
+      sole: '#7CFF3B',
+      sock: '#1A1024',
+      band: '#7CFF3B',
+      print: { style: 'web', colors: ['#1A1024', '#FFD23D'], shorts: false },
+    },
+    'Pumpkin orange with spooky spider webs. Boo!',
+  ),
+  holiday(
+    'holly-jolly',
+    'Holly Jolly',
+    12,
+    'Christmas',
+    '#D4102B',
+    {
+      jersey: '#D4102B',
+      trim: '#FFFFFF',
+      number: '#FFFFFF',
+      shorts: '#0E7A3A',
+      shortsTrim: '#FFFFFF',
+      shoe: '#FFFFFF',
+      shoeAccent: '#D4102B',
+      sole: '#F4F1EA',
+      sock: '#FFFFFF',
+      band: '#0E7A3A',
+      print: { style: 'snow', colors: ['#FFFFFF', '#3DDC6B'] },
+    },
+    'Holiday red and green with snowflakes falling all over.',
+  ),
+  holiday(
+    'snow-day',
+    'Snow Day',
+    1,
+    'Winter',
+    '#5EC8FF',
+    {
+      jersey: '#5EC8FF',
+      trim: '#FFFFFF',
+      number: '#0B2A6B',
+      shorts: '#1E3A8A',
+      shortsTrim: '#FFFFFF',
+      shoe: '#FFFFFF',
+      shoeAccent: '#1E3A8A',
+      sole: '#F4F1EA',
+      sock: '#FFFFFF',
+      band: '#1E3A8A',
+      print: { style: 'snow', colors: ['#FFFFFF', '#1E3A8A'] },
+    },
+    'Icy blue with big white flakes. No school today!',
+  ),
+];
+
 /** Every team's own uniform, in roster order (a family build's extra league included). */
 export const TEAM_UNIFORMS: readonly UniformDef[] = TEAMS.map(teamUniform);
 
-export const ALL_UNIFORMS: readonly UniformDef[] = [...SPECIAL_UNIFORMS, ...LIMITED_UNIFORMS, ...TEAM_UNIFORMS];
+/** Everything bought with coins on the Uniforms page: the plain specials, then the printed ones. */
+export const COIN_UNIFORMS: readonly UniformDef[] = [...SPECIAL_UNIFORMS, ...PRINTED_UNIFORMS];
+
+/** Everything only the Daily Shop sells: the limited editions, then the holiday ones. */
+export const SHOP_ONLY_UNIFORMS: readonly UniformDef[] = [...LIMITED_UNIFORMS, ...HOLIDAY_UNIFORMS];
+
+export const ALL_UNIFORMS: readonly UniformDef[] = [...COIN_UNIFORMS, ...SHOP_ONLY_UNIFORMS, ...TEAM_UNIFORMS];
 
 const BY_ID = new Map(ALL_UNIFORMS.map((u) => [u.id, u]));
 

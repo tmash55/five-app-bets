@@ -1,15 +1,17 @@
 /**
  * A uniform drawn flat, the way it hangs in a locker: a tank top in the jersey colour with its trim round the
- * collar and the arm holes and a number on the front, and the shorts under it when there is room.
+ * collar and the arm holes and a number on the front, and the shorts under it when there is room. A printed uniform
+ * carries its print on the cloth (JerseyPrint), calmed behind the number as it is on the court.
  */
 
 import { memo } from 'react';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
-import Svg, { Defs, LinearGradient, Path, Stop, Text as SvgText } from 'react-native-svg';
+import Svg, { ClipPath, Defs, Ellipse, G, LinearGradient, Path, RadialGradient, Stop, Text as SvgText } from 'react-native-svg';
 
-import type { KitColors } from '@/game/kit/look';
+import { PRINT_UNDER_NUMBER, type KitColors } from '@/game/kit/look';
 import { neonFont, night } from '@/theme/arcade';
 import { px } from '@/theme/tokens';
+import { PrintArt } from './JerseyPrint';
 import { useSvgId } from './Room';
 
 /** the drawing's own grid: the top alone, and the top over its shorts */
@@ -32,6 +34,8 @@ const SIDE_RIGHT = 'M88 40L89.5 101';
 const SHORTS = 'M12 96H88L94 142Q74 146 55 143L50 122L45 143Q26 146 6 142Z';
 const SHORTS_SIDE_LEFT = 'M11 100L7.5 139';
 const SHORTS_SIDE_RIGHT = 'M89 100L92.5 139';
+/** the number's baseline */
+const NUMBER_Y = 74;
 
 export interface JerseyProps {
   kit: KitColors;
@@ -49,10 +53,16 @@ export interface JerseyProps {
 /** A jersey in a uniform's colours. */
 export const Jersey = memo(function Jersey({ kit, number, width = px(60), shorts = false, dim = false, style }: JerseyProps) {
   const shine = useSvgId('shine');
+  const clipTop = useSvgId('cliptop');
+  const clipShorts = useSvgId('clipshorts');
+  const calm = useSvgId('calm');
+  const glow = useSvgId('glow');
   const h = shorts ? FULL_H : TOP_H;
   const label = number === undefined ? '' : String(number);
   // one figure sits big in the middle, two share the width
   const numberSize = label.length > 1 ? 36 : 44;
+  const print = kit.print;
+  const printShorts = print !== undefined && print.shorts !== false;
   return (
     <View pointerEvents="none" style={[{ width, height: (width * h) / W, opacity: dim ? 0.38 : 1 }, style]}>
       <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${h}`}>
@@ -63,23 +73,50 @@ export const Jersey = memo(function Jersey({ kit, number, width = px(60), shorts
             <Stop offset={0.55} stopColor={night.white} stopOpacity={0} />
             <Stop offset={1} stopColor={night.black} stopOpacity={0.22} />
           </LinearGradient>
+          {print && (
+            <>
+              <ClipPath id={clipTop}>
+                <Path d={BODY} />
+              </ClipPath>
+              <ClipPath id={clipShorts}>
+                <Path d={SHORTS} />
+              </ClipPath>
+              {/* the print fades to the jersey colour behind the number */}
+              <RadialGradient id={calm} cx="50%" cy="50%" r="50%">
+                <Stop offset={0} stopColor={kit.jersey} stopOpacity={1 - PRINT_UNDER_NUMBER} />
+                <Stop offset={0.72} stopColor={kit.jersey} stopOpacity={1 - PRINT_UNDER_NUMBER} />
+                <Stop offset={1} stopColor={kit.jersey} stopOpacity={0} />
+              </RadialGradient>
+            </>
+          )}
         </Defs>
         {shorts && (
           <>
             <Path d={SHORTS} fill={kit.shorts} stroke={night.lineLit} strokeWidth={1.5} strokeLinejoin="round" />
+            {print && printShorts && (
+              <G clipPath={`url(#${clipShorts})`}>
+                <PrintArt print={print} glowId={`${glow}s`} />
+              </G>
+            )}
             <Path d={SHORTS_SIDE_LEFT} stroke={kit.shortsTrim} strokeWidth={4} strokeLinecap="round" />
             <Path d={SHORTS_SIDE_RIGHT} stroke={kit.shortsTrim} strokeWidth={4} strokeLinecap="round" />
             <Path d={SHORTS} fill={`url(#${shine})`} />
           </>
         )}
         <Path d={BODY} fill={kit.jersey} stroke={night.lineLit} strokeWidth={1.5} strokeLinejoin="round" />
+        {print && (
+          <G clipPath={`url(#${clipTop})`}>
+            <PrintArt print={print} glowId={`${glow}t`} />
+            {label !== '' && <Ellipse cx={W / 2} cy={NUMBER_Y - numberSize * 0.36} rx={label.length > 1 ? 37 : 27} ry={numberSize * 0.62} fill={`url(#${calm})`} />}
+          </G>
+        )}
         <Path d={SIDE_LEFT} stroke={kit.trim} strokeWidth={3} strokeLinecap="round" />
         <Path d={SIDE_RIGHT} stroke={kit.trim} strokeWidth={3} strokeLinecap="round" />
         <Path d={COLLAR} fill="none" stroke={kit.trim} strokeWidth={5.5} strokeLinecap="round" />
         <Path d={ARM_LEFT} fill="none" stroke={kit.trim} strokeWidth={5.5} strokeLinecap="round" />
         <Path d={ARM_RIGHT} fill="none" stroke={kit.trim} strokeWidth={5.5} strokeLinecap="round" />
         {label !== '' && (
-          <SvgText x={W / 2} y={74} fontFamily={neonFont.display} fontSize={numberSize} fill={kit.number} stroke={kit.trim} strokeWidth={1.2} textAnchor="middle">
+          <SvgText x={W / 2} y={NUMBER_Y} fontFamily={neonFont.display} fontSize={numberSize} fill={kit.number} stroke={kit.trim} strokeWidth={1.2} textAnchor="middle">
             {label}
           </SvgText>
         )}

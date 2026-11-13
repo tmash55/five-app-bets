@@ -113,6 +113,13 @@ export function colorGap(a: string, b: string): number {
   return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
 }
 
+/** A kit without its print: what a change strip starts from, since a print belongs to the colours it was made for. */
+function plainKit(kit: KitColors): KitColors {
+  const out = { ...kit };
+  delete out.print;
+  return out;
+}
+
 /** The change strip a team wears when both teams would look alike. */
 export function awayKit(kit: KitColors): KitColors {
   const jersey = kit.trim;
@@ -120,7 +127,7 @@ export function awayKit(kit: KitColors): KitColors {
   const dark = [kit.jersey, kit.shorts, kit.number].reduce((best, c) => (luminance(c) < luminance(best) ? c : best));
   const number = colorGap(kit.jersey, jersey) > 0.5 ? kit.jersey : light ? dark : WHITE;
   return {
-    ...kit,
+    ...plainKit(kit),
     jersey,
     trim: kit.jersey,
     number,
@@ -149,7 +156,7 @@ export function kitsClash(home: Strip, away: Strip): boolean {
 /** A plain white strip with the team's darkest colour for trim and numbers. */
 function whiteKit(kit: KitColors): KitColors {
   const dark = [kit.jersey, kit.trim, kit.shorts].reduce((best, c) => (luminance(c) < luminance(best) ? c : best));
-  return { ...kit, jersey: WHITE, trim: dark, number: dark, shorts: WHITE, shortsTrim: dark, shoeAccent: dark, band: dark };
+  return { ...plainKit(kit), jersey: WHITE, trim: dark, number: dark, shorts: WHITE, shortsTrim: dark, shoeAccent: dark, band: dark };
 }
 
 /**
