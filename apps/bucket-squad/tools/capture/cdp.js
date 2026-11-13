@@ -138,6 +138,9 @@ async function main() {
         await evalJs(`__vt.step(${1000 / fps})`);
         if (js) await evalJs(js);
         await new Promise((r) => setTimeout(r, settle));
+        // a layer that has just slid into view can come out as a black block: its new tiles are only painted
+        // when a frame is drawn, and the clock is stopped. The first picture draws that frame, the second keeps it.
+        if (process.env.VT_TWICE) await send('Page.captureScreenshot', { format: 'jpeg', quality: 10 });
         const r = await send('Page.captureScreenshot', { format: 'jpeg', quality: Number(process.env.VT_Q || 92) });
         fs.writeFileSync(`${prefix}${String(vtCount[prefix]++).padStart(5, '0')}.jpg`, Buffer.from(r.data, 'base64'));
       }
