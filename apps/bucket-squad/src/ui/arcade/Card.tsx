@@ -24,6 +24,8 @@ import { Print } from './Type';
 
 /** the card pictures' height for a width of 1 */
 const ART_RATIO = 560 / 440;
+/** How far the picture is pushed up past the card's top edge, as a share of the card's inner height. Any more and the tallest hair in the league is cut off flat. */
+const ART_LIFT = 0.066;
 /** below this width a card is a thumbnail: no rays, no team, no rarity word */
 const SMALL = px(92);
 /** from this width a card is a hero: it throws light, and its background is lit from behind the figure */
@@ -134,7 +136,7 @@ export const ArcadeCard = memo(function ArcadeCard({ player, level = 1, width = 
             contentFit="contain"
             transition={0}
             tintColor={locked ? night.lineLit : undefined}
-            style={{ position: 'absolute', left: (innerW - artW) / 2, top: -innerH * 0.104, width: artW, height: artW * ART_RATIO, opacity: locked ? 0.3 : 1 }}
+            style={{ position: 'absolute', left: (innerW - artW) / 2, top: -innerH * ART_LIFT, width: artW, height: artW * ART_RATIO, opacity: locked ? 0.3 : 1 }}
           />
         )}
         {!locked && hero && <LinearGradient pointerEvents="none" colors={SHEEN} locations={SHEEN_AT} start={SHEEN_A} end={SHEEN_B} style={StyleSheet.absoluteFill} />}
