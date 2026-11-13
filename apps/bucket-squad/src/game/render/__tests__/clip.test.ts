@@ -11,7 +11,8 @@
  * would give. Depths are in figure units of a figure 1 tall (world / height):
  * the rest figure is 1.57 of them from the soles to the top of the head.
  *
- * `CLIP_REPORT=<file> npx jest clip` also writes the full table to a file.
+ * `CLIP_REPORT=<file> npx jest clip` also writes the full table to a file (`CLIP_ONLY=<rows,...>` narrows it),
+ * and `CLIP_MATCH=<file>` the same table for the match's poses.
  */
 
 import fs from 'fs';
@@ -21,7 +22,7 @@ import { DT as SIM_DT } from '../../sim/constants';
 import { createMatch, stepMatch } from '../../sim/sim';
 import type { Attrs, MatchState, PlayerSim } from '../../sim/types';
 import { ACT_LENGTH, ROLE_ACTS, ROLE_HAS_BALL, actAt, newActSlot, type StageAct, type StageRole } from '../../stage/director';
-import { FigureAnimator, type AnimFrame, type Mood, type ShowFrame } from '../animator';
+import { FigureAnimator, GUARD_SHAPES, type AnimFrame, type Mood, type ShowFrame } from '../animator';
 
 const DT = 1 / 60;
 const BONES = 64 * 16;
@@ -1010,6 +1011,31 @@ describe('warm-up figures keep their parts out of each other', () => {
     expect(verdict()).toBe('within limits');
   }, 30000);
 
+  it("the animator's guard keeps parts out of shapes that match the kit's chest, shorts and head", () => {
+    const at = (L: Loft, arr: Float64Array, y: number) => {
+      if (y <= L.y[0]) return arr[0];
+      for (let k = 1; k < L.y.length; k++) if (y <= L.y[k]) return arr[k - 1] + ((arr[k] - arr[k - 1]) * (y - L.y[k - 1])) / (L.y[k] - L.y[k - 1]);
+      return arr[L.y.length - 1];
+    };
+    for (const [g, L] of [
+      [GUARD_SHAPES.chest, CHEST],
+      [GUARD_SHAPES.hips, HIPS],
+    ] as const) {
+      expect(Math.abs(g.n - L.n)).toBeLessThan(0.1);
+      expect(Math.abs(g.y[0] - L.bot)).toBeLessThan(0.02);
+      expect(Math.abs(g.y[g.y.length - 1] - L.top)).toBeLessThan(0.02);
+      // the end slices are where the mesh rounds off, so only the inner ones are held to the slices of the mesh
+      for (let i = 1; i < g.y.length - 1; i++) {
+        expect([L.name, g.y[i], Math.abs(g.a[i] - at(L, L.a, g.y[i])) < 0.02]).toEqual([L.name, g.y[i], true]);
+        expect([L.name, g.y[i], Math.abs(g.b[i] - at(L, L.b, g.y[i])) < 0.02]).toEqual([L.name, g.y[i], true]);
+      }
+    }
+    for (let k = 0; k < 3; k++) {
+      expect(Math.abs(GUARD_SHAPES.head.c[k] - HEADV.c[k])).toBeLessThan(0.01);
+      expect(Math.abs(GUARD_SHAPES.head.r[k] - HEADV.r[k])).toBeLessThan(0.01);
+    }
+  });
+
   it('a forearm sunk into the belly would fail, and a hand resting on the chest would not', () => {
     // the limits themselves: a forearm's thickness in fails, a light touch passes
     const fore = CAPS.find((c) => c.name === 'foreL');
@@ -1035,93 +1061,3 @@ describe('penetration audit', () => {
     }, 600000);
   }
 });
-
-const dbg = process.env.CLIP_DEBUG;
-if (dbg) {
-  it('debug one frame', () => {
-    const [role, act, ts, hs, bs] = dbg.split(':');
-    const b = { height: Number(hs || 1), bulk: Number(bs || 1), head: 1 };
-    const an = new FigureAnimator(b, null, null, VARIANT[role as StageRole]);
-    const bones = new Float32Array(BONES);
-    const m = new Measure(an, bones, b.height);
-    const f = frame(role as StageRole);
-    const T = Number(ts);
-    const n = Math.round(T * 60);
-    for (let k = 0; k <= n; k++) {
-      f.time = k * DT;
-      repeat(act as StageAct)(f, f.time);
-      an.updateShow(f, bones);
-    }
-    m.prepare();
-    const out: string[] = [];
-    for (let i = 0; i < CAPS.length; i++) {
-      const v = [0, 1, 2].map((q) => m.capInVol(i, q).toFixed(3)).join(' ');
-      out.push(`${CAPS[i].name} A ${Array.from(capA.slice(i * 3, i * 3 + 3), (x) => x.toFixed(3))} B ${Array.from(capB.slice(i * 3, i * 3 + 3), (x) => x.toFixed(3))} r ${capR[i].toFixed(3)} chest/hips/head ${v}`);
-      if (m.capInVol(i, 0) > 0.02) out.push(`   along chest: ${[0, 0.2, 0.4, 0.6, 0.8, 1].map((s) => (capR[i] - m.sd(0, capA[i * 3] + (capB[i * 3] - capA[i * 3]) * s, capA[i * 3 + 1] + (capB[i * 3 + 1] - capA[i * 3 + 1]) * s, capA[i * 3 + 2] + (capB[i * 3 + 2] - capA[i * 3 + 2]) * s)).toFixed(3)).join(' ')}`);
-    }
-    const tab = (L: Loft) => Array.from(L.y, (y, k) => `${y.toFixed(3)}:${L.a[k].toFixed(3)}/${L.b[k].toFixed(3)}/${L.cz[k].toFixed(3)}`).join(' ');
-    out.push(`chest ${tab(CHEST)}`);
-    out.push(`hips ${tab(HIPS)}`);
-    if (f.hasBall) {
-      an.toWorld(0, 0, 0, P0);
-      const bw = new Float64Array([(an.ball[0] - P0[0]) / b.height, (an.ball[1] - P0[1]) / b.height, (an.ball[2] - P0[2]) / b.height]);
-      out.push(`contact ${an.contact} ball~hands ${CAPS.filter((c) => c.member === 'hand').map((c) => m.ballCap(bw, CAPS.indexOf(c)).toFixed(3))}`);
-    }
-    out.push(`chest origin ${Array.from(volT[0], (x) => x.toFixed(3))}`);
-    for (const nm of ['upL', 'upR']) {
-      const i = CAPS.findIndex((c) => c.name === nm);
-      for (const e of [capA, capB]) {
-        mul3(Pi, e[i * 3] * b.height, e[i * 3 + 1] * b.height, e[i * 3 + 2] * b.height, tmp);
-        const hs = 1 / Math.pow(b.height, 0.6);
-        const push = (an as unknown as { bodyPush: (x: number, y: number, z: number, r: number, hs: number, hsx: number) => number }).bodyPush(tmp[0], tmp[1], tmp[2], 0.07, hs, hs / b.bulk);
-        out.push(`guard ${nm} fig ${Array.from(tmp, (x) => x.toFixed(3))} push ${push.toFixed(3)}`);
-      }
-    }
-    console.log(out.join('\n'));
-  });
-}
-
-const dbg2 = process.env.CLIP_DEBUG2;
-if (dbg2) {
-  it('debug taps', () => {
-    const [role, hs, bs] = dbg2.split(':');
-    const b = { height: Number(hs), bulk: Number(bs), head: 1 };
-    const row = emptyRow();
-    run(role as StageRole, 120, tapped(role as StageRole, 99, 2.4), b, row);
-    const w = row['limb-torso'];
-    const out = [`worst ${w.d} ${w.what} at stage ${w.time} ${w.act}@${w.t}`];
-    // replay and print a few frames round it
-    const an = new FigureAnimator(b, null, null, VARIANT[role as StageRole]);
-    const bones = new Float32Array(BONES);
-    const m = new Measure(an, bones, b.height);
-    const f = frame(role as StageRole);
-    const next = tapped(role as StageRole, 99, 2.4);
-    const n = Math.round(w.time * 60) + 3;
-    for (let k = 0; k <= n; k++) {
-      f.time = k * DT;
-      next(f, f.time);
-      an.updateShow(f, bones);
-      if (k >= n - 6) {
-        m.prepare();
-        const ci = CAPS.findIndex((c) => w.what.startsWith(c.name + '>'));
-        const cu = (an as unknown as { cur: Float32Array }).cur;
-        out.push(`   cur ${Array.from(cu.slice(0, 26), (x) => x.toFixed(2)).join(' ')}`);
-        out.push(`k${k} ${f.act}@${f.t.toFixed(3)} idx ${f.index} pen ${m.capInVol(ci, 0).toFixed(3)} A ${Array.from(capA.slice(ci * 3, ci * 3 + 3), (x) => x.toFixed(3))} B ${Array.from(capB.slice(ci * 3, ci * 3 + 3), (x) => x.toFixed(3))}`);
-      }
-    }
-    console.log(out.join('\n'));
-  }, 120000);
-}
-
-const sweep = process.env.CLIP_SWEEP;
-if (sweep) {
-  it('sweep', () => {
-    const out: string[] = [];
-    for (const combo of JSON.parse(sweep) as number[][]) {
-      (globalThis as any).__P = combo;
-      const t = audit(false, process.env.CLIP_ONLY);
-      for (const [k, row] of t) out.push(`${combo.join(',')} ${k} ${PAIRS.map((p) => `${p} ${row[p].d > 0 ? row[p].d.toFixed(3) : '-'}`).join(' ')}`);
-    }
-    console.log(out.join('\n'));
-  }, 900000);
-}

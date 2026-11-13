@@ -248,6 +248,12 @@ const HIPS_B = [0.105, 0.145, 0.156, 0.155];
 /** the head without its ears, from the head pivot: an ellipsoid */
 const HEAD_EC = [0, 0.321, 0];
 const HEAD_ER = [0.427, 0.367, 0.37];
+/** the shapes, for the tests that hold them to the kit's meshes */
+export const GUARD_SHAPES = {
+  chest: { y: CHEST_Y, a: CHEST_A, b: CHEST_B, n: CHEST_N },
+  hips: { y: HIPS_Y, a: HIPS_A, b: HIPS_B, n: HIPS_N },
+  head: { c: HEAD_EC, r: HEAD_ER },
+};
 /** how close the middle of a hand, an elbow or a forearm may come to a surface, and the band over which the push fades in */
 const G_HAND = 0.05;
 const G_ELBOW = 0.07;
@@ -1491,7 +1497,7 @@ export class FigureAnimator {
         const dy = ay - hd[ro + 4] * along;
         const dz = az - hd[ro + 5] * along;
         const dl = Math.hypot(dx, dy, dz);
-        const need = lerp(BALL_R * 0.96, BALL_R + 0.03, p);
+        const need = lerp(BALL_R * 0.96, BALL_R + 0.01, p);
         if (dl < need && dl > 1e-6) {
           const k = need / dl - 1;
           bf[0] += dx * k;
@@ -1690,14 +1696,24 @@ export class FigureAnimator {
     this.setBall(lerp(HOLD_X, v3b[0], e), lerp(HOLD_Y, v3b[1], e) + 0.08 * arc, lerp(HOLD_Z, v3b[2], e) + 0.12 * arc);
     const bl = this.ballF;
     // the lead hand slides from the side of the ball over the top of it, pressing it to the hip
-    this.gripHand(s, bl[0] + s * lerp(0.15, 0.08, e), bl[1] + lerp(-0.02, 0.14, e), bl[2] + lerp(-0.06, 0.03, e));
+    // (when a tap cuts in with the ball still up in the air, the hand meets it on its way down instead of snapping up to it)
+    const lx = bl[0] + s * lerp(0.15, 0.08, e);
+    const ly = bl[1] + lerp(-0.02, 0.14, e);
+    const lz = bl[2] + lerp(-0.06, 0.03, e);
+    const lc = s > 0 ? HL : HR;
+    if (Math.hypot(this.cur[lc] - lx, this.cur[lc + 1] - ly, this.cur[lc + 2] - lz) > 0.2) this.hand(s, lx, ly, lz);
+    else this.gripHand(s, lx, ly, lz);
     this.pole(s, s, lerp(-0.55, 0.1, e), lerp(-0.35, -0.6, e));
     this.wrist(s, lerp(0.25, 0.7, e));
     // it lets go early and takes the ball back late, so it never reaches across the belly to the far hip
-    const away = smooth((k - 0.2) / 0.4);
+    // (a hand that is already off somewhere else, with the ball on the hip when a tap cuts in, stays off: a gripping hand is
+    // not blended, so taking hold from over there would jump it across the belly)
     const gx = bl[0] + o * 0.15;
     const gy = bl[1] - 0.02;
     const gz = bl[2] - 0.06;
+    const oc = o > 0 ? HL : HR;
+    const off = Math.hypot(this.cur[oc] - gx, this.cur[oc + 1] - gy, this.cur[oc + 2] - gz) > 0.2 ? 1 : 0;
+    const away = Math.max(off, smooth((k - 0.2) / 0.4));
     if (away < 0.002) {
       this.gripHand(o, gx, gy, gz);
       this.pole(o, o, -0.55, -0.35);
@@ -1768,9 +1784,9 @@ export class FigureAnimator {
     const hx = s * (0.6 + 0.016 * Math.sin(t * 6.3) * wob);
     const hy = 1.0 + 0.012 * Math.sin(t * 4.7 + 1) * wob;
     const hz = 0.12 + 0.014 * Math.cos(t * 5.6) * wob;
-    // the low hand in front of the chest, palm up under the ball
+    // the low hand in front of the chest, palm up under the ball (low enough that the ball clears the chin of a head looking down at it)
     const px = s * 0.15;
-    const py = 0.55;
+    const py = 0.52;
     const pz = 0.4;
 
     if (t < SPIN_LOAD) {
