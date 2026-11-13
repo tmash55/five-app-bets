@@ -37,12 +37,15 @@ export function useWidth(what?: string): [number, (e: LayoutChangeEvent) => void
 
 type GoldSize = 'big' | 'regular' | 'small';
 
-/** how tall the buttons at the foot of a page are, so a row of them lines up: the regular yellow button's height */
+/** how tall the buttons at the foot of a page are, outside edge to outside edge, so a row of them lines up */
 export const DECK_H = px(60);
+/** the pale ring drawn just outside a yellow button, as `ring` takes it and in screen points */
+const RING = 3;
+const GOLD_RING = px(RING);
 
 const GOLD: Record<GoldSize, { height: number; round: number; lip: number; padX: number; gap: number; label: number; icon: number; ring: boolean; glow: readonly [number, number, number] }> = {
   big: { height: px(88), round: arcade.rBig, lip: px(6), padX: px(18), gap: px(14), label: neonText.huge, icon: px(46), ring: true, glow: [22, 0.75, 4] },
-  regular: { height: DECK_H, round: arcade.rTile, lip: px(6), padX: px(16), gap: px(12), label: px(25), icon: px(24), ring: true, glow: [22, 0.7, 4] },
+  regular: { height: DECK_H - GOLD_RING * 2, round: arcade.rTile, lip: px(6), padX: px(16), gap: px(12), label: px(25), icon: px(24), ring: true, glow: [22, 0.7, 4] },
   small: { height: sizes.tap, round: arcade.rButton, lip: px(4), padX: px(12), gap: px(8), label: neonText.large, icon: px(18), ring: false, glow: [12, 0.65, 0] },
 };
 
@@ -86,7 +89,7 @@ export function GoldButton({ label, sub, icon, iconAfter, size = 'regular', onPr
       onLayout={onLayout}
       style={({ pressed }) => [
         { borderRadius: g.round, transform: [{ translateY: pressed ? px(2) : 0 }] },
-        !disabled && { boxShadow: [...(g.ring ? [ring(goldButton.ring, 3)] : []), halo(goldButton.glow, g.glow[0] * (pressed ? 0.6 : 1), g.glow[1] * (pressed ? 0.7 : 1), g.glow[2])] },
+        !disabled && { boxShadow: [...(g.ring ? [ring(goldButton.ring, RING)] : []), halo(goldButton.glow, g.glow[0] * (pressed ? 0.6 : 1), g.glow[1] * (pressed ? 0.7 : 1), g.glow[2])] },
         disabled && styles.off,
         style,
       ]}>

@@ -3,6 +3,7 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
+import Svg, { Line } from 'react-native-svg';
 
 import { playSfx, setMusic } from '@/audio/sound';
 import { mustPlayer, playerOverall, teamById } from '@/data/roster';
@@ -12,12 +13,13 @@ import { tierProgress, type Tier } from '@/meta/ladder';
 import type { MatchSetup, MatchSummary, PlayerLine } from '@/meta/match';
 import type { RewardLine } from '@/meta/rewards';
 import { packById } from '@/meta/packs';
+import { dayKey } from '@/meta/rng';
 import { nextTourGame, tourById, type Tour } from '@/meta/tour';
 import type { MatchOutcome } from '@/state/logic';
 import { startNext } from '@/state/play';
 import { useSave } from '@/state/save';
 import { useSession } from '@/state/session';
-import { arcade, neonLeading, night, tube as tubes } from '@/theme/arcade';
+import { arcade, goldButton, halo, neonLeading, night, tube as tubes } from '@/theme/arcade';
 import { px, size as sizes, space } from '@/theme/tokens';
 import { useCountUp } from '@/ui/Bits';
 import { useAfter } from '@/ui/hooks';
@@ -157,6 +159,7 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
   const router = useRouter();
   const after = useAfter();
   const packs = useSave((s) => s.packs);
+  const freePackDay = useSave((s) => s.freePackDay);
   const bank = useSave((s) => s.coins);
   const tourProgress = useSave((s) => s.tour);
   const owned = useSave((s) => s.owned);
@@ -223,7 +226,9 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
   const mvpDef = mustPlayer(mvp.id);
   const away = teamById(setup.away.kitTeam);
   const packIds = Object.keys(packs).filter((id) => packs[id] > 0);
-  const packCount = packIds.reduce((a, id) => a + packs[id], 0);
+  // today's free pack counts as one waiting to open: it is collected in the shop, where it sits first
+  const freePack = freePackDay !== dayKey();
+  const packCount = packIds.reduce((a, id) => a + packs[id], 0) + (freePack ? 1 : 0);
   const tour = setup.mode === 'tour' && setup.tour ? tourById(setup.tour.tourId, homeTeam) : null;
   const nextStop = tour !== null && summary.won ? nextTourGame(tourProgress, tour) : null;
   const go = goNext(setup, summary.won, tour, nextStop);
@@ -333,7 +338,7 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
                     <Print face="medium" size="small" color="textSoft" lines={1} style={styles.shrink}>
                       {l.label}
                     </Print>
-                    <View style={styles.leader} />
+                    <Leader />
                     <CoinAmount coins={l.coins} size="small" plus plain />
                   </View>
                 ))}
@@ -382,23 +387,44 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
               <GhostButton
                 tall
                 label={packCount > 1 ? 'OPEN PACKS' : 'OPEN PACK'}
-                art={<FoilPack pack={packById(packIds[0])} width={px(24)} />}
+                art={<FoilPack pack={packById(packIds[0] ?? 'playground')} width={px(24)} />}
                 badge={packCount}
                 tube="pink"
                 accessibilityLabel={`Open ${packCount === 1 ? 'your pack' : `your ${packCount} packs`}`}
-                onPress={() => router.push({ pathname: '/open', params: { pack: packIds[0] } })}
+                onPress={() => (packIds.length > 0 ? router.push({ pathname: '/open', params: { pack: packIds[0] } }) : router.push('/packs'))}
                 style={styles.grow}
               />
             )}
             {/* nothing to open: the squad instead, to change players before the next game (back comes here again) */}
             {packCount === 0 && <GhostButton tall label="MY SQUAD" icon="squad" tube="violet" onPress={() => router.push('/squad')} style={styles.grow} />}
           </View>
-          <Breathe on={settled} depth={0} swell={0.03} ms={900} style={styles.deckRight}>
+          <View style={styles.deckRight}>
+            {/* light that swells and fades behind it, "this one next", without moving its edges out of line */}
+            <Breathe on={settled} depth={0.85} ms={900} pointerEvents="none" style={styles.nextGlow}>
+              <View style={styles.nextGlowFill} />
+            </Breathe>
             <GoldButton label={go.label} sub={go.sub} icon={go.icon} onPress={again} accessibilityLabel={`${go.label}. ${go.sub}`} />
-          </Breathe>
+          </View>
         </Arrive>
       </ArcadeScreen>
       {momentsOn && moments.length > 0 && <MomentOverlay key={moments.length} moment={moments[0]} onClose={() => setMoments((m) => m.slice(1))} />}
+    </View>
+  );
+}
+
+const LEADER_H = Math.max(2, Math.round(arcade.hairline));
+const LEADER_DOTS = `${arcade.hairline * 0.1} ${arcade.hairline * 2.6}`;
+
+/**
+ * The dotted line from a reward to its coins, as on a receipt. Drawn as round dots on a line, because a dotted
+ * border on one side only comes out solid on some rows on an iPhone.
+ */
+function Leader() {
+  return (
+    <View style={styles.leader}>
+      <Svg width="100%" height={LEADER_H}>
+        <Line x1={arcade.hairline} y1={LEADER_H / 2} x2="100%" y2={LEADER_H / 2} stroke={night.lineLit} strokeWidth={arcade.hairline} strokeLinecap="round" strokeDasharray={LEADER_DOTS} />
+      </Svg>
     </View>
   );
 }
@@ -513,14 +539,10 @@ const styles = StyleSheet.create({
     gap: space.sm,
     paddingVertical: px(2),
   },
-  // the dotted line from a reward to its coins, as on a receipt
   leader: {
     flex: 1,
     minWidth: space.sm,
-    height: 0,
-    borderBottomWidth: arcade.hairline,
-    borderStyle: 'dotted',
-    borderColor: night.lineLit,
+    height: LEADER_H,
   },
   hidden: {
     opacity: 0,
@@ -563,6 +585,14 @@ const styles = StyleSheet.create({
   },
   deckRight: {
     flex: 1,
+  },
+  nextGlow: {
+    ...StyleSheet.absoluteFill,
+  },
+  nextGlowFill: {
+    flex: 1,
+    borderRadius: arcade.rTile,
+    boxShadow: [halo(goldButton.glow, 30, 0.9, 7)],
   },
   grow: {
     flex: 1,
