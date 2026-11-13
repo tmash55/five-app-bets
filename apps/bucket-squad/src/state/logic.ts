@@ -4,8 +4,8 @@
  * which keeps all the rules easy to test.
  */
 
-import { TEAMS, byValue, mustPlayer, playerById, playerOverall, teamPlayers } from '@/data/roster';
-import type { TeamDef } from '@/data/types';
+import { TEAMS, byValue, mustPlayer, playerById, playerOverall, teamById, teamPlayers } from '@/data/roster';
+import type { PlayerDef, TeamDef } from '@/data/types';
 import { addCopy, levelOf, type Gain, type Owned } from '@/meta/collection';
 import { TIERS, ladderResult, tierIndex, type Tier } from '@/meta/ladder';
 import type { MatchSummary } from '@/meta/match';
@@ -106,18 +106,35 @@ export function newSave(): SaveData {
   };
 }
 
-/** Teams you can call home: the ones with enough everyday players to start a squad. */
-export function homeTeamChoices(): TeamDef[] {
-  return TEAMS.filter((t) => teamPlayers(t.id).filter((p) => p.rarity === 'common').length >= SQUAD_SIZE);
+/**
+ * The three players a team hands a new career, best first, or null when it
+ * cannot be a home team: the starters the team names if it names three of its
+ * own, otherwise its three lowest-rated everyday (Common) players.
+ */
+export function startersOf(team: TeamDef, roster: readonly PlayerDef[]): string[] | null {
+  const byRating = (a: PlayerDef, b: PlayerDef) => playerOverall(a) - playerOverall(b);
+  const named = (team.starters ?? []).map((id) => roster.find((p) => p.id === id)).filter((p, i, all): p is PlayerDef => p !== undefined && all.indexOf(p) === i);
+  const commons = roster.filter((p) => p.rarity === 'common').sort(byRating);
+  const picks = named.length === SQUAD_SIZE ? named.sort(byRating) : commons.slice(0, SQUAD_SIZE);
+  // best of the three leads the squad
+  return picks.length === SQUAD_SIZE ? picks.reverse().map((p) => p.id) : null;
 }
 
-/** The three kids you start with: your home team's everyday players. */
+/** Teams you can call home: the ones with three players to start a squad with. */
+export function homeTeamChoices(): TeamDef[] {
+  return TEAMS.filter((t) => startersOf(t, teamPlayers(t.id)) !== null);
+}
+
+/** The three kids you start with: your home team's starters, or its three weakest players if it has none. */
 export function starterIds(teamId: string): string[] {
-  const roster = teamPlayers(teamId).sort((a, b) => playerOverall(a) - playerOverall(b));
-  const commons = roster.filter((p) => p.rarity === 'common');
-  const picks = (commons.length >= SQUAD_SIZE ? commons : roster).slice(0, SQUAD_SIZE);
-  // best of the three leads the squad
-  return picks.reverse().map((p) => p.id);
+  const roster = teamPlayers(teamId);
+  const starters = startersOf(teamById(teamId), roster);
+  if (starters) return starters;
+  return roster
+    .sort((a, b) => playerOverall(a) - playerOverall(b))
+    .slice(0, SQUAD_SIZE)
+    .reverse()
+    .map((p) => p.id);
 }
 
 export function startCareer(data: SaveData, teamId: string): SaveData {

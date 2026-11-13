@@ -36,6 +36,10 @@ export interface TeamDef {
   league: string;
   /** one line about the team */
   motto?: string;
+  /** the three players a new career with this home team starts with; without it, the team's three lowest-rated Commons */
+  starters?: string[];
+  /** who you win at this team's stop on the Tour; without it, the team's best player who is not a Legend */
+  star?: string;
 }
 
 export interface PlayerDef {

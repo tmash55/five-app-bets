@@ -89,6 +89,8 @@ export interface QuickOptions {
   difficulty: 0 | 1 | 2;
   /** team id, or null for a surprise */
   opponent: string | null;
+  /** a surprise opponent comes from this league (any league when left out) */
+  league?: string | null;
   /** court, or null for the opponent's home court */
   court: CourtId | null;
 }
@@ -99,7 +101,9 @@ export function quickSetup(prefs: Prefs, o: QuickOptions, rng: Rng = Math.random
   const mine = new Set(home.players.map((p) => p.id));
   const sideOf = (t: TeamDef) => teamSide(t, o.perTeam, o.difficulty, lv.level);
   // a surprise opponent is a team that can field its usual players against you
-  const all = playableTeams(o.perTeam);
+  const everyone = playableTeams(o.perTeam);
+  const inLeague = o.league ? everyone.filter((t) => t.league === o.league) : everyone;
+  const all = inLeague.length > 0 ? inLeague : everyone;
   const clean = all.filter((t) => !sideOf(t).players.some((p) => mine.has(p.id)));
   const team = o.opponent ? teamById(o.opponent) : pick(rng, clean.length > 0 ? clean : all);
   return {

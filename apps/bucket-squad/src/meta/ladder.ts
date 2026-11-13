@@ -63,16 +63,28 @@ export function ladderResult(points: number, won: boolean, margin: number): numb
   return Math.max(TIERS[t].floor, points - loss);
 }
 
-/** A computer squad for the next ladder game: any team, with weaker picks low on the ladder. */
+/** how many different squads you can meet at one tier, when there are that many */
+const MIN_POOL = 5;
+
+/**
+ * A computer squad for the next ladder game. Two things rise with the tiers:
+ * each team sends better players from its depth chart, and the weaker squads
+ * drop out of the draw, so with many teams you meet the easier ones first.
+ */
 export function ladderOpponent(points: number, perTeam: 2 | 3, rng: Rng, avoidTeam?: string): Side {
   const t = tierIndex(points);
-  const candidates = TEAMS.filter((team) => team.id !== avoidTeam && teamPlayers(team.id).length >= perTeam);
-  const team = pick(rng, candidates);
-  const sorted = teamPlayers(team.id).sort((a, b) => playerOverall(a) - playerOverall(b));
-  // slide a window up the team's depth chart as the tiers go by
-  const span = sorted.length - perTeam;
-  const start = Math.round((span * Math.min(t, TIERS.length - 2)) / (TIERS.length - 2));
-  const players = sorted.slice(start, start + perTeam).reverse();
+  const climb = Math.min(t, TIERS.length - 2) / (TIERS.length - 2);
+  const squads = TEAMS.filter((team) => team.id !== avoidTeam && teamPlayers(team.id).length >= perTeam)
+    .map((team) => {
+      const sorted = teamPlayers(team.id).sort((a, b) => playerOverall(a) - playerOverall(b));
+      const start = Math.round((sorted.length - perTeam) * climb);
+      const players = sorted.slice(start, start + perTeam).reverse();
+      return { team, players, strength: players.reduce((sum, p) => sum + playerOverall(p), 0) };
+    })
+    .sort((a, b) => a.strength - b.strength);
+  const pool = Math.min(squads.length, Math.max(MIN_POOL, Math.ceil(squads.length / 3)));
+  const from = Math.round((squads.length - pool) * climb);
+  const { team, players } = pick(rng, squads.slice(from, from + pool));
   return {
     name: team.name,
     short: team.short,

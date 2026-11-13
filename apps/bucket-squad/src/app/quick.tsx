@@ -4,13 +4,14 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
+import { LEAGUES, leagueOf } from '@/data/roster';
 import { COURTS, COURT_IDS, type CourtId } from '@/game/render/court';
 import { DIFFICULTY_NAMES, playableTeams } from '@/meta/setups';
 import { startQuick } from '@/state/play';
 import { useSave } from '@/state/save';
 import { useSession } from '@/state/session';
 import { size as sizes, space } from '@/theme/tokens';
-import { Segmented, type Choice } from '@/ui/Inputs';
+import { HeaderTabs, Segmented, type Choice } from '@/ui/Inputs';
 import { Screen } from '@/ui/Screen';
 import { Sticker, StickerButton } from '@/ui/Sticker';
 import { TeamTile } from '@/ui/TeamTile';
@@ -21,25 +22,28 @@ const FORMATS: readonly Choice<2 | 3>[] = [
   { value: 3, label: '3 on 3' },
 ];
 const LEVELS: readonly Choice<0 | 1 | 2>[] = DIFFICULTY_NAMES.map((label, i) => ({ value: i as 0 | 1 | 2, label }));
+const LEAGUE_TABS = LEAGUES.map((l) => ({ value: l.id, label: l.name }));
 
 export default function Quick() {
   const router = useRouter();
   const format = useSave((s) => s.settings.format);
   const difficulty = useSave((s) => s.settings.difficulty);
   const setSetting = useSave((s) => s.setSetting);
+  const homeTeam = useSave((s) => s.homeTeam);
   const last = useSession((s) => s.quick);
   const [opponent, setOpponent] = useState<string | null>(last?.opponent ?? null);
   const [court, setCourt] = useState<CourtId | null>(last?.court ?? null);
-  const teams = playableTeams(format);
+  const [league, setLeague] = useState(() => (opponent !== null ? leagueOf(opponent) : (last?.league ?? leagueOf(homeTeam))));
+  const teams = playableTeams(format).filter((t) => t.league === league);
   const picked = opponent !== null && teams.some((t) => t.id === opponent) ? opponent : null;
 
   const play = () => {
-    startQuick({ perTeam: format, difficulty, opponent: picked, court });
+    startQuick({ perTeam: format, difficulty, opponent: picked, court, league });
     router.push('/versus');
   };
 
   return (
-    <Screen title="QUICK GAME" tone="coral">
+    <Screen title="QUICK GAME" tone="coral" right={LEAGUES.length > 1 ? <HeaderTabs options={LEAGUE_TABS} value={league} onChange={setLeague} /> : undefined}>
       <View style={styles.row}>
         <View style={styles.left}>
           <Sticker fill="paper" round="lg" raise="mid" face={styles.panel}>
@@ -84,7 +88,7 @@ export default function Quick() {
           <Txt font="display" size="body" color="white" shadow center>
             WHO DO YOU WANT TO PLAY?
           </Txt>
-          <ScrollView style={styles.teams} contentContainerStyle={styles.teamsBody} showsVerticalScrollIndicator={false}>
+          <ScrollView key={league} style={styles.teams} contentContainerStyle={styles.teamsBody} showsVerticalScrollIndicator={false}>
             <TeamTile label="Surprise me" selected={picked === null} onPress={() => setOpponent(null)} />
             {teams.map((t) => (
               <TeamTile key={t.id} team={t} selected={t.id === picked} onPress={() => setOpponent(t.id)} />

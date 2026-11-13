@@ -11,6 +11,7 @@ import type { PlayerDef } from '@/data/types';
 import { tapFeedback } from '@/fx/feedback';
 import { color, duration, opacity, px, size as sizes, space, stroke, text } from '@/theme/tokens';
 import { RARITY_COLOR, Tag, TeamBadge } from './Bits';
+import { fitName } from './fitName';
 import { Icon } from './Icon';
 import { Sunburst } from './Screen';
 import { Sticker } from './Sticker';
@@ -41,25 +42,6 @@ const SCALE: Record<Scale, { ovr: 'body' | 'large' | 'title' | 'big'; name: 'tin
   large: { ovr: 'big', name: 'large', badge: sizes.avatarSmall, pip: sizes.pipLarge, pad: space.sm },
 };
 
-/** average glyph width of the display font, as a share of the font size */
-const GLYPH = 0.53;
-const MIN_FIT = 0.74;
-
-/**
- * Fit a name on one line: shrink a little, and if that is not enough use
- * "Wren K." for "Wren Kowalski". Done by hand so every platform agrees.
- */
-function fitName(name: string, px: number, room: number): { text: string; px: number } {
-  const need = (t: string) => t.length * px * GLYPH;
-  let text = name;
-  if (need(text) * MIN_FIT > room) {
-    const parts = name.split(' ');
-    if (parts.length > 1) text = `${parts[0]} ${parts[parts.length - 1][0]}.`;
-  }
-  const k = Math.min(1, room / need(text));
-  return { text, px: Math.max(px * MIN_FIT, Math.floor(px * k)) };
-}
-
 /** card widths where the lettering steps up a size */
 const STEPS = [px(92), px(140), px(200)] as const;
 
@@ -89,7 +71,7 @@ export const PlayerCard = memo(function PlayerCard({ player, level = 1, width = 
   const shown = Math.max(1, level);
   const plateH = Math.round(height * (scale === 'tiny' ? 0.25 : 0.23));
   const artH = height - plateH;
-  const name = fitName(player.name, text[sc.name], width - (sc.pad + space.hair) * 2 - stroke.regular * 2);
+  const name = fitName(player.name, text[sc.name], width - (sc.pad + space.hair) * 2 - stroke.regular * 2, player.short);
 
   const body = (
     <Sticker fill={locked ? 'paperDim' : rc.fill} round={scale === 'large' ? 'lg' : 'md'} raise={scale === 'tiny' || scale === 'small' ? 'low' : 'mid'} edge={selected ? 'coralDeep' : 'ink'} style={onPress ? undefined : style} face={{ width, height }}>

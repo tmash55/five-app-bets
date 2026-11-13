@@ -120,7 +120,9 @@ function buildTours(homeTeam: string | null): readonly Tour[] {
       return buildTour(pack.id, 'Neighborhood Tour', teams, NEIGHBORHOOD_STARS, homeTeam);
     }
     const teams = [...pack.teams].sort((a, b) => strength(a) - strength(b));
-    return buildTour(pack.id, `${pack.name} Tour`, teams, {}, homeTeam);
+    const stars: Record<string, string> = {};
+    for (const t of teams) if (t.star) stars[t.id] = t.star;
+    return buildTour(pack.id, `${pack.name} Tour`, teams, stars, homeTeam);
   });
 }
 
@@ -184,6 +186,15 @@ export function tourStars(progress: TourProgress, tour: Tour): { have: number; a
     all += s.games.length * STARS_PER_GAME;
   });
   return { have, all };
+}
+
+/**
+ * The tour to show first: one that still has a game to play, your home
+ * league's own tour before any other.
+ */
+export function preferredTour(tours: readonly Tour[], progress: TourProgress, league: string): Tour {
+  const open = tours.filter((t) => nextTourGame(progress, t) !== null);
+  return open.find((t) => t.id === league) ?? open[0] ?? tours.find((t) => t.id === league) ?? tours[0];
 }
 
 /** The next game worth playing: the first one without a star. */

@@ -4,7 +4,7 @@
  * summary the rest of the game can use.
  */
 
-import { awayKit, boosted, kitsClash, levelBonus, lookInKit, mustPlayer, teamById } from '@/data/roster';
+import { boosted, kitAgainst, levelBonus, lookInKit, mustPlayer, teamById } from '@/data/roster';
 import type { PlayerDef, TeamDef } from '@/data/types';
 import type { KitColors } from '@/game/kit/look';
 import type { CourtId } from '@/game/render/court';
@@ -80,8 +80,7 @@ export interface BuiltMatch {
 export function buildMatch(setup: MatchSetup): BuiltMatch {
   const homeTeam = teamById(setup.home.kitTeam);
   const awayTeam = teamById(setup.away.kitTeam);
-  const clash = homeTeam.id === awayTeam.id || kitsClash(homeTeam, awayTeam);
-  const kits: [KitColors, KitColors] = [homeTeam.kit, clash ? awayKit(awayTeam.kit) : awayTeam.kit];
+  const kits: [KitColors, KitColors] = [homeTeam.kit, kitAgainst(homeTeam, awayTeam)];
   const sides = [setup.home, setup.away] as const;
   const n = setup.perTeam;
   const lineup: BuiltMatch['lineup'] = [];

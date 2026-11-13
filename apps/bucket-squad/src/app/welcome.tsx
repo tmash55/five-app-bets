@@ -4,12 +4,13 @@ import { Redirect, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { mustPlayer, teamById } from '@/data/roster';
+import { LEAGUES, mustPlayer, teamById } from '@/data/roster';
 import { playSfx } from '@/audio/sound';
 import { homeTeamChoices, starterIds } from '@/state/logic';
 import { useSave } from '@/state/save';
 import { size as sizes, space } from '@/theme/tokens';
 import { TeamBadge } from '@/ui/Bits';
+import { HeaderTabs } from '@/ui/Inputs';
 import { PlayerCard } from '@/ui/PlayerCard';
 import { Screen } from '@/ui/Screen';
 import { Sticker, StickerButton } from '@/ui/Sticker';
@@ -21,9 +22,12 @@ export default function Welcome() {
   const onboarded = useSave((s) => s.onboarded);
   const startCareer = useSave((s) => s.startCareer);
   const [teams] = useState(homeTeamChoices);
+  // a build with an extra league lets you pick a home team from either
+  const leagues = LEAGUES.filter((l) => teams.some((t) => t.league === l.id)).map((l) => ({ value: l.id, label: l.name }));
   const [teamId, setTeamId] = useState(teams[0].id);
   const [leaving, setLeaving] = useState(false);
   const team = teamById(teamId);
+  const shown = teams.filter((t) => t.league === team.league);
   const starters = useMemo(() => starterIds(teamId).map(mustPlayer), [teamId]);
 
   if (onboarded && !leaving) return <Redirect href="/" />;
@@ -40,14 +44,15 @@ export default function Welcome() {
     <Screen
       back={false}
       coins={false}
+      right={leagues.length > 1 ? <HeaderTabs options={leagues} value={team.league} onChange={(league) => setTeamId((teams.find((t) => t.league === league) ?? teams[0]).id)} /> : undefined}
       left={
         <StickerText size="title" color="sun">
           PICK YOUR HOME TEAM
         </StickerText>
       }>
       <View style={styles.row}>
-        <ScrollView style={styles.teams} contentContainerStyle={styles.teamsBody} showsVerticalScrollIndicator={false}>
-          {teams.map((t) => (
+        <ScrollView key={team.league} style={styles.teams} contentContainerStyle={styles.teamsBody} showsVerticalScrollIndicator={false}>
+          {shown.map((t) => (
             <TeamTile key={t.id} team={t} selected={t.id === teamId} onPress={() => setTeamId(t.id)} />
           ))}
         </ScrollView>

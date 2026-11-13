@@ -58,6 +58,11 @@ export function leagueTeams(league: string): TeamDef[] {
 
 export const LEAGUES: readonly { id: string; name: string }[] = ROSTER_PACKS.map((p) => ({ id: p.id, name: p.name }));
 
+/** The league a team plays in: the first league for no team, or one this build does not know. */
+export function leagueOf(teamId: string | null): string {
+  return (teamId !== null ? TEAM_BY_ID.get(teamId)?.league : undefined) ?? LEAGUES[0].id;
+}
+
 export function cardArt(id: string): number | undefined {
   return CARDS[id];
 }
@@ -94,7 +99,12 @@ export function byValue(a: PlayerDef, b: PlayerDef): number {
 // Uniforms
 // ---------------------------------------------------------------------------
 
-function colorGap(a: string, b: string): number {
+const WHITE = '#FFFFFF';
+/** jerseys closer than this are too alike to tell two teams apart */
+const CLASH = 0.42;
+
+/** How different two colours are: 0 for the same colour, about 1.7 for black against white. */
+export function colorGap(a: string, b: string): number {
   const x = hexToRgb(a);
   const y = hexToRgb(b);
   return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
@@ -105,7 +115,7 @@ export function awayKit(kit: KitColors): KitColors {
   const jersey = kit.trim;
   const light = luminance(jersey) > 0.55;
   const dark = [kit.jersey, kit.shorts, kit.number].reduce((best, c) => (luminance(c) < luminance(best) ? c : best));
-  const number = colorGap(kit.jersey, jersey) > 0.5 ? kit.jersey : light ? dark : '#FFFFFF';
+  const number = colorGap(kit.jersey, jersey) > 0.5 ? kit.jersey : light ? dark : WHITE;
   return {
     ...kit,
     jersey,
@@ -119,14 +129,32 @@ export function awayKit(kit: KitColors): KitColors {
 }
 
 export function kitsClash(home: TeamDef, away: TeamDef): boolean {
-  return colorGap(home.kit.jersey, away.kit.jersey) < 0.42;
+  return colorGap(home.kit.jersey, away.kit.jersey) < CLASH;
+}
+
+/** A plain white strip with the team's darkest colour for trim and numbers. */
+function whiteKit(kit: KitColors): KitColors {
+  const dark = [kit.jersey, kit.trim, kit.shorts].reduce((best, c) => (luminance(c) < luminance(best) ? c : best));
+  return { ...kit, jersey: WHITE, trim: dark, number: dark, shorts: WHITE, shortsTrim: dark, shoeAccent: dark, band: dark };
+}
+
+/**
+ * What the visitors wear: their own uniform when the two teams are easy to
+ * tell apart, otherwise their change strip, or a plain white one when that
+ * looks like the home team as well.
+ */
+export function kitAgainst(home: TeamDef, away: TeamDef): KitColors {
+  if (home.id !== away.id && !kitsClash(home, away)) return away.kit;
+  const gap = (kit: KitColors) => colorGap(home.kit.jersey, kit.jersey);
+  const options = [awayKit(away.kit), whiteKit(away.kit)];
+  return options.find((kit) => gap(kit) >= CLASH) ?? options.reduce((best, kit) => (gap(kit) > gap(best) ? kit : best));
 }
 
 /** The colour that stands for a team on the court (rings, arrows) and in the HUD. */
 export function matchColors(home: TeamDef, away: TeamDef): [string, string] {
   const a = home.color;
   let b = away.color;
-  if (colorGap(a, b) < 0.4) b = colorGap(a, away.color2) > 0.4 ? away.color2 : '#FFFFFF';
+  if (colorGap(a, b) < 0.4) b = colorGap(a, away.color2) > 0.4 ? away.color2 : WHITE;
   return [a, b];
 }
 

@@ -1,4 +1,4 @@
-import { TEAMS, mustPlayer, playerOverall, teamById, teamPlayers } from '@/data/roster';
+import { TEAMS, colorGap, kitAgainst, kitsClash, mustPlayer, playerOverall, teamById, teamPlayers } from '@/data/roster';
 
 import { TIERS } from '../ladder';
 import { buildMatch, chemistry, type Side, type SidePlayer } from '../match';
@@ -191,6 +191,25 @@ describe('a ladder game', () => {
     }
   });
 
+  it('sends tougher squads as you climb', () => {
+    const strength = (points: number) => {
+      let total = 0;
+      for (let seed = 1; seed <= 200; seed++) total += sideOverall(ladderSetup(prefs(), points, 3, seededRng(seed)).away, 3);
+      return total / 200;
+    };
+    const perTier = TIERS.map((tier) => strength(tier.floor));
+    for (let i = 1; i < perTier.length; i++) expect(perTier[i]).toBeGreaterThanOrEqual(perTier[i - 1]);
+    expect(perTier[perTier.length - 1] - perTier[0]).toBeGreaterThan(12);
+  });
+
+  it('still meets a handful of different teams at every tier', () => {
+    for (const tier of TIERS) {
+      const met = new Set<string>();
+      for (let seed = 1; seed <= 200; seed++) met.add(ladderSetup(prefs(), tier.floor, 2, seededRng(seed)).away.kitTeam);
+      expect(met.size).toBeGreaterThanOrEqual(5);
+    }
+  });
+
   it('keeps a mixed squad away from its own players', () => {
     const squad: SidePlayer[] = [
       { id: 'kai-nakoa', level: 2 },
@@ -267,5 +286,26 @@ describe('teammates', () => {
     expect(chemistry(['wren-kowalski', 'jax-monroe', 'kai-nakoa'])).toBe(0);
     expect(chemistry(['wren-kowalski', 'pippa-quinn'])).toBe(1);
     expect(chemistry([])).toBe(0);
+  });
+});
+
+describe('uniforms', () => {
+  it('keeps the two teams easy to tell apart in every pairing', () => {
+    for (const home of TEAMS) {
+      for (const away of TEAMS) {
+        const kit = kitAgainst(home, away);
+        expect(colorGap(home.kit.jersey, kit.jersey)).toBeGreaterThanOrEqual(0.42);
+        // visitors only change when they have to
+        if (home.id !== away.id && !kitsClash(home, away)) expect(kit).toBe(away.kit);
+      }
+    }
+  });
+
+  it('puts the visitors in white when their change strip looks like the home team too', () => {
+    const home = teamById('comets');
+    const twin = { ...home, id: 'twins', kit: { ...home.kit, trim: home.kit.jersey } };
+    const kit = kitAgainst(home, twin);
+    expect(kit.jersey).toBe('#FFFFFF');
+    expect(kit.number).not.toBe('#FFFFFF');
   });
 });

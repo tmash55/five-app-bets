@@ -4,17 +4,17 @@ import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { mustPlayer } from '@/data/roster';
+import { LEAGUES, leagueOf, mustPlayer } from '@/data/roster';
 import { COURTS } from '@/game/render/court';
 import type { Owned } from '@/meta/collection';
 import { packById } from '@/meta/packs';
-import { STARS_PER_GAME, gameKey, gameOpen, nextTourGame, stageOpen, stageStars, tourStars, toursFor, type Tour, type TourGame, type TourProgress } from '@/meta/tour';
+import { STARS_PER_GAME, gameKey, gameOpen, nextTourGame, preferredTour, stageOpen, stageStars, tourStars, toursFor, type Tour, type TourGame, type TourProgress } from '@/meta/tour';
 import { startTour } from '@/state/play';
 import { useSave } from '@/state/save';
 import { color, opacity, size as sizes, space, stroke } from '@/theme/tokens';
 import { Avatar, RarityTag, Stars, Tag, TeamBadge, readableOn } from '@/ui/Bits';
 import { Icon } from '@/ui/Icon';
-import { Segmented } from '@/ui/Inputs';
+import { HeaderTabs } from '@/ui/Inputs';
 import { PackArt } from '@/ui/PackArt';
 import { CoinAmount } from '@/ui/Rewards';
 import { Screen } from '@/ui/Screen';
@@ -114,13 +114,19 @@ function StageCard({ tour, index, progress, owned, packDone, onPlay }: { tour: T
   );
 }
 
+/** a tour is named after its league, and the league's own name is the short one */
+function leagueName(id: string): string {
+  return LEAGUES.find((l) => l.id === id)?.name ?? id;
+}
+
 export default function TourScreen() {
   const router = useRouter();
   const progress = useSave((s) => s.tour);
   const owned = useSave((s) => s.owned);
   const starPacks = useSave((s) => s.starPacks);
-  const tours = toursFor(useSave((s) => s.homeTeam));
-  const [tourId, setTourId] = useState(() => (tours.find((t) => nextTourGame(progress, t) !== null) ?? tours[0]).id);
+  const homeTeam = useSave((s) => s.homeTeam);
+  const tours = toursFor(homeTeam);
+  const [tourId, setTourId] = useState(() => preferredTour(tours, progress, leagueOf(homeTeam)).id);
   const tour = tours.find((t) => t.id === tourId) ?? tours[0];
   const stars = tourStars(progress, tour);
   const scroller = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -139,8 +145,15 @@ export default function TourScreen() {
   };
 
   return (
-    <Screen title="TOUR" tone="mint" right={<Tag label={`${stars.have} / ${stars.all}`} fill="paper" icon="star" style={styles.centerSelf} />}>
-      {tours.length > 1 && <Segmented options={tours.map((t) => ({ value: t.id, label: t.name }))} value={tour.id} onChange={setTourId} style={styles.tours} />}
+    <Screen
+      title="TOUR"
+      tone="mint"
+      right={
+        <>
+          {tours.length > 1 && <HeaderTabs options={tours.map((t) => ({ value: t.id, label: leagueName(t.id) }))} value={tour.id} onChange={setTourId} />}
+          <Tag label={`${stars.have} / ${stars.all}`} fill="paper" icon="star" style={styles.centerSelf} />
+        </>
+      }>
       <ScrollView ref={scroller} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {tour.stages.map((_, i) => (
           <StageCard key={`${tour.id}${i}`} tour={tour} index={i} progress={progress} owned={owned} packDone={starPacks[`${tour.id}/${i}`] === true} onPlay={(g) => play(i, g)} />
@@ -155,10 +168,6 @@ const styles = StyleSheet.create({
     gap: space.md,
     paddingRight: space.lg,
     alignItems: 'center',
-  },
-  tours: {
-    marginBottom: space.xs,
-    maxWidth: sizes.panelMax,
   },
   card: {
     width: CARD_W,

@@ -88,6 +88,14 @@ export function Segmented<T extends string | number>({
   );
 }
 
+/** width of one tab in a screen's header */
+const TAB_W = sizes.card + space.xs;
+
+/** A pick-one row narrow enough to sit in a screen's header, for switching between leagues. */
+export function HeaderTabs<T extends string | number>({ options, value, onChange, fill }: { options: readonly Choice<T>[]; value: T; onChange: (value: T) => void; fill?: ColorName }) {
+  return <Segmented options={options} value={value} onChange={onChange} fill={fill} style={{ width: options.length * TAB_W + (options.length - 1) * space.sm }} />;
+}
+
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
