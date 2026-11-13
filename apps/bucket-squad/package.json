@@ -14,8 +14,11 @@
     "assets:kit": "python tools/blender/build_kit.py"
   },
   "dependencies": {
+    "@expo-google-fonts/bungee": "^0.4.1",
+    "@expo-google-fonts/chakra-petch": "^0.4.1",
     "@expo-google-fonts/fredoka": "^0.4.1",
     "@expo-google-fonts/lilita-one": "^0.4.1",
+    "@expo-google-fonts/tilt-neon": "^0.4.1",
     "@expo/metro-runtime": "~58.0.17",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~58.0.23",
