@@ -1,0 +1,33 @@
+{
+  "about": "Sounds made from a written description (see generate_sounds.py). Each has the description, its length in seconds, how many variants to make, and its group.",
+  "model": "eleven_text_to_sound_v3",
+  "sounds": {
+    "rim": { "group": "court", "seconds": 1.0, "variants": 4, "text": "A basketball clanks hard off the steel rim of an outdoor playground hoop, loud metallic clang with a short rattle, close up, dry, no echo, one-shot" },
+    "dunk": { "group": "court", "seconds": 1.5, "variants": 3, "text": "Slam dunk on an outdoor basketball hoop: the ball is slammed through, the rim snaps down and rattles hard, the net whips, heavy powerful impact, close up, one-shot" },
+    "swish": { "group": "court", "seconds": 0.8, "variants": 4, "text": "A basketball swishes cleanly through a nylon net, nothing but net, crisp soft snap of the net, close up, dry, outdoors, one-shot" },
+    "board": { "group": "court", "seconds": 0.7, "variants": 3, "text": "A basketball bangs off a metal playground backboard, hollow thud with a short rattle, close up, dry, outdoors, one-shot" },
+    "dribble": { "group": "court", "seconds": 0.5, "variants": 4, "text": "One single hard basketball bounce on outdoor asphalt, close up, punchy, dry, no echo, one-shot" },
+    "catch": { "group": "court", "seconds": 0.5, "variants": 4, "text": "Two hands catch a basketball, firm slap of palms on the leather ball, close up, dry, one-shot" },
+    "pass": { "group": "court", "seconds": 0.5, "variants": 3, "text": "A quick basketball chest pass, short soft whoosh of the ball through the air, subtle, dry, one-shot" },
+    "steal": { "group": "court", "seconds": 0.5, "variants": 3, "text": "A hand slaps a basketball away from a dribble, sharp quick smack on rubber, dry, one-shot" },
+    "block": { "group": "court", "seconds": 0.6, "variants": 3, "text": "A blocked basketball shot, a hand swats the ball hard in mid-air, loud flat smack, punchy, dry, one-shot" },
+    "land": { "group": "court", "seconds": 0.5, "variants": 3, "text": "Two sneakers land hard on asphalt after a jump, rubber soles thud with a little grit, close up, dry, one-shot" },
+    "scuff": { "group": "court", "seconds": 0.6, "variants": 4, "text": "One quick sneaker scrape on a gritty outdoor asphalt basketball court, a sharp shuffle step, close up, dry, one-shot" },
+    "whistle": { "group": "court", "seconds": 0.8, "variants": 2, "text": "A referee whistle, one short sharp blast, outdoors, dry, one-shot" },
+    "buzzer": { "group": "court", "seconds": 1.5, "variants": 2, "text": "A basketball scoreboard buzzer, loud harsh horn held for one second and then it stops, one-shot" },
+
+    "cheer": { "group": "crowd", "seconds": 2.5, "variants": 4, "influence": 0.4, "text": "A small group of kids at a neighborhood playground cheer and clap after a basket, happy excited shouts, outdoors, natural, no music" },
+    "cheerBig": { "group": "crowd", "seconds": 3.5, "variants": 3, "influence": 0.4, "text": "A big group of kids go wild, cheering, screaming with joy and clapping after an amazing basketball play, outdoors on a playground, natural, no music" },
+    "ooh": { "group": "crowd", "seconds": 1.8, "variants": 3, "influence": 0.4, "text": "A group of kids react with a loud impressed ooooh after an amazing basketball move, short crowd reaction, outdoors, no music" },
+    "aww": { "group": "crowd", "seconds": 1.8, "variants": 2, "influence": 0.4, "text": "A group of kids groan awww in disappointment after a missed shot, short crowd reaction, outdoors, no music" },
+
+    "ambPark": { "group": "ambience", "seconds": 20, "variants": 1, "loop": true, "influence": 0.4, "text": "Peaceful neighborhood park ambience on a sunny afternoon: birds singing in pine trees, a light breeze in the branches, kids playing very far away, no music, no close voices" },
+    "ambStreet": { "group": "ambience", "seconds": 20, "variants": 1, "loop": true, "influence": 0.4, "text": "Quiet suburban street ambience on a summer afternoon: a lawn mower far away, a dog barking in the distance, a light breeze, a few birds, no music, no close voices" },
+    "ambBeach": { "group": "ambience", "seconds": 20, "variants": 1, "loop": true, "influence": 0.4, "text": "Beach ambience at sunset: gentle ocean waves rolling onto sand, a few seagulls in the distance, a light sea breeze, no music, no voices" },
+    "ambSnow": { "group": "ambience", "seconds": 20, "variants": 1, "loop": true, "influence": 0.4, "text": "High mountain ambience in winter: cold wind blowing over snow in soft gusts, quiet and airy, no music, no voices" },
+    "ambCanyon": { "group": "ambience", "seconds": 20, "variants": 1, "loop": true, "influence": 0.4, "text": "Desert canyon ambience: a dry warm wind, cicadas buzzing, a hawk calling far away, no music, no voices" },
+
+    "packRip": { "group": "pack", "seconds": 1.2, "variants": 3, "text": "Tearing open a foil trading card pack, a crisp foil rip, close up, dry, one-shot" },
+    "cardFlip": { "group": "pack", "seconds": 0.5, "variants": 3, "text": "A trading card is flipped over onto a table, a quick snappy card flick, close up, dry, one-shot" }
+  }
+}
