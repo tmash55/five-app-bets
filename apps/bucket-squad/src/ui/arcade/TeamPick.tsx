@@ -12,8 +12,8 @@ import { MIN_FIT_LABEL } from './measure';
 import { teamLine } from './Surface';
 import { Print } from './Type';
 
-/** A neon tube in a team's colour, light enough to read on the dark wall. */
-export function teamTube(team: TeamDef): Tube {
+/** A neon tube in a team's (or a uniform's) colour, light enough to read on the dark wall. */
+export function teamTube(team: Pick<TeamDef, 'color'>): Tube {
   const glass = teamLine(team);
   return { glass, tint: blend(glass, night.white, 0.82), soft: blend(glass, night.white, 0.45) };
 }

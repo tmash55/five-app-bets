@@ -86,8 +86,8 @@ export function OvrBox({ value, tube: t = 'cyan', small, style }: { value: numbe
   );
 }
 
-/** A team's colour, light enough to read as a lit line on the dark wall. */
-export function teamLine(team: TeamDef): string {
+/** A team's (or a uniform's) colour, light enough to read as a lit line on the dark wall. */
+export function teamLine(team: Pick<TeamDef, 'color'>): string {
   return luminance(team.color) < 0.3 ? blend(team.color, night.white, 0.4) : team.color;
 }
 

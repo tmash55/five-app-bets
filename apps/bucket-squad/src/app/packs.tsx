@@ -25,6 +25,7 @@ import { Popup } from '@/ui/arcade/Popup';
 import { Bulbs } from '@/ui/arcade/Room';
 import { CountBadge, NeonPanel, Well } from '@/ui/arcade/Surface';
 import { Glow, Print } from '@/ui/arcade/Type';
+import { UniformsButton } from '@/ui/arcade/UniformLinks';
 import { useAfter } from '@/ui/hooks';
 
 /** the right-hand panel of packs waiting to be opened */
@@ -250,7 +251,8 @@ export default function Packs() {
 
   return (
     <View style={styles.root}>
-      <ArcadeScreen title="PACKS" tube="pink" style={styles.body}>
+      {/* coins buy uniforms too: the way to them sits by the coins */}
+      <ArcadeScreen title="PACKS" tube="pink" right={<UniformsButton />} style={styles.body}>
         <View style={styles.panels}>
           <NeonPanel tube="cyan" style={styles.machine}>
             <View style={styles.strip} onLayout={(e) => setStripW(e.nativeEvent.layout.width)}>

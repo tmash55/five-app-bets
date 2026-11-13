@@ -30,16 +30,21 @@ export interface Prefs {
   easyShots: boolean;
   /** decides where the home court comes on a tour */
   homeTeam?: string | null;
+  /** the uniform the squad wears (data/uniforms); null or left out for the captain's team's */
+  uniform?: string | null;
 }
 
 function newSeed(rng: Rng): number {
   return Math.floor(rng() * 2147483646) + 1;
 }
 
-/** The person's side. A mixed squad wears its captain's uniform so teammates are easy to tell apart. */
-export function homeSide(squad: readonly SidePlayer[]): Side {
+/**
+ * The person's side. The whole squad wears one uniform so teammates are easy to tell apart: the one picked on the
+ * uniforms page, or else the captain's team's.
+ */
+export function homeSide(squad: readonly SidePlayer[], uniform?: string | null): Side {
   const captain = mustPlayer(squad[0].id);
-  return { name: 'Your Squad', short: 'YOU', kitTeam: captain.team, players: [...squad] };
+  return { name: 'Your Squad', short: 'YOU', kitTeam: captain.team, players: [...squad], ...(typeof uniform === 'string' && uniform !== '' ? { uniform } : {}) };
 }
 
 export function sideOverall(side: Side, perTeam: number): number {
@@ -97,7 +102,7 @@ export interface QuickOptions {
 
 export function quickSetup(prefs: Prefs, o: QuickOptions, rng: Rng = Math.random): MatchSetup {
   const lv = QUICK_LEVELS[o.difficulty];
-  const home = homeSide(prefs.squad);
+  const home = homeSide(prefs.squad, prefs.uniform);
   const mine = new Set(home.players.map((p) => p.id));
   const sideOf = (t: TeamDef) => teamSide(t, o.perTeam, o.difficulty, lv.level);
   // a surprise opponent is a team that can field its usual players against you
@@ -123,7 +128,7 @@ export function quickSetup(prefs: Prefs, o: QuickOptions, rng: Rng = Math.random
 
 export function ladderSetup(prefs: Prefs, points: number, perTeam: 2 | 3, rng: Rng = Math.random): MatchSetup {
   const tier = TIERS[tierIndex(points)];
-  const home = homeSide(prefs.squad);
+  const home = homeSide(prefs.squad, prefs.uniform);
   const away = withoutMirrors(ladderOpponent(points, perTeam, rng, mustPlayer(prefs.squad[0].id).team), home);
   return {
     mode: 'ladder',
@@ -145,7 +150,7 @@ export function tourSetup(prefs: Prefs, tourId: string, stage: number, game: num
   const st = tour.stages[stage];
   const g = st?.games[game];
   if (!st || !g) return null;
-  const home = homeSide(prefs.squad);
+  const home = homeSide(prefs.squad, prefs.uniform);
   return {
     mode: 'tour',
     perTeam: g.perTeam,

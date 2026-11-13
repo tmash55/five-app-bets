@@ -172,7 +172,8 @@ function SquadCorner({ ids, owned, onPress }: { ids: string[]; owned: Record<str
   const area = useRef<ComponentRef<typeof View>>(null);
   const window = useWindowDimensions();
   const live = useSharedValue(0);
-  const setup = useMemo(() => squadStage(ids, FLOOR_PAINT, SPREAD), [ids]);
+  const uniform = useSave((s) => s.uniform);
+  const setup = useMemo(() => squadStage(ids, FLOOR_PAINT, SPREAD, uniform), [ids, uniform]);
   useFocusEffect(
     useCallback(() => {
       return () => live.set(0);

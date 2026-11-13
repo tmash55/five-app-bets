@@ -131,7 +131,18 @@ export function awayKit(kit: KitColors): KitColors {
   };
 }
 
-export function kitsClash(home: TeamDef, away: TeamDef): boolean {
+/**
+ * Anything that wears a uniform on the court: a team, or a uniform the squad picked (`Wear` in uniforms.ts).
+ * A team is one already, so the helpers below take either.
+ */
+export interface Strip {
+  id: string;
+  kit: KitColors;
+  color: string;
+  color2: string;
+}
+
+export function kitsClash(home: Strip, away: Strip): boolean {
   return colorGap(home.kit.jersey, away.kit.jersey) < KIT_CLASH;
 }
 
@@ -144,9 +155,9 @@ function whiteKit(kit: KitColors): KitColors {
 /**
  * What the visitors wear: their own uniform when the two teams are easy to
  * tell apart, otherwise their change strip, or a plain white one when that
- * looks like the home team as well.
+ * looks like the home team as well. The home side may be wearing any uniform.
  */
-export function kitAgainst(home: TeamDef, away: TeamDef): KitColors {
+export function kitAgainst(home: Strip, away: Strip): KitColors {
   if (home.id !== away.id && !kitsClash(home, away)) return away.kit;
   const gap = (kit: KitColors) => colorGap(home.kit.jersey, kit.jersey);
   const options = [awayKit(away.kit), whiteKit(away.kit)];
@@ -154,7 +165,7 @@ export function kitAgainst(home: TeamDef, away: TeamDef): KitColors {
 }
 
 /** The colour that stands for a team on the court (rings, arrows) and in the HUD. */
-export function matchColors(home: TeamDef, away: TeamDef): [string, string] {
+export function matchColors(home: Strip, away: Strip): [string, string] {
   const a = home.color;
   let b = away.color;
   if (colorGap(a, b) < 0.4) b = colorGap(a, away.color2) > 0.4 ? away.color2 : WHITE;

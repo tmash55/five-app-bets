@@ -40,6 +40,7 @@ go('/squad', '06-squad');
 go('/shelf', '07-shelf');
 steps.push(`eval:(()=>{ const s=__save.getState().squad[0]; __router.push('/player/' + s); return s })()`, 'wait:900', `shot:${out}/08-player.png`);
 go('/packs', '09-packs');
+go('/uniforms', '09b-uniforms');
 go('/missions', '10-missions');
 go('/settings', '11-settings');
 // a tour game: versus, the match with its pad, the pause menu, how to play, then the results

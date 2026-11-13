@@ -7,7 +7,7 @@ import { useSave } from './save';
 import { useSession } from './session';
 
 export function prefsFrom(data: SaveData): Prefs {
-  return { squad: squadLevels(data), quarterSeconds: data.settings.quarterSeconds, easyShots: data.settings.easyShots, homeTeam: data.homeTeam };
+  return { squad: squadLevels(data), quarterSeconds: data.settings.quarterSeconds, easyShots: data.settings.easyShots, homeTeam: data.homeTeam, uniform: data.uniform };
 }
 
 export function startQuick(options: QuickOptions): void {

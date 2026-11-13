@@ -5,7 +5,8 @@
  */
 
 import { boosted, kitAgainst, levelBonus, lookInKit, mustPlayer, teamById } from '@/data/roster';
-import type { PlayerDef, TeamDef } from '@/data/types';
+import type { PlayerDef } from '@/data/types';
+import { teamWear, uniformById, wearOf, type Wear } from '@/data/uniforms';
 import type { KitColors, Look } from '@/game/kit/look';
 import type { CourtId } from '@/game/render/court';
 import type { MatchVisuals } from '@/game/render/renderer';
@@ -24,8 +25,10 @@ export interface Side {
   /** shown on the scoreboard and the results screen */
   name: string;
   short: string;
-  /** the team whose uniform this side wears */
+  /** the team whose uniform this side wears, unless `uniform` says otherwise */
   kitTeam: string;
+  /** a uniform the squad picked (see data/uniforms); left out, or one this build does not have, it wears `kitTeam`'s */
+  uniform?: string;
   players: SidePlayer[];
 }
 
@@ -68,9 +71,15 @@ function gap(a: string, b: string): number {
   return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
 }
 
-/** How a player looks on the person's side: the kit team's home strip, with their own touches when it is their own team. */
-export function homeLook(def: PlayerDef, kitTeam: TeamDef): Look {
-  return lookInKit(def, { ...kitTeam.kit, ...(def.team === kitTeam.id ? (def.look.kit ?? {}) : {}) });
+/** What a side wears: the uniform it picked when this build has it, otherwise its kit team's own. */
+export function sideWear(side: Side): Wear {
+  const picked = uniformById(side.uniform);
+  return picked ? wearOf(picked) : teamWear(teamById(side.kitTeam));
+}
+
+/** How a player looks on the person's side: the uniform's colours, with their own touches when it is their own team's uniform. */
+export function homeLook(def: PlayerDef, wear: Wear): Look {
+  return lookInKit(def, { ...wear.kit, ...(def.team === wear.team ? (def.look.kit ?? {}) : {}) });
 }
 
 export interface BuiltMatch {
@@ -83,9 +92,9 @@ export interface BuiltMatch {
 }
 
 export function buildMatch(setup: MatchSetup): BuiltMatch {
-  const homeTeam = teamById(setup.home.kitTeam);
+  const home = sideWear(setup.home);
   const awayTeam = teamById(setup.away.kitTeam);
-  const kits: [KitColors, KitColors] = [homeTeam.kit, kitAgainst(homeTeam, awayTeam)];
+  const kits: [KitColors, KitColors] = [home.kit, kitAgainst(home, awayTeam)];
   const sides = [setup.home, setup.away] as const;
   const n = setup.perTeam;
   const lineup: BuiltMatch['lineup'] = [];
@@ -101,11 +110,11 @@ export function buildMatch(setup: MatchSetup): BuiltMatch {
     };
   }) as MatchConfig['teams'];
 
-  const looks = lineup.map((l) => (l.team === 0 ? homeLook(l.def, homeTeam) : lookInKit(l.def, kits[1])));
+  const looks = lineup.map((l) => (l.team === 0 ? homeLook(l.def, home) : lookInKit(l.def, kits[1])));
 
-  // HUD and floor-ring colours: each side's jersey colour reads best, with the team colour as a fallback
-  const colorOf = (team: TeamDef, kit: KitColors) => (gap(kit.jersey, '#FFFFFF') < 0.25 ? team.color : kit.jersey);
-  let colors: [string, string] = [colorOf(homeTeam, kits[0]), colorOf(awayTeam, kits[1])];
+  // HUD and floor-ring colours: each side's jersey colour reads best, with the team (or uniform) colour as a fallback
+  const colorOf = (main: string, kit: KitColors) => (gap(kit.jersey, '#FFFFFF') < 0.25 ? main : kit.jersey);
+  let colors: [string, string] = [colorOf(home.color, kits[0]), colorOf(awayTeam.color, kits[1])];
   if (gap(colors[0], colors[1]) < 0.35) colors = [colors[0], gap(colors[0], awayTeam.color2) > 0.35 ? awayTeam.color2 : '#FFFFFF'];
 
   const config: MatchConfig = {

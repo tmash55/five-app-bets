@@ -21,12 +21,13 @@ import { Spotlight, StageRing } from '@/ui/arcade/Room';
 import { ChemChip, OvrMeter } from '@/ui/arcade/Strength';
 import { NeonPanel } from '@/ui/arcade/Surface';
 import { Print } from '@/ui/arcade/Type';
+import { WearingButton } from '@/ui/arcade/UniformLinks';
 import { columnsThatFit, rowsOf } from '@/ui/rows';
 
 /** the page's own tube, the one the home page's SQUAD sign is bent from */
 const TUBE = tube.violet;
-/** what the spot labels, the strength chips and the hint need round the three squad cards */
-const AROUND_CARDS = px(124);
+/** what the spot labels, the strength chips and the uniform button with the hint need round the three squad cards */
+const AROUND_CARDS = px(130);
 /** the lit socket round a spot: its gap and its line, both sides of the card */
 const SOCKET_PAD = px(4);
 const SOCKET = (SOCKET_PAD + arcade.outline) * 2;
@@ -89,7 +90,7 @@ export default function Squad() {
   const benchRoom = body.width - leftW - space.lg - PANEL_IN;
   const benchColumns = columnsThatFit(benchRoom, BENCH_MIN, BENCH_GAP);
   const benchW = Math.floor((benchRoom - BENCH_GAP * (benchColumns - 1)) / benchColumns);
-  const hint = pick !== null ? `Tap a spot for ${mustPlayer(pick).name}.` : spot !== null ? 'Now tap the player you want there.' : 'Tap a spot, then tap a player. Your squad wears the captain’s uniform.';
+  const hint = pick !== null ? `Tap a spot for ${mustPlayer(pick).name}.` : spot !== null ? 'Now tap the player you want there.' : 'Tap a spot, then tap a player.';
   const stageW = (spotW + SOCKET) * 3 + space.md * 2;
   // the beam lands on the ring at the squad's feet: the column is centred, so find where the cards end in it
   const cardsTall = SPOT_LABEL + (spotW + SOCKET) * sizes.cardRatio;
@@ -127,9 +128,13 @@ export default function Squad() {
             <OvrMeter value={ovr} tube="violet" />
             <ChemChip chemistry={chem} />
           </Arrive>
-          <Print face="medium" size="body" color={pick !== null || spot !== null ? 'text' : 'textDim'} center lines={2} style={styles.hint}>
-            {hint}
-          </Print>
+          {/* what the whole squad wears, and the way to change it */}
+          <View style={[styles.foot, { width: leftW }]}>
+            <WearingButton room={Math.round(leftW * 0.58)} />
+            <Print face="medium" size="small" color={pick !== null || spot !== null ? 'text' : 'textDim'} lines={2} style={styles.hint}>
+              {hint}
+            </Print>
+          </View>
         </View>
 
         <Arrive delay={120} from="right" style={styles.right}>
@@ -238,9 +243,15 @@ const styles = StyleSheet.create({
     gap: space.sm,
     marginTop: space.xs,
   },
+  foot: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.md,
+  },
   hint: {
-    maxWidth: px(330),
-    minHeight: px(38),
+    flexShrink: 1,
+    maxWidth: px(200),
   },
   right: {
     flex: 1,

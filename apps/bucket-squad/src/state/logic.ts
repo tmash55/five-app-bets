@@ -6,6 +6,7 @@
 
 import { TEAMS, byValue, mustPlayer, playerById, playerOverall, teamById, teamPlayers } from '@/data/roster';
 import type { PlayerDef, TeamDef } from '@/data/types';
+import { teamWear, uniformById, uniformNeed, wearOf, type UniformDef, type Wear } from '@/data/uniforms';
 import { addCopy, levelOf, type Gain, type Owned } from '@/meta/collection';
 import { TIERS, ladderResult, tierIndex, type Tier } from '@/meta/ladder';
 import type { MatchSummary } from '@/meta/match';
@@ -68,6 +69,10 @@ export interface SaveData {
   settings: Settings;
   /** one-time hints already shown */
   tips: Record<string, true>;
+  /** special uniforms bought with coins, by uniform id */
+  uniforms: string[];
+  /** the uniform the whole squad wears, or null for the captain's team's */
+  uniform: string | null;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -103,6 +108,8 @@ export function newSave(): SaveData {
     stats: { games: 0, wins: 0, points: 0, dunks: 0, threes: 0, steals: 0, blocks: 0, perfects: 0, packs: 0, bestMargin: 0 },
     settings: { ...DEFAULT_SETTINGS },
     tips: {},
+    uniforms: [],
+    uniform: null,
   };
 }
 
@@ -201,6 +208,64 @@ export function markSeen(data: SaveData, playerId: string): SaveData {
 
 export function squadLevels(data: SaveData): { id: string; level: number }[] {
   return data.squad.map((id) => ({ id, level: Math.max(1, levelOf(data.owned[id] ?? 1)) }));
+}
+
+// ---------------------------------------------------------------------------
+// Uniforms
+// ---------------------------------------------------------------------------
+
+export interface UniformProgress {
+  /** players of the team collected, counted up to `need` (team uniforms); 1 once bought (specials) */
+  have: number;
+  /** players of the team it takes; 1 for a special */
+  need: number;
+  unlocked: boolean;
+}
+
+/** How close a uniform is to being yours: a team's by players collected (counted from the collection, never stored), a special by buying it. */
+export function uniformProgress(data: Pick<SaveData, 'owned' | 'uniforms'>, def: UniformDef): UniformProgress {
+  if (def.kind === 'special' || def.team === undefined) {
+    const bought = data.uniforms.includes(def.id);
+    return { have: bought ? 1 : 0, need: 1, unlocked: bought };
+  }
+  const need = uniformNeed(def);
+  const have = Math.min(need, teamPlayers(def.team).filter((p) => (data.owned[p.id] ?? 0) > 0).length);
+  return { have, need, unlocked: need > 0 && have >= need };
+}
+
+export function hasUniform(data: Pick<SaveData, 'owned' | 'uniforms'>, id: string): boolean {
+  const def = uniformById(id);
+  return def !== undefined && uniformProgress(data, def).unlocked;
+}
+
+export interface SquadUniform {
+  /** the uniform picked, or null when the squad wears its captain's team's */
+  def: UniformDef | null;
+  wear: Wear;
+  /** the captain's team */
+  captainTeam: TeamDef;
+}
+
+/** What the squad wears now, by the same rule as a match (meta/match `sideWear`): the uniform picked when this build has it, or else the captain's team's. */
+export function squadUniform(data: Pick<SaveData, 'squad' | 'uniform' | 'homeTeam'>): SquadUniform {
+  const captain = data.squad.length > 0 ? playerById(data.squad[0]) : undefined;
+  const teamId = captain?.team ?? data.homeTeam;
+  const captainTeam = TEAMS.find((t) => t.id === teamId) ?? TEAMS[0];
+  const def = uniformById(data.uniform) ?? null;
+  return { def, wear: def ? wearOf(def) : teamWear(captainTeam), captainTeam };
+}
+
+/** Buy a special uniform: one this build has, not yours yet, and coins enough. */
+export function buyUniform(data: SaveData, id: string): SaveData | null {
+  const def = uniformById(id);
+  if (!def || def.kind !== 'special' || def.price === undefined || data.uniforms.includes(id) || data.coins < def.price) return null;
+  return { ...data, coins: data.coins - def.price, uniforms: [...data.uniforms, id] };
+}
+
+/** Dress the squad in a uniform you have, or (null) back in the captain's colours. */
+export function wearUniform(data: SaveData, id: string | null): SaveData | null {
+  if (id !== null && !hasUniform(data, id)) return null;
+  return { ...data, uniform: id };
 }
 
 // ---------------------------------------------------------------------------
@@ -450,5 +515,9 @@ export function repairSave(raw: unknown): SaveData {
       easyShots: flag(st.easyShots, base.settings.easyShots),
     },
     tips: { ...(r.tips ?? {}) },
+    // bought uniforms are kept even when this build does not know one: the coins were spent
+    uniforms: Array.isArray(r.uniforms) ? r.uniforms.filter((id, i, all): id is string => typeof id === 'string' && id !== '' && all.indexOf(id) === i) : [],
+    // a uniform this build cannot find is worn as the captain's colours (see meta/match `sideWear`), not thrown away
+    uniform: typeof r.uniform === 'string' && r.uniform !== '' ? r.uniform : null,
   };
 }

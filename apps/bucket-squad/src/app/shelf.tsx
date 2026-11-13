@@ -5,11 +5,10 @@
 
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { LEAGUES, MAX_LEVEL, PLAYERS, boosted, byValue, leagueOf, leagueTeams, levelBonus, teamById, teamPlayers } from '@/data/roster';
 import type { PlayerDef, TeamDef } from '@/data/types';
-import { tapFeedback } from '@/fx/feedback';
 import { RATING_KEYS } from '@/game/sim/ratings';
 import { countOwned, levelOf, levelProgress, type Owned } from '@/meta/collection';
 import { useSave } from '@/state/save';
@@ -18,6 +17,7 @@ import { px } from '@/theme/tokens';
 import { ArcadeScreen, useArcadeBody } from '@/ui/arcade/ArcadeScreen';
 import { GhostButton, GoldButton } from '@/ui/arcade/Buttons';
 import { HeadCell } from '@/ui/arcade/Card';
+import { LeagueTabs } from '@/ui/arcade/LeagueTabs';
 import { LineIcon } from '@/ui/arcade/LineIcon';
 import { SPARE, firstThatFits, fitText } from '@/ui/arcade/fitText';
 import { MIN_FIT_LABEL, fitPerson, widthOf } from '@/ui/arcade/measure';
@@ -26,6 +26,7 @@ import { Meter, Pips, StatRow } from '@/ui/arcade/SegBar';
 import { Chip, NeonPanel, Well, teamLine } from '@/ui/arcade/Surface';
 import { ratingLabel } from '@/ui/arcade/ratingLabel';
 import { Print } from '@/ui/arcade/Type';
+import { UniformsButton } from '@/ui/arcade/UniformLinks';
 import { tourStop } from '@/ui/arcade/whereToFind';
 
 const ALL_IDS = PLAYERS.map((p) => p.id);
@@ -56,8 +57,6 @@ const PANEL_PAD = px(10);
 /** a rating's row: as tall as its lamps' label, so six of them leave the picture room */
 const ROW_SMALL = px(13);
 const ROW = px(16);
-/** a tab is a slim strip inside its chip: its tap area reaches the bar's full height */
-const TAB_SLOP = { top: px(11), bottom: px(11), left: px(2), right: px(2) };
 
 /** A team's players in the order the grid shows them: the best first. */
 function column(team: TeamDef): PlayerDef[] {
@@ -68,34 +67,6 @@ function column(team: TeamDef): PlayerDef[] {
 function firstPick(league: string, owned: Owned, fresh: readonly string[], squad: readonly string[]): string {
   const ids = leagueTeams(league).flatMap((t) => column(t).map((p) => p.id));
   return ids.find((id) => fresh.includes(id) && (owned[id] ?? 0) > 0) ?? ids.find((id) => squad.includes(id)) ?? ids.find((id) => (owned[id] ?? 0) > 0) ?? ids[0];
-}
-
-/** The leagues as lit tabs, when there is more than one. */
-function LeagueTabs({ value, onChange }: { value: string; onChange: (id: string) => void }) {
-  return (
-    <View accessibilityRole="tablist" style={styles.tabs}>
-      {LEAGUES.map((l) => {
-        const on = l.id === value;
-        return (
-          <Pressable
-            key={l.id}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: on }}
-            accessibilityLabel={l.name}
-            hitSlop={TAB_SLOP}
-            onPress={() => {
-              tapFeedback();
-              onChange(l.id);
-            }}
-            style={({ pressed }) => [styles.tab, on && { borderColor: tube.cyan.glass, boxShadow: [halo(tube.cyan.glass, 8, 0.6)] }, pressed && styles.pressed]}>
-            <Print face="bold" size="tiny" color={on ? tube.cyan.tint : 'textDim'} track="wide" upper>
-              {l.name}
-            </Print>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
 }
 
 /** How many players are found out of all of them, in the top bar. */
@@ -276,7 +247,13 @@ export default function Collection() {
       title="COLLECTION"
       tube="cyan"
       after={<Found have={have} of={ALL_IDS.length} meter={body.width > px(560)} />}
-      right={LEAGUES.length > 1 ? <LeagueTabs value={league} onChange={changeLeague} /> : undefined}>
+      right={
+        <>
+          {/* the uniforms come from the collection: a team's own unlocks with three of its players */}
+          <UniformsButton />
+          {LEAGUES.length > 1 && <LeagueTabs value={league} onChange={changeLeague} />}
+        </>
+      }>
       <View style={styles.page}>
         <ScrollView key={league} horizontal showsHorizontalScrollIndicator={false} style={styles.grow} contentContainerStyle={[styles.scroll, { minWidth: roomW }]}>
           <View style={[styles.grid, { width: gridW, height: gridH }]}>
@@ -363,25 +340,5 @@ const styles = StyleSheet.create({
   },
   found: {
     gap: px(10),
-  },
-  tabs: {
-    flexDirection: 'row',
-    gap: px(4),
-    height: arcade.chip,
-    padding: px(3),
-    backgroundColor: night.pit,
-    borderWidth: arcade.hairline,
-    borderColor: night.line,
-    borderRadius: arcade.rChip,
-  },
-  tab: {
-    justifyContent: 'center',
-    paddingHorizontal: px(9),
-    borderRadius: px(5),
-    borderWidth: arcade.hairline,
-    borderColor: night.clear,
-  },
-  pressed: {
-    opacity: 0.8,
   },
 });
