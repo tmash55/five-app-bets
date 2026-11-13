@@ -226,6 +226,98 @@ const fShowB = newFrame();
 const fShowL = newFrame();
 const fShowP = new Float64Array(3);
 
+// --- keeping hands, elbows and the ball out of the body on the warm-up stage ---------------
+//
+// Acts put hands and the ball where they want them, and the blend between two acts moves
+// them in straight lines: either can cut through the chest or the big head. After the
+// blend and before the arms are solved, hands, elbows and the ball are pushed back out of
+// simple shapes read off the kit's meshes (tests check them against the meshes). The push
+// fades in over a thin band outside the surface, so nothing pops as a hand comes close.
+
+/** the chest: heights above the torso pivot, with the half width across and the half depth front to back there */
+const CHEST_Y = [-0.035, 0.03, 0.13, 0.18, 0.25, 0.32, 0.37, 0.415];
+const CHEST_A = [0.19, 0.21, 0.214, 0.231, 0.218, 0.202, 0.16, 0.09];
+const CHEST_B = [0.14, 0.156, 0.159, 0.158, 0.151, 0.13, 0.105, 0.08];
+/** how square the slices are (2 is an ellipse; the chest and the shorts are boxier, which matters where an arm comes across the front) */
+const CHEST_N = 2.65;
+const HIPS_N = 2.8;
+/** the hips (the shorts), above the root pivot */
+const HIPS_Y = [-0.048, -0.02, 0, 0.085];
+const HIPS_A = [0.16, 0.2, 0.213, 0.21];
+const HIPS_B = [0.105, 0.145, 0.156, 0.155];
+/** the head without its ears, from the head pivot: an ellipsoid */
+const HEAD_EC = [0, 0.321, 0];
+const HEAD_ER = [0.427, 0.367, 0.37];
+/** how close the middle of a hand, an elbow or a forearm may come to a surface, and the band over which the push fades in */
+const G_HAND = 0.05;
+const G_ELBOW = 0.07;
+const G_FORE = 0.055;
+const G_SOFT = 0.025;
+/** the corner between the sides of the chest and its top and bottom is rounded off over this */
+const G_ROUND = 0.015;
+/** scratch: a normal, a push, and the ball's push */
+const gN = new Float64Array(3);
+const gP = new Float64Array(3);
+const gQ = new Float64Array(3);
+
+/**
+ * Signed distance from a point (in the body's own space) to a stack of rounded-square slices (|x/a|^n + |z/b|^n = 1), with
+ * the way out in `gN`: across, or up through the top (rounded where the sides meet it, so it turns smoothly).
+ */
+function slabSd(Y: readonly number[], A: readonly number[], B: readonly number[], N: number, x: number, y: number, z: number): number {
+  const n = Y.length;
+  let i = 0;
+  while (i < n - 2 && y > Y[i + 1]) i++;
+  const w = clamp01((y - Y[i]) / (Y[i + 1] - Y[i]));
+  const a = A[i] + (A[i + 1] - A[i]) * w;
+  const b = B[i] + (B[i + 1] - B[i]) * w;
+  const px = Math.pow(Math.abs(x / a), N);
+  const pz = Math.pow(Math.abs(z / b), N);
+  const q = Math.pow(px + pz, 1 / N);
+  let hd: number;
+  let hx = 0;
+  let hz = 1;
+  if (q < 1e-6) {
+    hd = -Math.min(a, b);
+  } else {
+    // q - 1 over its slope: a distance near the surface (q grows in proportion to the distance from the middle)
+    const qn = Math.pow(q, 1 - N);
+    const gx = x !== 0 ? (px / x) * qn : 0;
+    const gz = z !== 0 ? (pz / z) * qn : 0;
+    const gl = Math.hypot(gx, gz);
+    if (gl < 1e-9) {
+      hd = -Math.min(a, b);
+    } else {
+      hd = (q - 1) / gl;
+      hx = gx / gl;
+      hz = gz / gl;
+    }
+  }
+  const up = y - Y[n - 1];
+  const down = Y[0] - y;
+  const vd = Math.max(up, down);
+  const vy = up > down ? 1 : -1;
+  const m = Math.max(hd, vd);
+  const eh = Math.exp((hd - m) / G_ROUND);
+  const ev = Math.exp((vd - m) / G_ROUND);
+  // out through the top, but never down out of the bottom: the hips and the legs are under it
+  const nx = vy > 0 ? eh * hx : hx;
+  const ny = vy > 0 ? ev : 0;
+  const nz = vy > 0 ? eh * hz : hz;
+  const nl = Math.hypot(nx, ny, nz) || 1;
+  gN[0] = nx / nl;
+  gN[1] = ny / nl;
+  gN[2] = nz / nl;
+  return m + G_ROUND * Math.log(eh + ev);
+}
+
+/** How far to push something whose centre is `sd` from a surface and that should stay `r` clear: nothing beyond the soft band, all of it deep inside. */
+function softPush(sd: number, r: number): number {
+  const d = sd - r;
+  if (d >= G_SOFT) return 0;
+  return G_SOFT * Math.exp((d - G_SOFT) / G_SOFT) - d;
+}
+
 function frac(x: number): number {
   return x - Math.floor(x);
 }
@@ -1025,6 +1117,7 @@ export class FigureAnimator {
     this.toFigure(f.bx, f.by, f.bz, this.ballF);
 
     const key = this.buildPose(f);
+    this.guard = false;
     this.finish(bones, key, dt, f.time, p.vx * this.cs + p.vz * this.sn, p.vx * this.sn - p.vz * this.cs, p.vy, -f.y / this.sy);
   }
 
@@ -1132,6 +1225,8 @@ export class FigureAnimator {
   lift = 0;
 
   private grip = 0;
+  /** push hands, elbows and the ball out of the body (the warm-up stage only) */
+  private guard = false;
   private sf: ShowFrame | null = null;
   private showIndex = -1;
   private lands = 0;
@@ -1363,6 +1458,7 @@ export class FigureAnimator {
     this.prevRX = c[RX];
     this.prevRZ = c[RZ];
 
+    this.guard = true;
     this.finish(bones, f.index, dt, f.time, clamp(vF, -6, 6), clamp(vL, -6, 6), clamp(vy, -8, 8), -this.lift / this.sy);
 
     if (!f.hasBall) return;
@@ -1385,6 +1481,23 @@ export class FigureAnimator {
         bf[0] = lerp(bf[0], hd[ro] + hd[ro + 3] * 0.07, p);
         bf[1] = lerp(bf[1], hd[ro + 1] + hd[ro + 4] * 0.07 + BALL_R + 0.03, p);
         bf[2] = lerp(bf[2], hd[ro + 2] + hd[ro + 5] * 0.07, p);
+        // rolling from the fingertip to the palm it would cut through the hand: keep it a ball's radius off the hand, all the way along
+        const tip = HAND_TIP * hd[ro + 6];
+        const ax = bf[0] - hd[ro];
+        const ay = bf[1] - hd[ro + 1];
+        const az = bf[2] - hd[ro + 2];
+        const along = clamp(ax * hd[ro + 3] + ay * hd[ro + 4] + az * hd[ro + 5], 0, tip);
+        const dx = ax - hd[ro + 3] * along;
+        const dy = ay - hd[ro + 4] * along;
+        const dz = az - hd[ro + 5] * along;
+        const dl = Math.hypot(dx, dy, dz);
+        const need = lerp(BALL_R * 0.96, BALL_R + 0.03, p);
+        if (dl < need && dl > 1e-6) {
+          const k = need / dl - 1;
+          bf[0] += dx * k;
+          bf[1] += dy * k;
+          bf[2] += dz * k;
+        }
       }
       if (mix < 1) {
         bf[0] = lerp(ex, bf[0], mix);
@@ -1499,10 +1612,10 @@ export class FigureAnimator {
       this.holdShow();
       this.setSpin(0, 3 * air, 0);
     } else {
-      // arms up on the way down, then swing back to the sides
+      // arms up on the way down, then swing back to the sides (wide of the big head: the arms are short)
       const up = air ? 1 : Math.max(0, 1 - after / 0.35);
       for (let side = 1; side >= -1; side -= 2) {
-        this.hand(side, side * lerp(0.315, 0.46, up), lerp(0.47, 1.3, smooth(up)), lerp(0.04, 0.14, up));
+        this.hand(side, side * lerp(0.315, 0.58, up), lerp(0.47, 1.24, smooth(up)), lerp(0.04, 0.14, up));
         this.pole(side, side, -0.3, -0.5);
       }
     }
@@ -1539,13 +1652,15 @@ export class FigureAnimator {
       // the free hand waves
       const w = f.hasBall ? -s : s;
       const wig = Math.sin((t - 0.3) * 17) * on;
-      const wx = w * lerp(0.315, 0.5 + 0.06 * wig, on);
-      const wy = lerp(0.47, 1.42, on);
-      const wz = lerp(0.04, 0.22, on);
-      this.pole(w, w, -0.7, -0.2);
+      // out past the big head, elbow out, so the arm never crosses the face or the hair
+      const wx = w * lerp(0.315, 0.6 + 0.06 * wig, on);
+      const wy = lerp(0.47, 1.36, on);
+      const wz = lerp(0.04, 0.2, on);
+      this.pole(w, w, -0.4, -0.35);
       this.wrist(w, -0.35 * on);
-      c[TROLL] += -w * 0.06 * on;
-      c[HROLL] += -w * 0.08 * on;
+      // leaning away from the raised arm, as anyone does, keeps the big head out of its way
+      c[TROLL] += w * 0.05 * on;
+      c[HROLL] += w * 0.04 * on;
       if (f.hasBall) {
         fShowP[0] = wx;
         fShowP[1] = wy;
@@ -1563,21 +1678,23 @@ export class FigureAnimator {
 
   /**
    * The ball on the hip on side `s`: `k` is 0 at the hold and 1 on the hip.
-   * The other hand lets go once the ball is nearly there and goes to `free`
+   * The other hand lets go once the ball is on its way and goes to `free`
    * (figure space; its own hip when null).
    */
   private tuckBall(s: number, k: number, free: Float64Array | null): void {
     const o = -s;
     this.rootPt(s * 0.4, 0.55, 0.07, v3b);
     const e = smooth(k);
-    // a little lift on the way so it swings round the side rather than sliding through the shorts
-    this.setBall(lerp(HOLD_X, v3b[0], e), lerp(HOLD_Y, v3b[1], e) + 0.08 * Math.sin(Math.PI * e), lerp(HOLD_Z, v3b[2], e));
+    // a little lift and a swing out to the front on the way, so it goes round the side rather than through the belly
+    const arc = Math.sin(Math.PI * e);
+    this.setBall(lerp(HOLD_X, v3b[0], e), lerp(HOLD_Y, v3b[1], e) + 0.08 * arc, lerp(HOLD_Z, v3b[2], e) + 0.12 * arc);
     const bl = this.ballF;
     // the lead hand slides from the side of the ball over the top of it, pressing it to the hip
     this.gripHand(s, bl[0] + s * lerp(0.15, 0.08, e), bl[1] + lerp(-0.02, 0.14, e), bl[2] + lerp(-0.06, 0.03, e));
     this.pole(s, s, lerp(-0.55, 0.1, e), lerp(-0.35, -0.6, e));
     this.wrist(s, lerp(0.25, 0.7, e));
-    const away = smooth((k - 0.5) / 0.45);
+    // it lets go early and takes the ball back late, so it never reaches across the belly to the far hip
+    const away = smooth((k - 0.2) / 0.4);
     const gx = bl[0] + o * 0.15;
     const gy = bl[1] - 0.02;
     const gz = bl[2] - 0.06;
@@ -1587,12 +1704,14 @@ export class FigureAnimator {
       this.wrist(o, 0.25);
       return;
     }
+    // the free hand swings out and forward on its way, round the belly and the hip
+    const bow = Math.sin(Math.PI * away);
     if (free) {
-      this.hand(o, lerp(gx, free[0], away), lerp(gy, free[1], away), lerp(gz, free[2], away));
+      this.hand(o, lerp(gx, free[0], away) + o * 0.1 * bow, lerp(gy, free[1], away), lerp(gz, free[2], away) + 0.08 * bow);
       return;
     }
     this.rootPt(o * 0.29, 0.57, -0.01, v3b);
-    this.hand(o, lerp(gx, v3b[0], away), lerp(gy, v3b[1], away), lerp(gz, v3b[2], away));
+    this.hand(o, lerp(gx, v3b[0], away) + o * 0.1 * bow, lerp(gy, v3b[1], away), lerp(gz, v3b[2], away) + 0.08 * bow);
     this.pole(o, o, lerp(-0.55, 0.05, away), lerp(-0.35, -0.5, away));
     this.wrist(o, lerp(0.25, 0.5, away));
   }
@@ -1761,6 +1880,8 @@ export class FigureAnimator {
     this.ballF[1] += (floor - BALL_R) * (1 - clamp01((this.ballF[1] - BALL_R) / (st.top - BALL_R)));
     this.carry(0);
     const bl = this.ballF;
+    // the ball is the same size for every figure, so in figure space it is bigger on a small one
+    const br = BALL_R / this.sy;
     if (info.i < 0 || info.i >= pat.length) {
       this.holdShow();
     } else {
@@ -1781,7 +1902,8 @@ export class FigureAnimator {
           rz = bl[2] - 0.06;
         } else {
           rx = bl[0] + h * 0.02;
-          ry = softMax(bl[1] + BALL_R + 0.02, st.handLow, 0.05);
+          // the palm rides on top of the ball, the fingers over it
+          ry = softMax(bl[1] + br + 0.04, st.handLow, 0.05);
           rz = bl[2] - 0.03;
         }
         const gx = h * 0.34;
@@ -1790,7 +1912,7 @@ export class FigureAnimator {
         this.hand(h, lerp(gx, rx, w), lerp(gy, ry, w), lerp(gz, rz, w));
         this.pole(h, h * 0.9, lerp(-0.5, atHold ? -0.55 : 0.15, w), lerp(-0.5, -0.5, w));
         this.wrist(h, lerp(0.15, atHold ? 0.25 : 0.75, w));
-        const touching = atHold || bl[1] + BALL_R + 0.02 >= st.handLow + 0.025;
+        const touching = atHold || bl[1] + br + 0.04 >= st.handLow + 0.025;
         if (w > 0.999) {
           this.grip |= h > 0 ? 1 : 2;
           if (touching) this.contact |= h > 0 ? 1 : 2;
@@ -2023,7 +2145,8 @@ export class FigureAnimator {
       // both hands take it out to the side, then the guide hand lets go and the shooting hand is under it
       const k = smooth((t - 0.08) / 0.32);
       const free = smooth((t - 0.12) / 0.25);
-      this.gripHand(s, bl[0] + s * lerp(0.15, 0.0, k), bl[1] - lerp(0.02, BALL_R + 0.03, k), bl[2] - lerp(0.06, 0.02, k));
+      // (on the back of the ball, toward the body, so the forearm comes from behind it and not through it)
+      this.gripHand(s, bl[0] + s * lerp(0.11, 0.0, k), bl[1] - lerp(0.04, BALL_R + 0.03, k), bl[2] - lerp(0.11, 0.02, k));
       this.pole(s, s * lerp(1, 0.25, k), -1, -0.25);
       this.wrist(s, lerp(0.25, -0.15, k));
       if (free < 0.002) {
@@ -2038,7 +2161,8 @@ export class FigureAnimator {
       const ft = t - tRel;
       const snap = smooth(ft / 0.08);
       const ready = smooth((t - (tCatch - 0.42)) / 0.32);
-      this.hand(s, lerp(s * 0.6, cx + s * 0.16, ready), lerp(1.26, SHOT_CATCH - 0.02, ready), lerp(0.24, cz - 0.07, ready));
+      // (the hand stays where it let go, under where the ball was, and the ball leaves it)
+      this.hand(s, lerp(s * 0.66, cx + s * 0.16, ready), lerp(SHOT_REL - BALL_R - 0.01, SHOT_CATCH - 0.02, ready), lerp(0.2, cz - 0.07, ready));
       this.pole(s, s * lerp(0.25, 1, ready), -1, lerp(-0.25, -0.35, ready));
       this.wrist(s, lerp(0.9 * snap, 0.25, ready));
       this.hand(o, lerp(s * 0.05, cx + o * 0.16, ready), lerp(0.74, SHOT_CATCH - 0.02, ready), lerp(0.3, cz - 0.07, ready));
@@ -2066,10 +2190,11 @@ export class FigureAnimator {
       const k = smooth((t - w0) / 0.5) * (1 - smooth((t - (w1 - 0.45)) / 0.45));
       if (k <= 0) continue;
       const pulse = 0.02 * Math.sin((t - w0) * 4.2) * k;
-      c[TYAW] += a * 0.16 * k;
+      // the chest turns into it, bringing the stretched shoulder forward so the arm can lie across the front
+      c[TYAW] -= a * 0.22 * k;
       c[TROLL] += a * 0.03 * k;
       // the stretched arm reaches straight across, in front of the chest
-      this.bodyPt(-a * 0.24, 0.79, 0.3 + pulse, v3b);
+      this.bodyPt(-a * 0.2, 0.8, 0.45 + pulse, v3b);
       const ax = v3b[0];
       const ay = v3b[1];
       const az = v3b[2];
@@ -2077,15 +2202,17 @@ export class FigureAnimator {
       this.hand(a, lerp(v3[0], ax, k), lerp(v3[1], ay, k), lerp(v3[2], az, k));
       this.pole(a, a * 0.3, -1, -0.2);
       this.wrist(a, 0);
-      // the other forearm hooks it near the elbow and pulls it in
+      // the other forearm cradles it from below near the elbow and pulls it in: it comes up once the arm is across and lets go first
+      // (the whole arm stays under the stretched one, a forearm's and a hand's thickness down, so the two lie together instead of crossing through)
+      const kh = smooth((t - w0 - 0.2) / 0.45) * (1 - smooth((t - (w1 - 0.8)) / 0.4));
       this.bodyPt(a * SHOULDER[0], SHOULDER[1], SHOULDER[2], v3);
       const hx = lerp(v3[0], ax, 0.45);
-      const hy = lerp(v3[1], ay, 0.45) - 0.035;
-      const hz = lerp(v3[2], az, 0.45) + 0.07 - pulse;
+      const hy = lerp(v3[1], ay, 0.45) - 0.13;
+      const hz = lerp(v3[2], az, 0.45) + 0.03 - pulse;
       this.restHand(-a, v3);
-      this.hand(-a, lerp(v3[0], hx, k), lerp(v3[1], hy, k), lerp(v3[2], hz, k));
+      this.hand(-a, lerp(v3[0], hx, kh), lerp(v3[1], hy, kh), lerp(v3[2], hz, kh));
       this.pole(-a, -a * 0.8, -1, -0.1);
-      this.wrist(-a, 0.3 * k);
+      this.wrist(-a, 0.3 * kh);
       c[EYE] = 1 - 0.2 * k;
     }
     // shake out between sides
@@ -2122,11 +2249,13 @@ export class FigureAnimator {
       // which way this arm goes in the bend: over the top (away side), or down to the hip
       const over = side * lean < 0 ? Math.abs(lean) / 0.36 : 0;
       const hip = side * lean > 0 ? Math.abs(lean) / 0.36 : 0;
-      let tx = side * 0.21;
-      let ty = 1.66;
-      let tz = 0.07;
-      tx = lerp(tx, -side * 0.1, over);
-      ty = lerp(ty, 1.72, over);
+      // up and out wide, a big Y: these arms are short, so a hand pulled any higher straightens the arm
+      // right through the big head. Over the top the hand goes a little higher; the lean takes it over
+      let tx = side * 0.7;
+      let ty = 1.16;
+      let tz = 0.06;
+      tx = lerp(tx, side * 0.66, over);
+      ty = lerp(ty, 1.3, over);
       this.bodyPt(tx, ty, tz, v3);
       this.rootPt(side * 0.29, 0.57, -0.01, v3b);
       this.restHand(side, fShowP);
@@ -2134,7 +2263,7 @@ export class FigureAnimator {
       const hy = lerp(v3[1], v3b[1], hip);
       tz = lerp(v3[2], v3b[2], hip);
       this.hand(side, lerp(fShowP[0], hx, up), lerp(fShowP[1], hy, up), lerp(fShowP[2], tz, up));
-      this.pole(side, side, lerp(-0.4, 0.05, hip), lerp(-0.6, -0.5, hip));
+      this.pole(side, side, lerp(-0.6, 0.05, hip), lerp(-0.2, -0.5, hip));
       this.wrist(side, lerp(-0.25, 0.5, hip) * up);
     }
     c[EYE] = 1 - 0.25 * Math.max(bendL, bendR) - 0.1 * toes;
@@ -2156,7 +2285,10 @@ export class FigureAnimator {
     for (let side = 1; side >= -1; side -= 2) {
       this.restHand(side, v3);
       const k = smooth((fold - 0.25) / 0.75);
-      this.hand(side, lerp(v3[0], side * 0.11, k), lerp(v3[1] + 0.06 * inhale, 0.13 - 0.02 * bounce, k), lerp(v3[2], 0.27, k));
+      // fingertips on the toes: the hand rests on top of the shoe, not in it
+      // (going down and coming back up they pass in front of the legs, not through the thighs)
+      const bow = 4 * k * (1 - k);
+      this.hand(side, lerp(v3[0], side * 0.11, k) + side * 0.04 * bow, lerp(v3[1] + 0.06 * inhale, 0.17 - 0.02 * bounce, k), lerp(v3[2], 0.29, k) + 0.1 * bow);
       this.pole(side, side * 0.5, 0.3, -1);
       this.wrist(side, 0.3 * k);
     }
@@ -2188,9 +2320,11 @@ export class FigureAnimator {
       const fz = lerp(0, -0.2, k);
       this.foot(a, fx, fy, fz, 1.6 * k, a * 0.05);
       this.planted = a > 0 ? 2 : 1;
-      // the same-side hand holds the foot
+      // the same-side hand holds the foot, round the back of it on the laces (a shoe's and a hand's thickness behind the ankle)
       this.restHand(a, v3);
-      this.hand(a, lerp(v3[0], fx + a * 0.01, k), lerp(v3[1], fy + 0.035, k), lerp(v3[2], fz - 0.075, k));
+      // (on the way there and back it swings round the outside of the foot)
+      const round = 4 * k * (1 - k);
+      this.hand(a, lerp(v3[0], fx + a * 0.01, k) + a * 0.15 * round, lerp(v3[1], fy + 0.05, k), lerp(v3[2], fz - 0.16, k));
       this.pole(a, a * 0.7, 0.2, -1);
       this.wrist(a, 0.4 * k);
       // the other arm out for balance, working harder in the wobble
@@ -2265,6 +2399,93 @@ export class FigureAnimator {
     this.lookCam(0.9);
   }
 
+  /**
+   * How far (figure space) to move a point out of the chest, the hips and the head so that it keeps `r` from
+   * their surfaces; the move goes into `gP` and its length is returned. `hs`, `hsx`: the head's scale.
+   */
+  private bodyPush(x: number, y: number, z: number, r: number, hs: number, hsx: number): number {
+    gP[0] = 0;
+    gP[1] = 0;
+    gP[2] = 0;
+    for (let v = 0; v < 3; v++) {
+      const f = v === 0 ? fTorso : v === 1 ? fRoot : fHead;
+      // into the body's own space (the frames are rigid)
+      const dx = x + gP[0] - f[9];
+      const dy = y + gP[1] - f[10];
+      const dz = z + gP[2] - f[11];
+      const lx = f[0] * dx + f[1] * dy + f[2] * dz;
+      const ly = f[3] * dx + f[4] * dy + f[5] * dz;
+      const lz = f[6] * dx + f[7] * dy + f[8] * dz;
+      let sd: number;
+      if (v === 2) {
+        // the head is scaled with the build
+        const rx = HEAD_ER[0] * hsx;
+        const ry = HEAD_ER[1] * hs;
+        const rz = HEAD_ER[2] * hsx;
+        const ex = lx - HEAD_EC[0] * hsx;
+        const ey = ly - HEAD_EC[1] * hs;
+        const ez = lz - HEAD_EC[2] * hsx;
+        const k0 = Math.hypot(ex / rx, ey / ry, ez / rz);
+        const k1 = Math.hypot(ex / (rx * rx), ey / (ry * ry), ez / (rz * rz));
+        if (k1 < 1e-9) continue;
+        sd = (k0 * (k0 - 1)) / k1;
+        gN[0] = ex / (rx * rx) / k1;
+        gN[1] = ey / (ry * ry) / k1;
+        gN[2] = ez / (rz * rz) / k1;
+      } else if (v === 0) {
+        sd = slabSd(CHEST_Y, CHEST_A, CHEST_B, CHEST_N, lx, ly, lz);
+      } else {
+        sd = slabSd(HIPS_Y, HIPS_A, HIPS_B, HIPS_N, lx, ly, lz);
+      }
+      const p = softPush(sd, r);
+      if (p <= 0) continue;
+      // back into figure space
+      gP[0] += p * (f[0] * gN[0] + f[3] * gN[1] + f[6] * gN[2]);
+      gP[1] += p * (f[1] * gN[0] + f[4] * gN[1] + f[7] * gN[2]);
+      gP[2] += p * (f[2] * gN[0] + f[5] * gN[1] + f[8] * gN[2]);
+    }
+    return Math.hypot(gP[0], gP[1], gP[2]);
+  }
+
+  /** The ball, and the hands gripping it, go out of the body together; a free hand on its own. */
+  private guardBody(hs: number, hsx: number): void {
+    const c = this.cur;
+    gQ[0] = 0;
+    gQ[1] = 0;
+    gQ[2] = 0;
+    const bf = this.ballF;
+    const ball = this.hasBall && !this.onFinger && !this.hidden;
+    if (ball) {
+      const rb = BALL_R / Math.sqrt(this.sx * this.sy);
+      if (this.bodyPush(bf[0], bf[1], bf[2], rb, hs, hsx) > 0) gQ.set(gP);
+    }
+    for (let side = 0; side < 2; side++) {
+      const o = side === 0 ? HL : HR;
+      const held = ball && (this.grip & (1 << side)) !== 0;
+      const qx = held ? gQ[0] : 0;
+      const qy = held ? gQ[1] : 0;
+      const qz = held ? gQ[2] : 0;
+      if (this.bodyPush(c[o] + qx, c[o + 1] + qy, c[o + 2] + qz, G_HAND, hs, hsx) <= 0) continue;
+      if (held) {
+        // a gripping hand cannot leave the ball: the ball and both hands go
+        gQ[0] += gP[0];
+        gQ[1] += gP[1];
+        gQ[2] += gP[2];
+      } else {
+        c[o] += gP[0];
+        c[o + 1] += gP[1];
+        c[o + 2] += gP[2];
+      }
+    }
+    if (!ball || gQ[0] * gQ[0] + gQ[1] * gQ[1] + gQ[2] * gQ[2] === 0) return;
+    for (let k = 0; k < 3; k++) bf[k] += gQ[k];
+    for (let side = 0; side < 2; side++) {
+      if ((this.grip & (1 << side)) === 0) continue;
+      const o = side === 0 ? HL : HR;
+      for (let k = 0; k < 3; k++) c[o + k] += gQ[k];
+    }
+  }
+
   private writeBones(bones: Float32Array, lid: number, floorY: number): void {
     const c = this.cur;
     const b = this.build;
@@ -2284,6 +2505,7 @@ export class FigureAnimator {
     framePos(fLocal, HEAD[0] - TORSO[0], HEAD[1] - TORSO[1], HEAD[2] - TORSO[2]);
     frameMul(fHead, fTorso, fLocal);
     frameToM4(fHead, bones, B_HEAD, hsx, hs, hsx);
+    if (this.guard) this.guardBody(hs, hsx);
 
     // eyes ride the head, and squash shut to blink
     const eb = c[EYEB];
@@ -2315,9 +2537,9 @@ export class FigureAnimator {
       const ho = side > 0 ? HL : HR;
       const po = side > 0 ? PL : PR;
       const bo = side > 0 ? B_ARM_L : B_ARM_R;
-      const tx = c[ho];
-      const ty = c[ho + 1];
-      const tz = c[ho + 2];
+      let tx = c[ho];
+      let ty = c[ho + 1];
+      let tz = c[ho + 2];
       // the shoulder shrugs up and out a little for a high reach
       const raise = clamp01((ty - SHOULDER[1]) / 0.7);
       frameApply(
@@ -2332,7 +2554,66 @@ export class FigureAnimator {
       const sz = v3[2];
       const l1 = UPPER * ARM_BASE;
       const l2 = FORE * ARM_BASE + PALM;
-      solveLimb(sx, sy, sz, tx, ty, tz, l1, l2, c[po], c[po + 1], c[po + 2], 1, ARM_MAX_STRETCH, limb);
+      let px = c[po];
+      let py = c[po + 1];
+      let pz = c[po + 2];
+      if (this.guard) {
+        // a pole that points along the arm leaves the elbow free to flip from up to down: lean it toward out, down and back
+        const dl = Math.hypot(tx - sx, ty - sy, tz - sz) || 1;
+        const pl = Math.hypot(px, py, pz) || 1;
+        const k = (px * (tx - sx) + py * (ty - sy) + pz * (tz - sz)) / (dl * pl);
+        const lean = smooth((0.5 - Math.sqrt(Math.max(0, 1 - k * k))) / 0.5) * pl;
+        px += side * 0.6 * lean;
+        py -= 0.75 * lean;
+        pz -= 0.3 * lean;
+      }
+      solveLimb(sx, sy, sz, tx, ty, tz, l1, l2, px, py, pz, 1, ARM_MAX_STRETCH, limb);
+      if (this.guard) {
+        // the elbow, the middle of the upper arm and of the forearm stay out of the body: move the elbow out (and a free hand with the forearm), solve again
+        const free = (this.grip & (side > 0 ? 1 : 2)) === 0;
+        for (let it = 0; it < 2; it++) {
+          let ex = 0;
+          let ey = 0;
+          let ez = 0;
+          let el = 0;
+          let hx = 0;
+          let hy = 0;
+          let hz = 0;
+          for (let q = 0; q < 3; q++) {
+            // q 0: the elbow; 1: most of the way down the upper arm; 2: the middle of the forearm
+            const u = q === 1 ? 0.6 : 0.5;
+            const qx = q === 0 ? limb.mx : q === 1 ? sx + (limb.mx - sx) * u : limb.mx + (limb.ex - limb.mx) * u;
+            const qy = q === 0 ? limb.my : q === 1 ? sy + (limb.my - sy) * u : limb.my + (limb.ey - limb.my) * u;
+            const qz = q === 0 ? limb.mz : q === 1 ? sz + (limb.mz - sz) * u : limb.mz + (limb.ez - limb.mz) * u;
+            // a stretched arm is drawn thicker
+            const d = this.bodyPush(qx, qy, qz, (q === 2 ? G_FORE : G_ELBOW) * Math.sqrt(limb.stretch), hs, hsx);
+            if (d <= 0) continue;
+            // the upper arm turns about the shoulder: its elbow has to go further
+            const g = q === 1 ? 1 / u : q === 2 && !free ? 2 : 1;
+            if (d * g > el) {
+              el = d * g;
+              ex = gP[0] * g;
+              ey = gP[1] * g;
+              ez = gP[2] * g;
+            }
+            // a free hand goes along: all of the forearm's push, and half the elbow's, since a nearly straight arm can only move its elbow by moving its hand
+            if (free && (q === 2 || q === 0)) {
+              const hk = q === 2 ? 1 : 0.5;
+              hx += gP[0] * hk;
+              hy += gP[1] * hk;
+              hz += gP[2] * hk;
+            }
+          }
+          if (el <= 1e-5) break;
+          tx += hx;
+          ty += hy;
+          tz += hz;
+          px = limb.mx + ex - sx;
+          py = limb.my + ey - sy;
+          pz = limb.mz + ez - sz;
+          solveLimb(sx, sy, sz, tx, ty, tz, l1, l2, px, py, pz, 1, ARM_MAX_STRETCH, limb);
+        }
+      }
       const st = limb.stretch;
       // a stretched arm thickens too, so a long reach reads as a strong arm and not a noodle
       const thick = Math.sqrt(st);
