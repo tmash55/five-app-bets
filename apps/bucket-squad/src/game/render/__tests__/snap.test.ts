@@ -254,27 +254,35 @@ function fmt(s: Snap): string {
 
 const KINDS = ['hips', 'head', 'hands', 'feet', 'yaw', 'ball', 'camera', 'aim'];
 
+/** Every snap of `seeds` played `seconds` each under `clock`, the seed added to each state. */
+export function snapGather(seeds: number[], seconds: number, clock: number[]): SnapRun {
+  const snaps: Snap[] = [];
+  const all = new Map<string, number[]>();
+  let frames = 0;
+  for (const seed of seeds) {
+    const r = snapRun(seed, seconds, clock);
+    frames += r.frames;
+    for (const s of r.snaps) snaps.push({ ...s, state: `${s.state} s${seed}` });
+    for (const [k, v] of r.all) {
+      const list = all.get(k) ?? [];
+      for (const x of v) list.push(x);
+      all.set(k, list);
+    }
+  }
+  return { snaps, all, frames };
+}
+
+const worst = (v: number[]): number => v.reduce((a, b) => Math.max(a, b), 0);
+
 export function snapReport(seeds: number[], seconds: number): string {
   const out: string[] = [];
   for (const [name, clock] of Object.entries(CLOCKS)) {
-    const snaps: Snap[] = [];
-    const all = new Map<string, number[]>();
-    let frames = 0;
-    for (const seed of seeds) {
-      const r = snapRun(seed, seconds, clock);
-      frames += r.frames;
-      for (const s of r.snaps) snaps.push({ ...s, state: `${s.state} s${seed}` });
-      for (const [k, v] of r.all) {
-        const list = all.get(k) ?? [];
-        for (const x of v) list.push(x);
-        all.set(k, list);
-      }
-    }
+    const { snaps, all, frames } = snapGather(seeds, seconds, clock);
     out.push(`== ${name}: seeds ${seeds.join(',')}, ${seconds}s each, ${frames} frames`);
     out.push(`   per kind: p99 / p99.9 / worst`);
     for (const k of KINDS) {
       const v = all.get(k) ?? [];
-      out.push(`   ${k.padEnd(7)} ${pct(v, 0.99).toFixed(2)} / ${pct(v, 0.999).toFixed(2)} / ${v.reduce((a, b) => Math.max(a, b), 0).toFixed(2)}`);
+      out.push(`   ${k.padEnd(7)} ${pct(v, 0.99).toFixed(2)} / ${pct(v, 0.999).toFixed(2)} / ${worst(v).toFixed(2)}`);
     }
     out.push('   top 20:');
     for (const s of topSnaps(snaps, 20)) out.push('   ' + fmt(s));
@@ -292,17 +300,72 @@ export function snapReport(seeds: number[], seconds: number): string {
   return out.join('\n');
 }
 
+/**
+ * The limits, per display clock and kind: [p99.9, worst] (m/s; rad/s for the yaw). Before the drawn match was smoothed the same
+ * matches measured, at 60 Hz: hands 40 / 115, yaw 31.5 / 87, ball 73 / 146, camera 1.8 / 17.9; at 120 Hz: hands 47 / 170,
+ * ball 102 / 207. What is left on the ball is mostly a fast pass stopping in the hands, a real stop in a frame. Never raise these.
+ */
+const LIMITS: Record<string, Record<string, [number, number]>> = {
+  '60 Hz': {
+    hips: [4, 8],
+    head: [8, 16],
+    hands: [18, 30],
+    feet: [8, 17],
+    yaw: [14, 42],
+    ball: [30, 52],
+    camera: [2, 3],
+    aim: [0.8, 1],
+  },
+  '16/33 ms': {
+    hips: [4, 13],
+    head: [8, 14],
+    hands: [18, 45],
+    feet: [9, 15],
+    yaw: [16, 31],
+    ball: [33, 54],
+    camera: [2.7, 4],
+    aim: [1.1, 1.2],
+  },
+  '120 Hz': {
+    hips: [3.5, 13],
+    head: [11, 29],
+    hands: [29, 64],
+    feet: [8, 28],
+    yaw: [9, 42],
+    ball: [54, 93],
+    camera: [1.1, 1.7],
+    aim: [0.4, 0.5],
+  },
+};
+
+const SEEDS = [7, 12, 5, 9, 21];
+const SECONDS = 45;
+
 describe('snap audit', () => {
   const report = process.env.SNAP_REPORT;
   if (report) {
     it('writes the report', () => {
-      const [seeds, secs] = (process.env.SNAP_ARGS || '7,12,5,9,21:45').split(':');
+      const [seeds, secs] = (process.env.SNAP_ARGS || `${SEEDS.join(',')}:${SECONDS}`).split(':');
       fs.writeFileSync(report, snapReport(seeds.split(',').map(Number), Number(secs)) + '\n');
     }, 900000);
-  } else {
-    it('runs', () => {
-      const r = snapRun(7, 5, CLOCKS['60 Hz']);
-      expect(r.frames).toBeGreaterThan(200);
-    });
+    return;
+  }
+  for (const [name, clock] of Object.entries(CLOCKS)) {
+    it(`${name}: no part of a drawn match changes speed past its limits`, () => {
+      const r = snapGather(SEEDS, SECONDS, clock);
+      expect(r.frames).toBeGreaterThan(SEEDS.length * SECONDS * 15);
+      const got: Record<string, [number, number]> = {};
+      const over: string[] = [];
+      for (const k of KINDS) {
+        const v = r.all.get(k) ?? [];
+        const [p, w] = LIMITS[name][k];
+        got[k] = [Math.round(pct(v, 0.999) * 100) / 100, Math.round(worst(v) * 100) / 100];
+        if (got[k][0] > p || got[k][1] > w) {
+          const top = topSnaps(r.snaps.filter((s) => kindOf(s.part) === k), 1)[0];
+          over.push(`${k} ${got[k][0]} / ${got[k][1]} over ${p} / ${w}${top ? `: ${fmt(top)}` : ''}`);
+        }
+      }
+      expect(over).toEqual([]);
+    }, 120000);
   }
 });
