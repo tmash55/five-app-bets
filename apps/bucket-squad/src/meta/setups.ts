@@ -17,6 +17,12 @@ const QUICK_LEVELS = [
   { difficulty: 0.82, level: 4, rubberBand: 0.2 },
 ] as const;
 
+/**
+ * How much stronger than your side a surprise opponent may be, per difficulty: on Rookie a surprise is about your
+ * match, on Pro a step up, on All-Star anyone. A team you pick yourself is never limited.
+ */
+export const SURPRISE_ROOM = [4, 12, Infinity] as const;
+
 export const QUARTERS = 4;
 
 /** how much wider the "perfect" release window is than the simulation's own */
@@ -100,6 +106,19 @@ export interface QuickOptions {
   court: CourtId | null;
 }
 
+/**
+ * The teams a surprise may come from: those within this difficulty's room above your side's overall, or, when none
+ * is, the weakest of them (all teams that tie for weakest).
+ */
+export function fairSurprises(teams: readonly TeamDef[], home: Side, perTeam: 2 | 3, difficulty: 0 | 1 | 2, sideOf: (t: TeamDef) => Side): TeamDef[] {
+  const mine = sideOverall(home, perTeam);
+  const rated = teams.map((t) => ({ t, ovr: sideOverall(withoutMirrors(sideOf(t), home), perTeam) }));
+  const fair = rated.filter((r) => r.ovr <= mine + SURPRISE_ROOM[difficulty]);
+  if (fair.length > 0) return fair.map((r) => r.t);
+  const least = Math.min(...rated.map((r) => r.ovr));
+  return rated.filter((r) => r.ovr === least).map((r) => r.t);
+}
+
 export function quickSetup(prefs: Prefs, o: QuickOptions, rng: Rng = Math.random): MatchSetup {
   const lv = QUICK_LEVELS[o.difficulty];
   const home = homeSide(prefs.squad, prefs.uniform);
@@ -110,7 +129,7 @@ export function quickSetup(prefs: Prefs, o: QuickOptions, rng: Rng = Math.random
   const inLeague = o.league ? everyone.filter((t) => t.league === o.league) : everyone;
   const all = inLeague.length > 0 ? inLeague : everyone;
   const clean = all.filter((t) => !sideOf(t).players.some((p) => mine.has(p.id)));
-  const team = o.opponent ? teamById(o.opponent) : pick(rng, clean.length > 0 ? clean : all);
+  const team = o.opponent ? teamById(o.opponent) : pick(rng, fairSurprises(clean.length > 0 ? clean : all, home, o.perTeam, o.difficulty, sideOf));
   return {
     mode: 'quick',
     perTeam: o.perTeam,

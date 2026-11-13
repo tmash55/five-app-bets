@@ -3,7 +3,7 @@ import { KIT_CLASH, TEAMS, colorGap, kitAgainst, kitsClash, mustPlayer, playerOv
 import { TIERS } from '../ladder';
 import { buildMatch, chemistry, type Side, type SidePlayer } from '../match';
 import { seededRng } from '../rng';
-import { QUARTERS, homeSide, ladderSetup, playableTeams, quickSetup, sideOverall, teamSide, tourSetup, withoutMirrors, type Prefs } from '../setups';
+import { QUARTERS, SURPRISE_ROOM, fairSurprises, homeSide, ladderSetup, playableTeams, quickSetup, sideOverall, teamSide, tourSetup, withoutMirrors, type Prefs } from '../setups';
 import { toursFor } from '../tour';
 
 /** the three Comets everyone starts with, best first */
@@ -148,6 +148,37 @@ describe('a quick game', () => {
         expect(ids(s.away)).toEqual(ids(teamSide(teamById(s.away.kitTeam), 3, difficulty, s.away.players[0].level)));
       }
     }
+  });
+
+  it('keeps a surprise fair for the difficulty: about your match on Rookie, a step up on Pro, anyone on All-Star', () => {
+    for (const perTeam of [2, 3] as const) {
+      const mine = sideOverall(homeSide(STARTERS), perTeam);
+      const seen: Record<number, Set<string>> = { 0: new Set(), 1: new Set(), 2: new Set() };
+      for (let seed = 1; seed <= 300; seed++) {
+        for (const difficulty of [0, 1, 2] as const) {
+          const s = quickSetup(prefs(), { perTeam, difficulty, opponent: null, court: null }, seededRng(seed));
+          const theirs = sideOverall(s.away, perTeam);
+          if (difficulty === 0) expect([s.away.kitTeam, theirs <= mine + SURPRISE_ROOM[0]]).toEqual([s.away.kitTeam, true]);
+          if (difficulty === 1) expect([s.away.kitTeam, theirs <= mine + SURPRISE_ROOM[1]]).toEqual([s.away.kitTeam, true]);
+          seen[difficulty].add(s.away.kitTeam);
+        }
+      }
+      // the starters never meet the two strongest teams by surprise on Rookie or Pro, but can on All-Star
+      for (const strong of ['legends', 'throwbacks']) {
+        expect(seen[0].has(strong)).toBe(false);
+        expect(seen[1].has(strong)).toBe(false);
+        expect(seen[2].has(strong)).toBe(true);
+      }
+      // and there is still a choice of several teams at every level
+      for (const d of [0, 1, 2]) expect(seen[d].size).toBeGreaterThanOrEqual(4);
+    }
+  });
+
+  it('falls back to the weakest teams when none fits the room', () => {
+    const strongest = playableTeams(3).filter((t) => t.id === 'legends' || t.id === 'throwbacks');
+    const home = homeSide(STARTERS);
+    const sideOf = (t: (typeof strongest)[number]) => teamSide(t, 3, 0, 1);
+    expect(fairSurprises(strongest, home, 3, 0, sideOf).map((t) => t.id)).toEqual(['throwbacks']);
   });
 
   it('still fields a full, different side when you pick your own team', () => {
