@@ -57,6 +57,8 @@ export interface StickerButtonProps extends Omit<StickerProps, 'pressed'> {
   iconColor?: ColorName | (string & {});
   textColor?: ColorName | (string & {});
   textSize?: 'small' | 'body' | 'large' | 'title' | 'big';
+  /** a smaller font size for a label that has to fit a narrow button (the button keeps its height) */
+  labelPx?: number;
   height?: number;
   /** skip the click sound (the caller plays its own) */
   quiet?: boolean;
@@ -74,6 +76,7 @@ export function StickerButton({
   iconColor,
   textColor = 'ink',
   textSize = 'large',
+  labelPx,
   height,
   quiet,
   hitSlop = space.xs,
@@ -109,7 +112,7 @@ export function StickerButton({
           <>
             {icon && <Icon name={icon} size={iconSize} color={iconColor ?? textColor} />}
             {label !== undefined && (
-              <Txt font="display" size={textSize} color={textColor} lines={1}>
+              <Txt font="display" size={textSize} color={textColor} lines={1} style={labelPx !== undefined && { fontSize: labelPx }}>
                 {label}
               </Txt>
             )}

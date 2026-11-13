@@ -1,4 +1,4 @@
-import { MIN_FIT, fitName } from '../fitName';
+import { MIN_FIT, fitName, fitSize, textWidth } from '../fitName';
 
 describe('fitName', () => {
   it('leaves a name that fits alone', () => {
@@ -28,5 +28,35 @@ describe('fitName', () => {
 
   it('keeps a one-word name whole', () => {
     expect(fitName('Moose', 16, 20).text).toBe('Moose');
+  });
+
+  it('measures each letter, so a long name of narrow letters is not cut short', () => {
+    // the same number of letters, but wide ones need more room than narrow ones
+    expect(textWidth('Mwww', 16)).toBeGreaterThan(textWidth('Iill', 16) * 2);
+    // a long name that fits once shrunk a little keeps every letter
+    const long = 'Bartholomew Hollingsworth-Lee';
+    const room = textWidth(long, 20) * 0.8;
+    const fit = fitName(long, 20, room, 'Bart');
+    expect(fit.text).toBe(long);
+    expect(textWidth(fit.text, fit.px)).toBeLessThanOrEqual(room);
+  });
+
+  it('never measures a fitted name wider than its room', () => {
+    for (const name of ['Wren Kowalski', 'Hank Dooley Jr.', 'Zoë Ångström-Wu', 'Maximilian-Alexander Featherstonehaugh']) {
+      for (const room of [60, 90, 120, 180]) {
+        const fit = fitName(name, 16, room, 'Max');
+        if (fit.px > 16 * MIN_FIT) expect(textWidth(fit.text, fit.px)).toBeLessThanOrEqual(room);
+      }
+    }
+  });
+});
+
+describe('fitSize', () => {
+  it('keeps the size of a line that fits, and shrinks one that does not, down to the floor', () => {
+    expect(fitSize('Comets', 20, 200)).toBe(20);
+    const px = fitSize('Timberwolves', 20, textWidth('Timberwolves', 20) * 0.9);
+    expect(px).toBeLessThan(20);
+    expect(px).toBeGreaterThanOrEqual(20 * MIN_FIT);
+    expect(fitSize('Timberwolves', 20, 10)).toBe(20 * MIN_FIT);
   });
 });

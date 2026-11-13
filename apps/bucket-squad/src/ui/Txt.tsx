@@ -3,6 +3,7 @@
 import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
 import { color, font, stroke, text, type ColorName } from '@/theme/tokens';
+import { MIN_FIT_LABEL } from './fitName';
 
 type SizeName = keyof typeof text;
 type FontName = keyof typeof font;
@@ -34,7 +35,7 @@ export function Txt({ children, size = 'body', font: f = 'body', color: c = 'ink
       allowFontScaling={false}
       numberOfLines={lines ?? (fit ? 1 : undefined)}
       adjustsFontSizeToFit={fit}
-      minimumFontScale={fit ? 0.6 : undefined}
+      minimumFontScale={fit ? MIN_FIT_LABEL : undefined}
       style={[
         {
           fontFamily: font[f],

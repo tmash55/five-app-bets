@@ -2,7 +2,8 @@
 
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { size as sizes, space, type ColorName } from '@/theme/tokens';
+import { size as sizes, space, stroke, text, type ColorName } from '@/theme/tokens';
+import { fitSize } from './fitName';
 import type { IconName } from './Icon';
 import { StickerButton } from './Sticker';
 
@@ -55,12 +56,15 @@ export function Segmented<T extends string | number>({
   value,
   onChange,
   fill = 'sun',
+  labelRoom,
   style,
 }: {
   options: readonly Choice<T>[];
   value: T;
   onChange: (value: T) => void;
   fill?: ColorName;
+  /** how wide a label may be; a longer one is drawn a little smaller */
+  labelRoom?: number;
   style?: StyleProp<ViewStyle>;
 }) {
   return (
@@ -74,6 +78,7 @@ export function Segmented<T extends string | number>({
             fill={on ? fill : 'paperDim'}
             textColor={on ? 'ink' : 'inkFaint'}
             textSize="body"
+            labelPx={labelRoom === undefined ? undefined : fitSize(o.label, text.body, labelRoom)}
             raise={on ? 'low' : 'none'}
             round="md"
             height={sizes.buttonSmall}
@@ -90,10 +95,12 @@ export function Segmented<T extends string | number>({
 
 /** width of one tab in a screen's header */
 const TAB_W = sizes.card + space.xs;
+/** room for a tab's label: the tab less its padding and outline */
+const TAB_ROOM = TAB_W - space.sm * 2 - stroke.regular * 2;
 
 /** A pick-one row narrow enough to sit in a screen's header, for switching between leagues. */
 export function HeaderTabs<T extends string | number>({ options, value, onChange, fill }: { options: readonly Choice<T>[]; value: T; onChange: (value: T) => void; fill?: ColorName }) {
-  return <Segmented options={options} value={value} onChange={onChange} fill={fill} style={{ width: options.length * TAB_W + (options.length - 1) * space.sm }} />;
+  return <Segmented options={options} value={value} onChange={onChange} fill={fill} labelRoom={TAB_ROOM} style={{ width: options.length * TAB_W + (options.length - 1) * space.sm }} />;
 }
 
 const styles = StyleSheet.create({

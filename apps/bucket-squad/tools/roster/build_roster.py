@@ -446,7 +446,7 @@ def main():
     if errors:
         print("\n".join(errors))
         sys.exit(1)
-    data = {"id": "neighborhood", "name": "Neighborhood League", "teams": TEAMS, "players": CAST}
+    data = {"id": "neighborhood", "name": "Neighborhood", "teams": TEAMS, "players": CAST}
     OUT.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n")
     by = {}
     for p in CAST:

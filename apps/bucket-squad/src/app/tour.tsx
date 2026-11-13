@@ -13,6 +13,7 @@ import { startTour } from '@/state/play';
 import { useSave } from '@/state/save';
 import { color, opacity, size as sizes, space, stroke } from '@/theme/tokens';
 import { Avatar, RarityTag, Stars, Tag, TeamBadge, readableOn } from '@/ui/Bits';
+import { FitLine } from '@/ui/FitLine';
 import { Icon } from '@/ui/Icon';
 import { HeaderTabs } from '@/ui/Inputs';
 import { PackArt } from '@/ui/PackArt';
@@ -62,9 +63,9 @@ function StageCard({ tour, index, progress, owned, packDone, onPlay }: { tour: T
       <View style={[styles.head, { backgroundColor: stage.team.color }]}>
         <TeamBadge team={stage.team} diameter={sizes.badge} />
         <View style={styles.grow}>
-          <Txt font="display" size="large" color={on} lines={1}>
+          <FitLine size="large" color={on}>
             {stage.team.name}
-          </Txt>
+          </FitLine>
           <Txt size="tiny" color={on} lines={1}>
             {COURTS[stage.team.court].name}
           </Txt>
@@ -79,9 +80,7 @@ function StageCard({ tour, index, progress, owned, packDone, onPlay }: { tour: T
               <Txt size="tiny" color="inkSoft">
                 {(owned[star.id] ?? 0) > 0 ? 'ON YOUR SHELF' : 'WIN THEIR STAR'}
               </Txt>
-              <Txt font="display" size="body" lines={1}>
-                {star.name}
-              </Txt>
+              <FitLine person={star}>{star.name}</FitLine>
             </View>
             <RarityTag rarity={star.rarity} style={styles.centerSelf} />
           </View>

@@ -1,4 +1,4 @@
-import { TEAMS, colorGap, kitAgainst, kitsClash, mustPlayer, playerOverall, teamById, teamPlayers } from '@/data/roster';
+import { KIT_CLASH, TEAMS, colorGap, kitAgainst, kitsClash, mustPlayer, playerOverall, teamById, teamPlayers } from '@/data/roster';
 
 import { TIERS } from '../ladder';
 import { buildMatch, chemistry, type Side, type SidePlayer } from '../match';
@@ -294,10 +294,24 @@ describe('uniforms', () => {
     for (const home of TEAMS) {
       for (const away of TEAMS) {
         const kit = kitAgainst(home, away);
-        expect(colorGap(home.kit.jersey, kit.jersey)).toBeGreaterThanOrEqual(0.42);
+        expect(colorGap(home.kit.jersey, kit.jersey)).toBeGreaterThanOrEqual(KIT_CLASH);
         // visitors only change when they have to
         if (home.id !== away.id && !kitsClash(home, away)) expect(kit).toBe(away.kit);
       }
+    }
+  });
+
+  it('changes strip for two shades of one colour', () => {
+    const home = teamById('comets');
+    const shade = (id: string, jersey: string, trim: string) => ({ ...home, id, kit: { ...home.kit, jersey, trim } });
+    // red against wine, and royal blue against navy: far enough apart on paper, too close on a busy court
+    for (const [a, b] of [
+      ['#E03A3E', '#860038'],
+      ['#006BB6', '#00285E'],
+    ]) {
+      const kit = kitAgainst(shade('h', a, '#FFFFFF'), shade('v', b, '#FDBB30'));
+      expect(kit.jersey).not.toBe(b);
+      expect(colorGap(a, kit.jersey)).toBeGreaterThanOrEqual(KIT_CLASH);
     }
   });
 

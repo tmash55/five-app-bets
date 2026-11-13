@@ -100,8 +100,11 @@ export function byValue(a: PlayerDef, b: PlayerDef): number {
 // ---------------------------------------------------------------------------
 
 const WHITE = '#FFFFFF';
-/** jerseys closer than this are too alike to tell two teams apart */
-const CLASH = 0.42;
+/**
+ * Jerseys closer than this are too alike to tell two teams apart. Two shades of one colour (red and wine,
+ * royal blue and navy, navy and black) sit just under 0.48 and are hard to tell apart on a busy court.
+ */
+export const KIT_CLASH = 0.48;
 
 /** How different two colours are: 0 for the same colour, about 1.7 for black against white. */
 export function colorGap(a: string, b: string): number {
@@ -129,7 +132,7 @@ export function awayKit(kit: KitColors): KitColors {
 }
 
 export function kitsClash(home: TeamDef, away: TeamDef): boolean {
-  return colorGap(home.kit.jersey, away.kit.jersey) < CLASH;
+  return colorGap(home.kit.jersey, away.kit.jersey) < KIT_CLASH;
 }
 
 /** A plain white strip with the team's darkest colour for trim and numbers. */
@@ -147,7 +150,7 @@ export function kitAgainst(home: TeamDef, away: TeamDef): KitColors {
   if (home.id !== away.id && !kitsClash(home, away)) return away.kit;
   const gap = (kit: KitColors) => colorGap(home.kit.jersey, kit.jersey);
   const options = [awayKit(away.kit), whiteKit(away.kit)];
-  return options.find((kit) => gap(kit) >= CLASH) ?? options.reduce((best, kit) => (gap(kit) > gap(best) ? kit : best));
+  return options.find((kit) => gap(kit) >= KIT_CLASH) ?? options.reduce((best, kit) => (gap(kit) > gap(best) ? kit : best));
 }
 
 /** The colour that stands for a team on the court (rings, arrows) and in the HUD. */

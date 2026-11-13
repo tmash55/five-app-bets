@@ -6,8 +6,9 @@ import Svg, { Circle, Path, Polygon, Rect } from 'react-native-svg';
 
 import { teamById } from '@/data/roster';
 import type { PackDef } from '@/meta/packs';
-import { color, opacity, size as sizes, stroke } from '@/theme/tokens';
+import { color, opacity, size as sizes, stroke, text } from '@/theme/tokens';
 import { TeamBadge } from './Bits';
+import { MIN_FIT_LABEL, fitSize } from './fitName';
 import { Icon } from './Icon';
 import { Txt, resolveColor } from './Txt';
 
@@ -15,6 +16,8 @@ import { Txt, resolveColor } from './Txt';
 const W = 100;
 const H = 138;
 const TEETH = 9;
+/** the name strip's margin from each side of the pack, on the drawing's grid */
+const LABEL_INSET = 14;
 
 /** height for a width of 1 */
 export const PACK_RATIO = H / W;
@@ -52,6 +55,7 @@ export const PackArt = memo(function PackArt({ pack, width = sizes.card, style }
   const k = width / W;
   const emblem = 42 * k;
   const label = pack.name.replace(/ Pack$/, '').toUpperCase();
+  const labelSize = width >= sizes.cardLarge ? 'large' : width >= sizes.card ? 'body' : 'tiny';
   return (
     <View style={[{ width, height }, style]}>
       <Svg width={width} height={height} viewBox={`0 0 ${W} ${H}`}>
@@ -72,11 +76,14 @@ export const PackArt = memo(function PackArt({ pack, width = sizes.card, style }
       <View pointerEvents="none" style={[styles.emblem, { top: 60 * k - emblem / 2, left: width / 2 - emblem / 2, width: emblem, height: emblem }]}>
         {pack.team ? <TeamBadge team={teamById(pack.team)} diameter={emblem} /> : <Icon name={pack.id === 'legend' ? 'crown' : pack.id === 'allstar' ? 'star' : 'ball'} size={emblem * 0.72} color="white" />}
       </View>
-      <View pointerEvents="none" style={[styles.label, { top: 86 * k, height: 20 * k, left: 14 * k, right: 14 * k }]}>
-        <Txt font="display" size={width >= sizes.cardLarge ? 'large' : width >= sizes.card ? 'body' : 'tiny'} fit center>
-          {label}
-        </Txt>
-      </View>
+      {/* a pack drawn as small as an icon keeps its name strip blank: no name fits there */}
+      {width >= sizes.badge && (
+        <View pointerEvents="none" style={[styles.label, { top: 86 * k, height: 20 * k, left: LABEL_INSET * k, right: LABEL_INSET * k }]}>
+          <Txt font="display" size={labelSize} fit center style={{ fontSize: fitSize(label, text[labelSize], width - LABEL_INSET * 2 * k, MIN_FIT_LABEL) }}>
+            {label}
+          </Txt>
+        </View>
+      )}
     </View>
   );
 });
