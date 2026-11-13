@@ -259,3 +259,52 @@ describe('the horn', () => {
     expect(said).toEqual(['END OF Q4']);
   });
 });
+
+describe('fire', () => {
+  type Shown = { text: string; tone?: string; sub?: string };
+
+  test('a player catching fire gets a big callout of their own and the ignite sound, for either team', () => {
+    for (const who of [0, 4]) {
+      sfx.mockClear();
+      const m = match();
+      const shown: Shown[] = [];
+      const d = director((c) => shown.push(c));
+      d.handle({ type: 'fire', player: who, on: true }, m);
+      expect(heard('ignite')).toHaveLength(1);
+      expect(shown).toHaveLength(1);
+      expect(shown[0].tone).toBe('fire');
+      expect(shown[0].sub).toBe(['A', 'B', 'C', 'D', 'E', 'F'][who]);
+      // the fire going out is quiet
+      d.handle({ type: 'fire', player: who, on: false }, m);
+      expect(shown).toHaveLength(1);
+      expect(heard('ignite')).toHaveLength(1);
+    }
+  });
+
+  test('a basket that lights a player is called first, and the fire a moment later', () => {
+    const m = match();
+    const shown: Shown[] = [];
+    const d = director((c) => shown.push(c));
+    d.handle({ type: 'score', by: 0, team: 0, points: 3, kind: 'jumper', perfect: false, buzzer: false, assist: -1 }, m);
+    d.handle({ type: 'fire', player: 0, on: true }, m);
+    expect(shown).toHaveLength(1);
+    expect(shown[0].tone).not.toBe('fire');
+    for (let i = 0; i < 30; i++) step(d, m);
+    expect(shown).toHaveLength(1);
+    for (let i = 0; i < 30; i++) step(d, m);
+    expect(shown).toHaveLength(2);
+    expect(shown[1].tone).toBe('fire');
+  });
+
+  test('shots and dunks by a player on fire crackle, and nobody else’s do', () => {
+    const m = match();
+    const d = director();
+    d.handle({ type: 'shot', by: 1, three: false, grade: 'ok', contest: 0 }, m);
+    d.handle({ type: 'dunkStart', by: 1, style: 'twoHand', oop: false }, m);
+    expect(heard('fireShot')).toHaveLength(0);
+    m.players[1].fireT = 5;
+    d.handle({ type: 'shot', by: 1, three: false, grade: 'ok', contest: 0 }, m);
+    d.handle({ type: 'dunkStart', by: 1, style: 'twoHand', oop: false }, m);
+    expect(heard('fireShot')).toHaveLength(2);
+  });
+});

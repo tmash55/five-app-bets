@@ -59,6 +59,9 @@ const TRIM: Partial<Record<SfxName, number>> = {
   buzzer: 0.8,
   ankle: 0.55,
   hypeEnd: 0.6,
+  // catching fire is a big moment but should not drown the basket that lit it
+  ignite: 0.7,
+  fireShot: 0.75,
   lose: 0.7,
   // the pack opening: the slam's boom measures loud for how it sounds, and a lamp tick plays up to thirty times a card
   slam: 0.65,

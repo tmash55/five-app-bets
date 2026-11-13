@@ -1,4 +1,4 @@
-/** The match overlay: scoreboard, shot clock, hype bars and the big pop-up callouts. */
+/** The match overlay: scoreboard, shot clock, hype bars, flame meters and the big pop-up callouts. */
 
 import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { HudState } from '@/game/runner';
 import { color, duration, layer, px, radius, size as sizes, space, stroke, type ColorName } from '@/theme/tokens';
 import { Avatar, ProgressBar, readableOn } from '@/ui/Bits';
+import { Icon } from '@/ui/Icon';
 import { Sticker } from '@/ui/Sticker';
 import { StickerText, Txt } from '@/ui/Txt';
 import type { Callout, CalloutTone } from './director';
@@ -94,8 +95,44 @@ export const Scoreboard = memo(function Scoreboard({ hud, names, colors }: { hud
   );
 });
 
+/** a flame meter is full at this many steps (the HUD gets one more while the player is on fire) */
+const HEAT_STEPS = 20;
+
+/** One of the person's players and their flame meter; it flares up while they are on fire. */
+const FlameTag = memo(function FlameTag({ playerId, fill, value, you }: { playerId: string; fill: string; value: number; you: boolean }) {
+  const lit = value > HEAT_STEPS;
+  const flick = useSharedValue(0);
+  useEffect(() => {
+    flick.set(lit ? withRepeat(withTiming(1, { duration: duration.normal, easing: Easing.inOut(Easing.quad) }), -1, true) : withTiming(0, { duration: duration.normal }));
+  }, [lit, flick]);
+  const flame = useAnimatedStyle(() => ({ transform: [{ scale: 1 + 0.3 * flick.value }, { rotate: `${-10 + 20 * flick.value}deg` }] }));
+  return (
+    <Sticker fill={lit ? 'orange' : you ? 'white' : 'paper'} round="md" raise="low" border={stroke.thin} face={styles.tagFace}>
+      <Avatar id={playerId} diameter={sizes.avatarSmall} fill={fill} />
+      <View style={styles.tagMeter}>
+        <Animated.View style={flame}>
+          <Icon name="flame" size={sizes.iconSmall} color={lit ? 'sun' : value > 0 ? 'orange' : 'paperDim'} />
+        </Animated.View>
+        <ProgressBar value={lit ? 1 : value / HEAT_STEPS} fill={lit ? 'sun' : 'orange'} track="paperDim" height={sizes.bar - stroke.thin} style={styles.tagBar} />
+      </View>
+    </Sticker>
+  );
+});
+
+/** The person's squad in the top corner, each with a flame meter. */
+export const SquadHeat = memo(function SquadHeat({ players, fill }: { players: { id: string; fire: number; you: boolean }[]; fill: string }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View pointerEvents="none" style={[styles.squad, { top: Math.max(insets.top, space.sm), right: Math.max(insets.right, space.md) }]}>
+      {players.map((p) => (
+        <FlameTag key={p.id} playerId={p.id} fill={fill} value={p.fire} you={p.you} />
+      ))}
+    </View>
+  );
+});
+
 /** Who the person is controlling right now, at the bottom of the screen. */
-export const ControlPlate = memo(function ControlPlate({ playerId, name, fill, hyped }: { playerId: string; name: string; fill: string; hyped: boolean }) {
+export const ControlPlate = memo(function ControlPlate({ playerId, name, fill, hyped, onFire }: { playerId: string; name: string; fill: string; hyped: boolean; onFire?: boolean }) {
   const insets = useSafeAreaInsets();
   const pop = useSharedValue(1);
   useEffect(() => {
@@ -104,11 +141,12 @@ export const ControlPlate = memo(function ControlPlate({ playerId, name, fill, h
   const style = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
   return (
     <Animated.View pointerEvents="none" style={[styles.plate, { bottom: Math.max(insets.bottom, space.sm) }, style]}>
-      <Sticker fill={hyped ? 'sun' : 'paper'} round="pill" raise="low" face={styles.plateFace}>
+      <Sticker fill={onFire ? 'orange' : hyped ? 'sun' : 'paper'} round="pill" raise="low" face={styles.plateFace}>
         <Avatar id={playerId} diameter={sizes.avatarSmall} fill={fill} />
         <Txt font="display" size="body" lines={1}>
           {name}
         </Txt>
+        {onFire && <Icon name="flame" size={sizes.iconSmall} color="sun" />}
       </Sticker>
     </Animated.View>
   );
@@ -131,6 +169,8 @@ function toneColor(tone: CalloutTone, colors: [string, string]): ColorName | (st
       return colors[1];
     case 'gold':
       return 'sun';
+    case 'fire':
+      return 'orange';
     case 'perfect':
       return 'perfect';
     case 'good':
@@ -285,6 +325,26 @@ const styles = StyleSheet.create({
     paddingLeft: space.xs,
     paddingRight: space.md,
     paddingVertical: space.hair,
+  },
+  squad: {
+    position: 'absolute',
+    flexDirection: 'row',
+    gap: space.xs,
+    zIndex: layer.hud,
+  },
+  tagFace: {
+    alignItems: 'center',
+    gap: space.hair,
+    padding: space.xs,
+  },
+  tagMeter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.hair,
+    width: sizes.avatarSmall + space.lg,
+  },
+  tagBar: {
+    flex: 1,
   },
   callouts: {
     ...StyleSheet.absoluteFill,

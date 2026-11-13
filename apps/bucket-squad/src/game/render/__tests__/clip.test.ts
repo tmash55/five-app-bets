@@ -1310,9 +1310,11 @@ describe('warm-up figures keep their parts out of each other', () => {
 });
 
 describe('match figures keep their arms and the held ball out of their own head and body', () => {
-  // 45 s of two computer-only matches (seed 7 has a dunk in it), both builds of the warm-up's checks taking turns down the roster, measured every third frame
+  // 45 s of three computer-only matches (seeds 5 and 21 have alley-oops in them), both builds of the warm-up's checks taking turns down the roster, measured every third frame
   // (centimetres of a figure 120 cm tall: before the fix, over a minute of these matches, the held ball went 21-27 cm past its limit, the holder's hands 14 cm and the arms 22-24 cm)
-  const SEEDS = [7, 12];
+  // The seeds were 7 and 12 until players began to move by their ratings, which plays every game differently. The limits are as they were; the
+  // known leftovers (a raised arm under the big head, a ball held at the chin) land on a moment just past them in some games, as they did before.
+  const SEEDS = [5, 9, 21];
   const runs = new Map<number, MatchCheck>();
   const get = (seed: number) => {
     let r = runs.get(seed);

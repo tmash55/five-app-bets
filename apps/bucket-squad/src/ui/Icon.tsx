@@ -37,7 +37,8 @@ export type IconName =
   | 'hand'
   | 'shield'
   | 'wand'
-  | 'jump';
+  | 'jump'
+  | 'flame';
 
 export interface IconProps {
   name: IconName;
@@ -68,6 +69,14 @@ export function Icon({ name, size = sizes.icon, color: c = 'white', ink = 'ink' 
       break;
     case 'star':
       body = <Path d="M12 2.2l2.9 6.1 6.7.9-4.9 4.6 1.2 6.6L12 17.2l-5.9 3.2 1.2-6.6L2.4 9.2l6.7-.9z" fill={f} {...o} />;
+      break;
+    case 'flame':
+      body = (
+        <G>
+          <Path d="M12.4 2c.9 3.4 4.9 5.4 5.8 9.4.9 4.6-2 9.6-6.2 9.6S5 17.8 6 13.6c.4-1.8 1.7-3 2.2-4.6.5 1.5 1.3 2.4 2.3 2.8.1-3.4-.8-6.4 1.9-9.8z" fill={f} {...o} />
+          <Path d="M12.2 12.4c.6 1.6 2.6 2.6 2.6 4.8 0 1.7-1.2 2.9-2.8 2.9s-2.7-1.2-2.7-2.7c0-1.3.9-2 1.4-2.9.3.7.7 1.1 1.1 1.3.1-1.1-.1-2.2.4-3.4z" fill={color.sun} stroke={k} strokeWidth={1.2} strokeLinejoin="round" />
+        </G>
+      );
       break;
     case 'bolt':
       body = <Path d="M13.6 1.8L4.4 13.4h5.4l-1.6 8.8 9.6-12.2h-5.6z" fill={f} {...o} />;
