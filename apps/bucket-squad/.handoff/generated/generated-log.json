@@ -518,5 +518,29 @@
   "loop": false,
   "model": "eleven_text_to_sound_v3",
   "credits": 6
+ },
+ {
+  "file": "ambCanyon_1.mp3",
+  "text": "Hot desert canyon ambience in the afternoon: a steady dry wind blowing between red rocks, cicadas buzzing in the heat, now and then a hawk crying far away, no music, no voices",
+  "seconds": 20,
+  "loop": true,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 220
+ },
+ {
+  "file": "ambCanyon_2.mp3",
+  "text": "Hot desert canyon ambience in the afternoon: a steady dry wind blowing between red rocks, cicadas buzzing in the heat, now and then a hawk crying far away, no music, no voices",
+  "seconds": 20,
+  "loop": true,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 220
+ },
+ {
+  "file": "ambCanyon_2.mp3",
+  "text": "Hot desert canyon ambience in the afternoon: a steady dry wind blowing between red rocks, cicadas buzzing in the heat, now and then a hawk crying far away, no music, no voices",
+  "seconds": 20,
+  "loop": true,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 220
  }
 ]
