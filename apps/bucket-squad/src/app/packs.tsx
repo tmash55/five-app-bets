@@ -32,7 +32,6 @@ const READY_W = px(236);
 /** the room for a waiting pack's name: the panel less its padding, the well's, and the small pack beside it */
 const WELL_WORDS = READY_W - px(22) - px(4) - px(18) - px(36) - px(10);
 /** the corner of a waiting pack's row that its "?" takes from the name */
-const HELP_ROOM = px(14);
 /** the small round "what is inside" button after a shop pack's line; its tap area is the full size of a tap */
 const ODDS_DOT = px(20);
 /** the marquee bulbs swap every so often: a slow chase, never a flash */
@@ -152,12 +151,12 @@ function ReadyWell({ pack, line, onOdds, children }: { pack: PackDef; line: stri
         style={({ pressed }) => [styles.wellHead, pressed && styles.pressed]}>
         <FoilPack pack={pack} width={px(36)} flat />
         <View style={styles.wellWords} onLayout={(e: LayoutChangeEvent) => setRoom(e.nativeEvent.layout.width)}>
-          {/* the name keeps clear of the "?" in the corner above it */}
-          <PrintFit fit={fitText(pack.name, 'bold', neonText.body, room - HELP_ROOM, 'tight', 0.8)} face="bold" track="tight" />
+          <PrintFit fit={fitText(pack.name, 'bold', neonText.body, room, 'tight', 0.8)} face="bold" track="tight" />
           <PrintFit fit={fitText(line, 'medium', neonText.tiny, room)} face="medium" color="textDim" />
         </View>
-        <View style={styles.wellHelp}>
-          <LineIcon name="help" size={px(12)} color={night.textFaint} weight={2.6} />
+        {/* the same round "?" as under the shop's packs: the whole row opens what is inside */}
+        <View style={styles.oddsDot}>
+          <LineIcon name="help" size={px(12)} color={night.textDim} weight={2.6} />
         </View>
       </Pressable>
       {children}
@@ -416,11 +415,6 @@ const styles = StyleSheet.create({
   wellWords: {
     flex: 1,
     gap: px(2),
-  },
-  wellHelp: {
-    position: 'absolute',
-    right: -px(4),
-    top: -px(4),
   },
   oddsPanel: {
     gap: space.md,
