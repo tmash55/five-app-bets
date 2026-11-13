@@ -5,6 +5,7 @@
 
 import { Platform } from 'react-native';
 
+import { perfAdd, perfFrame, perfHud, perfOn, perfReport, perfReset, perfStep } from './perf';
 import { MatchRenderer, type MatchVisuals } from './render/renderer';
 import { DT, RULES } from './sim/constants';
 import { createMatch, stepMatch } from './sim/sim';
@@ -114,6 +115,7 @@ export class MatchRunner {
     this.gl = gl;
     this.renderer = new MatchRenderer(gl, this.visuals);
     this.last = -1;
+    perfReset();
     this.raf = requestAnimationFrame(this.frame);
     this.sendHud();
   }
@@ -145,6 +147,7 @@ export class MatchRunner {
     if (r) r.beforeStep(m);
     stepMatch(m, this.pad);
     if (r) r.afterStep(m);
+    if (perfOn()) perfStep(m.events.map((e) => e.type));
     const onEvent = this.hooks.onEvent;
     if (onEvent) {
       for (const e of m.events) onEvent(e, m);
@@ -152,6 +155,7 @@ export class MatchRunner {
     this.hooks.onStep?.(m);
     if (m.phase === 'final' && !this.finalSent && m.phaseT > 2.4) {
       this.finalSent = true;
+      perfReport('match');
       this.hooks.onFinal?.(m);
     }
   }
@@ -161,7 +165,15 @@ export class MatchRunner {
     const r = this.renderer;
     const gl = this.gl;
     if (!r || !gl) return;
+    const probe = perfOn();
+    if (probe) perfFrame(this.last < 0 ? 0 : now - this.last);
+    let t0 = probe ? performance.now() : 0;
     waitForGL(gl);
+    if (probe) {
+      const t1 = performance.now();
+      perfAdd('wait', t1 - t0);
+      t0 = t1;
+    }
     let dt = this.last < 0 ? 0 : (now - this.last) / 1000;
     this.last = now;
     if (dt > 0.1) dt = 0.1;
@@ -176,9 +188,15 @@ export class MatchRunner {
       }
       if (this.acc >= DT) this.acc = 0;
     }
+    if (probe) {
+      const t1 = performance.now();
+      perfAdd('sim', t1 - t0);
+      t0 = t1;
+    }
     r.resize(gl.drawingBufferWidth, gl.drawingBufferHeight);
     r.render(this.m, this.manual ? 1 : this.acc / DT, running ? dt : 0);
     gl.endFrameEXP?.();
+    if (probe) perfAdd('draw', performance.now() - t0);
     this.sendHud();
   };
 
@@ -230,6 +248,7 @@ export class MatchRunner {
     const key = hudKey(hud);
     if (key === this.lastHud) return;
     this.lastHud = key;
+    perfHud();
     onHud(hud);
   }
 }

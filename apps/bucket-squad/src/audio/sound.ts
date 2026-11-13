@@ -13,6 +13,7 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer, type AudioSource } from 'expo-audio';
 import { Platform } from 'react-native';
 
+import { perfLoad, perfSound } from '../game/perf';
 import { AMBIENCE_FILES, MUSIC_FILES, SFX_FILES } from './files';
 
 export type SfxName = keyof typeof SFX_FILES;
@@ -297,6 +298,7 @@ function poolFor(name: SfxName): Pool | null {
       for (let i = 0; i < each; i++) row.push(makeVoice(file));
     }
     const pool: Pool = { rows, turn: rows.map(() => 0), used: 0, count: takes.length * each };
+    perfLoad(name);
     live += pool.count;
     pools.set(name, pool);
     return pool;
@@ -337,6 +339,7 @@ export function playSfx(name: SfxName, volume = 1): void {
   const drift = DRIFT[name] ?? 0;
   const rate = drift > 0 ? 1 + (Math.random() * 2 - 1) * drift : 1;
   note('sfx', name, level, take, rate);
+  perfSound(name);
   const pool = poolFor(name);
   if (!pool) return;
   pool.used = Date.now();
