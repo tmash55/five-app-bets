@@ -1,16 +1,18 @@
-/** Settings: sound, controls, game length, your record, the how-to-play guide and starting over. */
+/** Settings: sound, controls, game length, your record, the how-to-play guide, the account and starting over. */
 
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { useAccount } from '@/account';
 import { HAS_EXTRA_ROSTER } from '@/data/roster';
 import { HowToOverlay } from '@/match/HowTo';
 import type { Stats } from '@/state/logic';
 import { useSave } from '@/state/save';
 import { tube as tubes } from '@/theme/arcade';
 import { px, space } from '@/theme/tokens';
+import { AccountRow, AccountSheet, useGate } from '@/ui/arcade/Account';
 import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
 import { GhostButton, GoldButton } from '@/ui/arcade/Buttons';
 import { LampSwitch, PickRow, SignHead, type Choice } from '@/ui/arcade/Controls';
@@ -61,6 +63,10 @@ export default function Settings() {
   const resetAll = useSave((s) => s.resetAll);
   const [howTo, setHowTo] = useState(false);
   const [confirm, setConfirm] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [gate, askGrownUp] = useGate();
+  const phase = useAccount((s) => s.phase);
+  const inAccount = useAccount((s) => s.userId !== null);
 
   const startOver = () => {
     resetAll();
@@ -108,18 +114,21 @@ export default function Settings() {
               <GhostButton label="HOW TO PLAY" icon="help" tube="cyan" onPress={() => setHowTo(true)} style={styles.grow} />
               <GhostButton label="START OVER" icon="close" tube="red" onPress={() => setConfirm(true)} style={styles.grow} />
             </View>
-            <Print face="medium" size="tiny" color="textFaint" center>{`Bucket Squad ${Constants.expoConfig?.version ?? ''}  ·  Your game is saved on this device.`}</Print>
+            <AccountRow onOpen={() => askGrownUp(() => setAccountOpen(true))} note={`Bucket Squad ${Constants.expoConfig?.version ?? ''}`} />
           </Arrive>
         </View>
       </ArcadeScreen>
       {howTo && <HowToOverlay onClose={() => setHowTo(false)} />}
+      {/* the pick between two saved games has its own pop-up over every page (see _layout) */}
+      {accountOpen && phase !== 'choose' && <AccountSheet onClose={() => setAccountOpen(false)} />}
+      {gate}
       {confirm && (
         <Popup tube="red" width={px(400)} onDismiss={() => setConfirm(false)} style={styles.confirm}>
           <Glow face="display" size="title" tube="red" track="close">
             START OVER?
           </Glow>
           <Print face="medium" size="body" color="textSoft" center>
-            This erases every player, coin, pack and win on this device. It cannot be undone.
+            {inAccount ? 'This erases every player, coin, pack and win on this device and in your account. It cannot be undone.' : 'This erases every player, coin, pack and win on this device. It cannot be undone.'}
           </Print>
           <View style={styles.buttons}>
             <GoldButton label="KEEP MY GAME" size="small" onPress={() => setConfirm(false)} style={styles.grow} />

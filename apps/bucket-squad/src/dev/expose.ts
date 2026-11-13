@@ -6,6 +6,7 @@
 
 import { router } from 'expo-router';
 
+import { useAccount } from '@/account';
 import * as roster from '@/data/roster';
 import * as setups from '@/meta/setups';
 import { useSave } from '@/state/save';
@@ -18,4 +19,6 @@ export function exposeForTooling(): void {
   g.__setups = setups;
   g.__roster = roster;
   g.__router = router;
+  // what the account part of Settings shows (setting it only changes the pictures, never the account)
+  g.__account = useAccount;
 }
