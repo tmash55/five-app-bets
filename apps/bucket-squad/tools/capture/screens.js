@@ -30,7 +30,8 @@ const SEED = `(()=>{
 const steps = [`size:${size}`, `nav:${URL}`, 'until:!!globalThis.__save', 'wait:2500', `eval:${SEED}`];
 const go = (path, name, wait = 900) => steps.push(`eval:(()=>{ __router.dismissTo('/'); return 1 })()`, 'wait:350', `eval:(()=>{ __router.push(${JSON.stringify(path)}); return ${JSON.stringify(path)} })()`, `wait:${wait}`, `shot:${out}/${name}.png`);
 
-steps.push(`eval:(()=>{ __router.replace('/'); return 1 })()`, 'wait:1200', `shot:${out}/01-home.png`);
+// the squad walks on and warms up first, so the home page waits for the entrance to finish
+steps.push(`eval:(()=>{ __router.replace('/'); return 1 })()`, 'wait:5000', `shot:${out}/01-home.png`);
 go('/play', '02-play');
 go('/tour', '03-tour');
 go('/ladder', '04-ladder');
