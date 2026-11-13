@@ -20,7 +20,7 @@ import { PadModel, padLayout, type ButtonId, type ButtonSpot, type PadTouch, typ
 const TURBO_STEPS = 20;
 /** buttons are see-through until pressed, so players behind them stay visible */
 const IDLE = (opacity.dim + opacity.soft) / 2;
-const RING_WIDTH = 6;
+const RING_WIDTH = 6 * pad.unit;
 
 interface Props {
   runner: MatchRunner;
@@ -38,12 +38,14 @@ function PadButton({ spot, pressed, fill, label, icon }: { spot: ButtonSpot; pre
     opacity: IDLE + (1 - IDLE) * pressed.value,
   }));
   const d = spot.r * 2;
+  // the lettering follows the pad, not the rest of the screen, so it always fits its button
+  const letters = spot.r >= pad.button / 2 ? pad.label : spot.r >= pad.buttonMid / 2 ? pad.labelMid : pad.labelSmall;
   return (
     <Animated.View
       pointerEvents="none"
       style={[styles.button, { left: spot.x - spot.r, top: spot.y - spot.r, width: d, height: d, borderRadius: spot.r, backgroundColor: fill }, style]}>
       {icon && <Icon name={icon} size={Math.round(spot.r * 0.62)} color="white" />}
-      <Txt font="display" size={spot.r > 40 ? 'body' : spot.r > 34 ? 'small' : 'tiny'} color="white" shadow>
+      <Txt font="display" color="white" shadow style={{ fontSize: letters, lineHeight: Math.round(letters * 1.12) }}>
         {label}
       </Txt>
     </Animated.View>

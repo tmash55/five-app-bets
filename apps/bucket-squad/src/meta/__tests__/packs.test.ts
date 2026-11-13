@@ -9,7 +9,7 @@ const rank = (id: string) => RARITIES.indexOf(mustPlayer(id).rarity);
 
 describe('pack definitions', () => {
   it('has odds that add up to one', () => {
-    for (const p of [...SHOP_PACKS, packById(teamPackId('rockets'))]) {
+    for (const p of [...SHOP_PACKS, packById(teamPackId('comets'))]) {
       const sum = RARITIES.reduce((a, r) => a + p.odds[r], 0);
       expect(sum).toBeCloseTo(1, 9);
     }

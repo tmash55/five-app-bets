@@ -2,7 +2,7 @@
 
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { color, size as sizes, space, stroke, type ColorName } from '@/theme/tokens';
+import { color, px, size as sizes, space, stroke, type ColorName } from '@/theme/tokens';
 import { Icon, type IconName } from '@/ui/Icon';
 import { Overlay, Panel } from '@/ui/Overlay';
 import { Sticker, StickerButton } from '@/ui/Sticker';
@@ -89,7 +89,7 @@ export function HowToGuide() {
 export function HowToOverlay({ onClose, closeLabel = 'GOT IT!' }: { onClose: () => void; closeLabel?: string }) {
   return (
     <Overlay>
-      <Panel width={sizes.panelMax + 120} face={styles.panel}>
+      <Panel width={sizes.panelMax + px(120)} face={styles.panel}>
         <StickerText size="title" color="sun" center>
           HOW TO PLAY
         </StickerText>

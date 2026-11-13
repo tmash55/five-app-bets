@@ -78,10 +78,10 @@ def kit(jersey, trim, number, shorts, shorts_trim, shoe, shoe_accent, sock, band
 
 TEAMS = [
     {
-        "id": "rockets",
-        "name": "Rockets",
+        "id": "comets",
+        "name": "Comets",
         "place": "Pinecone Park",
-        "short": "RKT",
+        "short": "COM",
         "color": "#2F6BDE",
         "color2": "#FFD23F",
         "kit": kit("#2F6BDE", "#FFD23F", WHITE, "#2F6BDE", "#FFD23F", WHITE, "#2F6BDE", WHITE, "#FFD23F"),
@@ -90,10 +90,10 @@ TEAMS = [
         "motto": "First ones at the park, last ones to leave.",
     },
     {
-        "id": "thunder",
-        "name": "Thunder",
+        "id": "stompers",
+        "name": "Stompers",
         "place": "Maple Street",
-        "short": "THU",
+        "short": "STM",
         "color": "#7A4CE0",
         "color2": "#FFD23F",
         "kit": kit("#7A4CE0", "#FFD23F", "#FFD23F", "#3A2A7A", "#FFD23F", "#2B2440", "#FFD23F", WHITE, "#FFD23F"),
@@ -214,48 +214,48 @@ def L(skin, style, hair, eyes="oval", brows="calm", mouth="smile", nose=None, fa
 
 RETRO = {"shortShorts": True, "highSocks": True}
 
-# Pinecone Park Rockets
-P("dash-bennett", "Dash Bennett", "Zoom", "rockets", 3, "rare", "Speedster", (92, 68, 72, 84, 76, 48),
+# Pinecone Park Comets
+P("dash-bennett", "Dash Bennett", "Zoom", "comets", 3, "rare", "Speedster", (92, 68, 72, 84, 76, 48),
   L("brown", "hightop", "black", brows="fierce", mouth="smirk", acc=("wristbandR",), build={"height": 0.97},
     kit={"shoe": "#FFD23F", "shoeAccent": "#2F6BDE"}),
   "So fast his shadow needs a head start.")
-P("pippa-quinn", "Pippa Quinn", "Pip", "rockets", 12, "common", "Sharpshooter", (66, 84, 44, 68, 58, 42),
+P("pippa-quinn", "Pippa Quinn", "Pip", "comets", 12, "common", "Sharpshooter", (66, 84, 44, 68, 58, 42),
   L("light", "pigtails", "ginger", eyes="round", brows="raised", mouth="grin", nose="small", acc=("freckles", "lashes"),
     build={"height": 0.93}),
   "Practices swishes on her garage hoop until the streetlights come on.")
-P("gus-moretti", "Gus Moretti", "Big Gus", "rockets", 44, "common", "Big", (50, 56, 80, 50, 48, 84),
+P("gus-moretti", "Gus Moretti", "Big Gus", "comets", 44, "common", "Big", (50, 56, 80, 50, 48, 84),
   L("peach", "curly", "gold", eyes="wide", brows="thick", mouth="bigsmile", nose="wide", acc=("sweatband",),
     build={"height": 1.08, "bulk": 1.12}),
   "Blocks your shot, then shares his orange slices.")
-P("nia-brooks", "Nia Brooks", "Hops", "rockets", 21, "rare", "High Flyer", (80, 64, 92, 70, 66, 78),
+P("nia-brooks", "Nia Brooks", "Hops", "comets", 21, "rare", "High Flyer", (80, 64, 92, 70, 66, 78),
   L("cocoa", "puffs", "jet", eyes="tall", brows="raised", mouth="grin", acc=("lashes", "wristbandL"), highSocks=True),
   "Jumped clean over the monkey bars once. Okay, twice.")
-P("teo-ramirez", "Teo Ramirez", "Captain", "rockets", 8, "epic", "All-Around", (82, 84, 80, 84, 78, 70),
+P("teo-ramirez", "Teo Ramirez", "Captain", "comets", 8, "epic", "All-Around", (82, 84, 80, 84, 78, 70),
   L("amber", "short", "darkbrown", mouth="bigsmile", acc=("capBack",), hatColor="#E5483B"),
   "Picks the teams, keeps the peace and hits the game winner.")
-P("wren-kowalski", "Wren Kowalski", "Hawk Eye", "rockets", 5, "common", "Lockdown", (72, 60, 46, 62, 86, 70),
+P("wren-kowalski", "Wren Kowalski", "Hawk Eye", "comets", 5, "common", "Lockdown", (72, 60, 46, 62, 86, 70),
   L("porcelain", "bob", "brown", eyes="round", acc=("glasses", "lashes"), frameColor="#E5483B", build={"height": 0.95}),
   "Reads every pass like it is her favorite book.")
 
-# Maple Street Thunder
-P("jax-monroe", "Jax Monroe", "Boom", "thunder", 1, "epic", "High Flyer", (84, 70, 96, 76, 68, 82),
+# Maple Street Stompers
+P("jax-monroe", "Jax Monroe", "Boom", "stompers", 1, "epic", "High Flyer", (84, 70, 96, 76, 68, 82),
   L("chestnut", "mohawk", "blue", eyes="wide", brows="fierce", mouth="tooth", acc=("bandaid", "wristbandL", "wristbandR")),
   "Every dunk gets a sound effect. He does them himself.")
-P("lulu-park", "Lulu Park", "Lightning Lu", "thunder", 7, "rare", "Speedster", (94, 72, 50, 86, 80, 40),
+P("lulu-park", "Lulu Park", "Lightning Lu", "stompers", 7, "rare", "Speedster", (94, 72, 50, 86, 80, 40),
   L("sand", "highpony", "black", eyes="tall", brows="raised", mouth="grin", nose="small", acc=("lashes", "headband"),
     build={"height": 0.92}),
   "Blink and she already has the ball. And your snack.")
-P("otis-washington", "Otis Washington", "The Wall", "thunder", 50, "common", "Big", (48, 52, 82, 48, 50, 90),
+P("otis-washington", "Otis Washington", "The Wall", "stompers", 50, "common", "Big", (48, 52, 82, 48, 50, 90),
   L("umber", "flattop", "black", brows="thick", nose="wide", acc=("kneepadL", "kneepadR"), build={"height": 1.1, "bulk": 1.15}),
   "Nothing gets past him. Not even the ice cream truck.")
-P("maya-okafor", "Maya Okafor", "Splash", "thunder", 30, "rare", "Sharpshooter", (74, 94, 56, 76, 62, 50),
+P("maya-okafor", "Maya Okafor", "Splash", "stompers", 30, "rare", "Sharpshooter", (74, 94, 56, 76, 62, 50),
   L("umber", "braids", "black", eyes="tall", mouth="smirk", acc=("lashes", "sleeveR"), sleeveColor="#FFD23F"),
   "Calls \"splash\" before the ball leaves her hands.")
-P("finn-omalley", "Finn O'Malley", "Gizmo", "thunder", 13, "common", "Playmaker", (70, 66, 42, 86, 66, 40),
+P("finn-omalley", "Finn O'Malley", "Gizmo", "stompers", 13, "common", "Playmaker", (70, 66, 42, 86, 66, 40),
   L("porcelain", "spiky", "ginger", eyes="wide", brows="raised", mouth="tooth", acc=("goggles", "freckles"),
     build={"height": 0.94}),
   "Invented eleven new passes. Four of them work.")
-P("bea-castillo", "Bea Castillo", "Bumble", "thunder", 22, "common", "Lockdown", (76, 58, 48, 64, 84, 66),
+P("bea-castillo", "Bea Castillo", "Bumble", "stompers", 22, "common", "Lockdown", (76, 58, 48, 64, 84, 66),
   L("tan", "bun", "darkbrown", eyes="round", brows="fierce", acc=("bow", "lashes")),
   "Buzzes around the ball handler until they give up.")
 

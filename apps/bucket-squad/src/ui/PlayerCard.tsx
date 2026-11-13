@@ -9,7 +9,7 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepe
 import { MAX_LEVEL, cardArt, playerOverall, teamById } from '@/data/roster';
 import type { PlayerDef } from '@/data/types';
 import { tapFeedback } from '@/fx/feedback';
-import { color, duration, opacity, size as sizes, space, stroke, text } from '@/theme/tokens';
+import { color, duration, opacity, px, size as sizes, space, stroke, text } from '@/theme/tokens';
 import { RARITY_COLOR, Tag, TeamBadge } from './Bits';
 import { Icon } from './Icon';
 import { Sunburst } from './Screen';
@@ -60,10 +60,13 @@ function fitName(name: string, px: number, room: number): { text: string; px: nu
   return { text, px: Math.max(px * MIN_FIT, Math.floor(px * k)) };
 }
 
+/** card widths where the lettering steps up a size */
+const STEPS = [px(92), px(140), px(200)] as const;
+
 function scaleFor(width: number): Scale {
-  if (width < 92) return 'tiny';
-  if (width < 140) return 'small';
-  if (width < 200) return 'medium';
+  if (width < STEPS[0]) return 'tiny';
+  if (width < STEPS[1]) return 'small';
+  if (width < STEPS[2]) return 'medium';
   return 'large';
 }
 

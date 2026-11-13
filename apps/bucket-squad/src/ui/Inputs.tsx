@@ -39,6 +39,7 @@ export function ToggleChip({
       onPress={() => onChange(!on)}
       accessibilityLabel={`${label}: ${on ? 'on' : 'off'}`}
       style={style}
+      face={styles.cellFace}
     />
   );
 }

@@ -3,12 +3,12 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { HAS_EXTRA_ROSTER } from '@/data/roster';
 import { HowToOverlay } from '@/match/HowTo';
 import { useSave } from '@/state/save';
-import { size as sizes, space } from '@/theme/tokens';
+import { px, size as sizes, space } from '@/theme/tokens';
 import { Tag } from '@/ui/Bits';
 import { Segmented, ToggleChip, type Choice } from '@/ui/Inputs';
 import { Overlay, Panel } from '@/ui/Overlay';
@@ -80,7 +80,7 @@ export default function Settings() {
               <Txt font="display" size="small" color="inkSoft">
                 YOUR RECORD
               </Txt>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stats}>
+              <View style={styles.stats}>
                 <Stat label="Wins" value={stats.wins} />
                 <Stat label="Games" value={stats.games} />
                 <Stat label="Points" value={stats.points} />
@@ -89,7 +89,7 @@ export default function Settings() {
                 <Stat label="Steals" value={stats.steals} />
                 <Stat label="Blocks" value={stats.blocks} />
                 <Stat label="Packs" value={stats.packs} />
-              </ScrollView>
+              </View>
             </Sticker>
             <StickerButton label="HOW TO PLAY" icon="help" iconColor="sun" fill="white" textSize="body" onPress={() => setHowTo(true)} />
             <StickerButton label="START OVER" icon="close" iconColor="coral" fill="white" textSize="body" onPress={() => setConfirm(true)} />
@@ -100,7 +100,7 @@ export default function Settings() {
       {howTo && <HowToOverlay onClose={() => setHowTo(false)} />}
       {confirm && (
         <Overlay>
-          <Panel width={sizes.panelMax - 120} face={styles.confirm}>
+          <Panel width={sizes.panelMax - px(120)} face={styles.confirm}>
             <StickerText size="title" color="coral" center>
               START OVER?
             </StickerText>
@@ -146,13 +146,15 @@ const styles = StyleSheet.create({
   option: {
     gap: space.hair,
   },
+  // two rows of four, so the whole record shows at once
   stats: {
-    gap: space.lg,
-    paddingRight: space.sm,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: space.xs,
   },
   stat: {
     alignItems: 'center',
-    minWidth: sizes.tap,
+    width: '25%',
   },
   confirm: {
     gap: space.sm,

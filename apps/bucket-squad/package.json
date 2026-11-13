@@ -58,6 +58,9 @@
   },
   "jest": {
     "preset": "jest-expo",
+    "setupFiles": [
+      "<rootDir>/jest.setup.js"
+    ],
     "moduleNameMapper": {
       "^@roster-extra$": "<rootDir>/src/data/rosterExtra.empty.ts",
       "^@/(.*)$": "<rootDir>/src/$1"

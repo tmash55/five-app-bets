@@ -141,6 +141,9 @@ export class MatchDirector {
       case 'bounce':
         if (e.speed > 1.2) playSfx('bounce', Math.min(1, 0.25 + e.speed * 0.1));
         break;
+      case 'dribble':
+        playSfx('dribble', ours(m.players[e.by].team) ? 0.9 : 0.6);
+        break;
       case 'pass':
         playSfx('pass');
         break;

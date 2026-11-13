@@ -66,7 +66,7 @@ export const SHOP_PACKS: readonly PackDef[] = [
 
 const TEAM_ODDS: Odds = { common: 0.58, rare: 0.3, epic: 0.11, legend: 0.01 };
 
-/** Pack ids look like "playground" or "team:rockets". */
+/** Pack ids look like "playground" or "team:comets". */
 export function packById(id: string): PackDef {
   if (id.startsWith('team:')) {
     const team = teamById(id.slice(5));

@@ -6,14 +6,14 @@ import { seededRng } from '../rng';
 import { QUARTERS, homeSide, ladderSetup, playableTeams, quickSetup, sideOverall, teamSide, tourSetup, withoutMirrors, type Prefs } from '../setups';
 import { toursFor } from '../tour';
 
-/** the three Rockets everyone starts with, best first */
+/** the three Comets everyone starts with, best first */
 const STARTERS: SidePlayer[] = [
   { id: 'wren-kowalski', level: 1 },
   { id: 'pippa-quinn', level: 1 },
   { id: 'gus-moretti', level: 1 },
 ];
 
-const prefs = (over: Partial<Prefs> = {}): Prefs => ({ squad: STARTERS, quarterSeconds: 60, easyShots: true, homeTeam: 'rockets', ...over });
+const prefs = (over: Partial<Prefs> = {}): Prefs => ({ squad: STARTERS, quarterSeconds: 60, easyShots: true, homeTeam: 'comets', ...over });
 
 const ids = (side: Side) => side.players.map((p) => p.id);
 const shares = (a: Side, b: Side) => ids(a).some((id) => ids(b).includes(id));
@@ -21,7 +21,7 @@ const shares = (a: Side, b: Side) => ids(a).some((id) => ids(b).includes(id));
 describe('your side', () => {
   it('wears the captain’s uniform and brings the whole squad', () => {
     const side = homeSide(STARTERS);
-    expect(side.kitTeam).toBe('rockets');
+    expect(side.kitTeam).toBe('comets');
     expect(ids(side)).toEqual(['wren-kowalski', 'pippa-quinn', 'gus-moretti']);
     const mixed = homeSide([{ id: 'kai-nakoa', level: 2 }, STARTERS[0], STARTERS[1]]);
     expect(mixed.kitTeam).toBe('waves');
@@ -69,37 +69,37 @@ describe('computer sides', () => {
 
 describe('never facing your own squad', () => {
   it('leaves a side alone when nobody is shared', () => {
-    const away = teamSide(teamById('thunder'), 3, 0, 1);
+    const away = teamSide(teamById('stompers'), 3, 0, 1);
     expect(withoutMirrors(away, homeSide(STARTERS))).toBe(away);
   });
 
   it('swaps a shared player for the teammate closest in skill', () => {
     const home = homeSide(STARTERS);
-    const away: Side = { name: 'Rockets', short: 'RKT', kitTeam: 'rockets', players: [{ id: 'gus-moretti', level: 3 }, { id: 'nia-brooks', level: 3 }] };
+    const away: Side = { name: 'Comets', short: 'COM', kitTeam: 'comets', players: [{ id: 'gus-moretti', level: 3 }, { id: 'nia-brooks', level: 3 }] };
     const out = withoutMirrors(away, home);
     expect(shares(out, home)).toBe(false);
     expect(out.players[1]).toEqual({ id: 'nia-brooks', level: 3 });
     // the stand-in keeps the level and comes from the same team
     expect(out.players[0].level).toBe(3);
-    expect(mustPlayer(out.players[0].id).team).toBe('rockets');
+    expect(mustPlayer(out.players[0].id).team).toBe('comets');
     const want = playerOverall(mustPlayer('gus-moretti'));
-    const free = teamPlayers('rockets').filter((p) => !ids(home).includes(p.id) && p.id !== 'nia-brooks');
+    const free = teamPlayers('comets').filter((p) => !ids(home).includes(p.id) && p.id !== 'nia-brooks');
     const closest = Math.min(...free.map((p) => Math.abs(playerOverall(p) - want)));
     expect(Math.abs(playerOverall(mustPlayer(out.players[0].id)) - want)).toBe(closest);
   });
 
   it('counts the bench too, and never uses a stand-in twice', () => {
     const home = homeSide(STARTERS);
-    const away: Side = { name: 'Rockets', short: 'RKT', kitTeam: 'rockets', players: STARTERS.map((p) => ({ ...p })) };
+    const away: Side = { name: 'Comets', short: 'COM', kitTeam: 'comets', players: STARTERS.map((p) => ({ ...p })) };
     const out = withoutMirrors(away, home);
     expect(shares(out, home)).toBe(false);
     expect(new Set(ids(out)).size).toBe(3);
   });
 
   it('keeps a player it cannot replace rather than leaving a hole', () => {
-    const everyone = teamPlayers('rockets').map((p) => ({ id: p.id, level: 1 }));
-    const home: Side = { name: 'Your Squad', short: 'YOU', kitTeam: 'rockets', players: everyone };
-    const away: Side = { name: 'Rockets', short: 'RKT', kitTeam: 'rockets', players: everyone.slice(0, 2) };
+    const everyone = teamPlayers('comets').map((p) => ({ id: p.id, level: 1 }));
+    const home: Side = { name: 'Your Squad', short: 'YOU', kitTeam: 'comets', players: everyone };
+    const away: Side = { name: 'Comets', short: 'COM', kitTeam: 'comets', players: everyone.slice(0, 2) };
     expect(withoutMirrors(away, home).players).toHaveLength(2);
   });
 });
@@ -125,7 +125,7 @@ describe('a quick game', () => {
   });
 
   it('gets harder with each level', () => {
-    const at = (difficulty: 0 | 1 | 2) => quickSetup(prefs(), { perTeam: 2, difficulty, opponent: 'thunder', court: null }, seededRng(3));
+    const at = (difficulty: 0 | 1 | 2) => quickSetup(prefs(), { perTeam: 2, difficulty, opponent: 'stompers', court: null }, seededRng(3));
     expect(at(0).difficulty).toBeLessThan(at(1).difficulty);
     expect(at(1).difficulty).toBeLessThan(at(2).difficulty);
     expect(at(0).rubberBand).toBeGreaterThan(at(2).rubberBand);
@@ -133,8 +133,8 @@ describe('a quick game', () => {
   });
 
   it('gives a wider shot window with easy shots on', () => {
-    const easy = quickSetup(prefs({ easyShots: true }), { perTeam: 2, difficulty: 0, opponent: 'thunder', court: null }, seededRng(4));
-    const standard = quickSetup(prefs({ easyShots: false }), { perTeam: 2, difficulty: 0, opponent: 'thunder', court: null }, seededRng(4));
+    const easy = quickSetup(prefs({ easyShots: true }), { perTeam: 2, difficulty: 0, opponent: 'stompers', court: null }, seededRng(4));
+    const standard = quickSetup(prefs({ easyShots: false }), { perTeam: 2, difficulty: 0, opponent: 'stompers', court: null }, seededRng(4));
     expect(easy.timingAssist).toBeGreaterThan(standard.timingAssist);
     expect(standard.timingAssist).toBeGreaterThanOrEqual(1);
   });
@@ -151,8 +151,8 @@ describe('a quick game', () => {
   });
 
   it('still fields a full, different side when you pick your own team', () => {
-    const s = quickSetup(prefs(), { perTeam: 3, difficulty: 0, opponent: 'rockets', court: null }, seededRng(5));
-    expect(s.away.kitTeam).toBe('rockets');
+    const s = quickSetup(prefs(), { perTeam: 3, difficulty: 0, opponent: 'comets', court: null }, seededRng(5));
+    expect(s.away.kitTeam).toBe('comets');
     expect(shares(s.away, s.home)).toBe(false);
     expect(new Set(ids(s.away)).size).toBe(3);
   });
@@ -177,7 +177,7 @@ describe('a ladder game', () => {
     for (let seed = 1; seed <= 300; seed++) {
       const s = ladderSetup(prefs(), (seed * 37) % 2200, seed % 2 === 0 ? 2 : 3, seededRng(seed));
       expect(s.mode).toBe('ladder');
-      expect(s.away.kitTeam).not.toBe('rockets');
+      expect(s.away.kitTeam).not.toBe('comets');
       expect(shares(s.away, s.home)).toBe(false);
       expect(s.court).toBe(teamById(s.away.kitTeam).court);
     }
@@ -210,8 +210,8 @@ describe('a tour game', () => {
     const s = tourSetup(prefs(), 'neighborhood', 0, 0, seededRng(8));
     expect(s).not.toBeNull();
     expect(s?.mode).toBe('tour');
-    expect(s?.away.kitTeam).toBe('thunder');
-    expect(s?.court).toBe(teamById('thunder').court);
+    expect(s?.away.kitTeam).toBe('stompers');
+    expect(s?.court).toBe(teamById('stompers').court);
     expect(s?.perTeam).toBe(2);
     expect(s?.tour).toEqual({ tourId: 'neighborhood', stage: 0, game: 0 });
   });
@@ -223,7 +223,7 @@ describe('a tour game', () => {
   });
 
   it('never puts your own players on the other side, even at home', () => {
-    for (const home of ['rockets', 'thunder', 'waves', 'skyhawks', 'yetis', 'coyotes']) {
+    for (const home of ['comets', 'stompers', 'waves', 'skyhawks', 'yetis', 'coyotes']) {
       const squad = teamPlayers(home)
         .filter((p) => p.rarity === 'common')
         .map((p) => ({ id: p.id, level: 1 }));
@@ -244,7 +244,7 @@ describe('a tour game', () => {
   });
 
   it('opens against a side a brand new squad can beat', () => {
-    for (const home of ['rockets', 'thunder', 'waves', 'skyhawks', 'yetis', 'coyotes']) {
+    for (const home of ['comets', 'stompers', 'waves', 'skyhawks', 'yetis', 'coyotes']) {
       const squad = teamPlayers(home)
         .filter((p) => p.rarity === 'common')
         .sort((a, b) => playerOverall(b) - playerOverall(a))

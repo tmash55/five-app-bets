@@ -36,6 +36,8 @@ export interface MatchConfig {
   /** keep matches close: 0 none, 1 strong */
   rubberBand: number;
   autoSwitch: boolean;
+  /** the person's team plays itself while the camera, rings and HUD behave as if someone were playing (trailers and screenshots) */
+  demo?: boolean;
 }
 
 export interface PadInput {
@@ -232,6 +234,8 @@ export type SimEvent =
   | { type: 'rim'; speed: number; hoop: number }
   | { type: 'board'; speed: number; hoop: number }
   | { type: 'bounce'; speed: number }
+  /** the ball hits the floor on a dribble */
+  | { type: 'dribble'; by: number }
   | { type: 'pass'; by: number; to: number; lob: boolean }
   | { type: 'catch'; by: number }
   | { type: 'swipe'; by: number }

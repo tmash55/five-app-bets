@@ -65,14 +65,15 @@ interface Tracked {
 /** Where everything sits for a screen of this size. `left`, `right` and `bottom` are the safe-area insets. */
 export function padLayout(width: number, height: number, left: number, right: number, bottom: number, lefty: boolean): PadLayout {
   const edge = pad.inset;
+  const u = pad.unit;
   // centres measured from the bottom corner on the button side: a triangle the thumb can roll around
   const fromCorner: [ButtonId, number, number, number][] = [
-    ['turbo', 98, 26, pad.buttonSmall / 2 + 3],
-    ['a', 38, 114, pad.button / 2],
-    ['b', 150, 108, pad.buttonMid / 2],
-    ['sw', 244, 24, pad.buttonSmall / 2 - 4],
+    ['turbo', 98 * u, 26 * u, pad.buttonSmall / 2 + 3 * u],
+    ['a', 38 * u, 114 * u, pad.button / 2],
+    ['b', 150 * u, 108 * u, pad.buttonMid / 2],
+    ['sw', 244 * u, 24 * u, pad.buttonSmall / 2 - 4 * u],
   ];
-  const floor = Math.max(bottom, 6) + edge;
+  const floor = Math.max(bottom, 6 * u) + edge;
   // the side inset only has to clear the rounded corner, so a thumb never has to stretch for the buttons
   const side = (v: number) => Math.max(v * 0.55, edge * 0.4) + edge;
   const inset = side(lefty ? left : right);
@@ -83,8 +84,8 @@ export function padLayout(width: number, height: number, left: number, right: nu
     r,
   }));
   const stickInset = side(lefty ? right : left);
-  const restX = lefty ? width - stickInset - pad.stick / 2 - 26 : stickInset + pad.stick / 2 + 26;
-  const restY = height - floor - pad.stick / 2 - 8;
+  const restX = lefty ? width - stickInset - pad.stick / 2 - 26 * u : stickInset + pad.stick / 2 + 26 * u;
+  const restY = height - floor - pad.stick / 2 - 8 * u;
   return { width, height, lefty, spots, restX, restY };
 }
 
@@ -163,7 +164,7 @@ export class PadModel {
   /** The closest spot to (x, y) where the whole stick still fits on the screen. */
   private onScreen(x: number, y: number): [number, number] {
     const { width, height } = this.layout;
-    const m = pad.stick / 2 + 6;
+    const m = pad.stick / 2 + 6 * pad.unit;
     return [Math.max(m, Math.min(width - m, x)), Math.max(m, Math.min(height - m, y))];
   }
 

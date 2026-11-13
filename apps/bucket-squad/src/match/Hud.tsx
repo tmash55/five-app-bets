@@ -6,11 +6,14 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepe
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { HudState } from '@/game/runner';
-import { color, duration, layer, radius, size as sizes, space, stroke, type ColorName } from '@/theme/tokens';
+import { color, duration, layer, px, radius, size as sizes, space, stroke, type ColorName } from '@/theme/tokens';
 import { Avatar, ProgressBar, readableOn } from '@/ui/Bits';
 import { Sticker } from '@/ui/Sticker';
 import { StickerText, Txt } from '@/ui/Txt';
 import type { Callout, CalloutTone } from './director';
+
+/** how far a callout drifts up as it fades */
+const DRIFT = px(14);
 
 function clockText(tenths: number): string {
   if (tenths < 100) return `${Math.floor(tenths / 10)}.${tenths % 10}`;
@@ -27,7 +30,7 @@ const HypeBar = memo(function HypeBar({ value, fill, flip }: { value: number; fi
   const style = useAnimatedStyle(() => ({ opacity: 1 - 0.45 * glow.value, transform: [{ scaleY: 1 + 0.25 * glow.value }] }));
   return (
     <Animated.View style={[styles.hype, flip && styles.flip, style]}>
-      <ProgressBar value={on ? 1 : value / 20} fill={on ? 'sun' : fill} track="paperDim" height={sizes.bar - 2} />
+      <ProgressBar value={on ? 1 : value / 20} fill={on ? 'sun' : fill} track="paperDim" height={sizes.bar - stroke.thin} />
     </Animated.View>
   );
 });
@@ -164,7 +167,7 @@ function Lane({ item, colors, note }: { item: Shown | null; colors: [string, str
   }, [key, hold, scale, fade, tilt]);
   const style = useAnimatedStyle(() => ({
     opacity: fade.value,
-    transform: [{ scale: scale.value }, { rotate: `${tilt.value}deg` }, { translateY: (1 - fade.value) * -14 }],
+    transform: [{ scale: scale.value }, { rotate: `${tilt.value}deg` }, { translateY: (1 - fade.value) * -DRIFT }],
   }));
   if (!item) return null;
   const fill = toneColor(item.tone, colors);

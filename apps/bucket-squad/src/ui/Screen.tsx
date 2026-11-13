@@ -81,8 +81,8 @@ export interface ScreenProps {
   back?: boolean;
   /** called instead of going back */
   onBack?: () => void;
-  /** show the coin count (on by default) */
-  coins?: boolean;
+  /** show the coin count (on by default); a number shows that many instead, for a screen still counting its coins in */
+  coins?: boolean | number;
   /** extra header content, left of the coins */
   right?: React.ReactNode;
   /** replaces the title */
@@ -139,7 +139,7 @@ export function Screen({ children, title, tone = 'sky', back = true, onBack, coi
         </View>
         <View style={styles.headerSide}>
           {right}
-          {coins && <CoinPill coins={coinCount} />}
+          {coins !== false && <CoinPill coins={typeof coins === 'number' ? coins : coinCount} />}
         </View>
       </View>
       <View style={[styles.body, { paddingLeft: padLeft, paddingRight: padRight, paddingBottom: Math.max(insets.bottom, space.sm) }, style]}>{children}</View>

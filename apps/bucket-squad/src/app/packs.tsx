@@ -9,7 +9,7 @@ import { RARITIES, RARITY_LABEL } from '@/data/types';
 import { SHOP_PACKS, packById, type PackDef } from '@/meta/packs';
 import { dayKey } from '@/meta/rng';
 import { useSave } from '@/state/save';
-import { size as sizes, space } from '@/theme/tokens';
+import { px, size as sizes, space } from '@/theme/tokens';
 import { RARITY_COLOR, Tag } from '@/ui/Bits';
 import { Icon } from '@/ui/Icon';
 import { Overlay, Panel } from '@/ui/Overlay';
@@ -58,7 +58,7 @@ function PackCard({ pack, tag, tagFill, note, onOdds, children }: { pack: PackDe
 function OddsOverlay({ pack, onClose }: { pack: PackDef; onClose: () => void }) {
   return (
     <Overlay onDismiss={onClose}>
-      <Panel width={sizes.panelMax - 80} face={styles.oddsPanel}>
+      <Panel width={sizes.panelMax - px(80)} face={styles.oddsPanel}>
         <View style={styles.oddsHead}>
           <PackArt pack={pack} width={sizes.avatarLarge} />
           <View style={styles.oddsText}>

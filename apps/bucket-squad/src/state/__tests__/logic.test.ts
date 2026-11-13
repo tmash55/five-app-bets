@@ -12,7 +12,7 @@ import { DEFAULT_SETTINGS, SQUAD_SIZE, STARTING_COINS, buyPack, claimFreePack, c
 const DAY = '2026-03-09';
 const NEXT_DAY = '2026-03-10';
 
-const career = (team = 'rockets'): SaveData => startCareer(newSave(), team);
+const career = (team = 'comets'): SaveData => startCareer(newSave(), team);
 
 /** a day whose missions include (or leave out) a kind of goal */
 function dayWith(metric: string, want = true): string {
@@ -26,7 +26,7 @@ function dayWith(metric: string, want = true): string {
 describe('starting out', () => {
   it('offers only home teams with three everyday players', () => {
     const teams = homeTeamChoices();
-    expect(teams.map((t) => t.id)).toEqual(['rockets', 'thunder', 'waves', 'skyhawks', 'yetis', 'coyotes']);
+    expect(teams.map((t) => t.id)).toEqual(['comets', 'stompers', 'waves', 'skyhawks', 'yetis', 'coyotes']);
     for (const t of teams) {
       const ids = starterIds(t.id);
       expect(ids).toHaveLength(SQUAD_SIZE);
@@ -61,7 +61,7 @@ describe('starting out', () => {
   it('does not change the save it was given', () => {
     const before = newSave();
     const copy = JSON.parse(JSON.stringify(before));
-    startCareer(before, 'rockets');
+    startCareer(before, 'comets');
     expect(before).toEqual(copy);
   });
 });
@@ -76,7 +76,7 @@ describe('packs', () => {
   });
 
   it('never sells a pack that can only be earned', () => {
-    expect(buyPack({ ...career(), coins: 99999 }, 'team:rockets')).toBeNull();
+    expect(buyPack({ ...career(), coins: 99999 }, 'team:comets')).toBeNull();
   });
 
   it('gives one free pack a day', () => {
@@ -235,7 +235,7 @@ describe('after a ladder game', () => {
 });
 
 describe('after a tour game', () => {
-  const tour = tourById('neighborhood', 'rockets');
+  const tour = tourById('neighborhood', 'comets');
   const tourGame = (stage: number, game: number, score: [number, number]) => summary({ mode: 'tour', score, tour: { tourId: tour.id, stage, game } });
 
   it('pays the first win, counts stars and never pays twice', () => {
@@ -262,8 +262,8 @@ describe('after a tour game', () => {
   it('gives the team pack for the Rivalry and the star player for the Showdown', () => {
     const s = career();
     const rivalry = finishMatch(s, tourGame(0, 1, [15, 13]), DAY);
-    expect(rivalry.outcome.tour?.pack).toBe('team:thunder');
-    expect(rivalry.data.packs['team:thunder']).toBe(1);
+    expect(rivalry.outcome.tour?.pack).toBe('team:stompers');
+    expect(rivalry.data.packs['team:stompers']).toBe(1);
 
     const star = tour.stages[0].games[2].unlock as string;
     const showdown = finishMatch(rivalry.data, tourGame(0, 2, [15, 13]), DAY);
@@ -391,8 +391,8 @@ describe('repairing a save', () => {
     expect(fixed.homeTeam).toBeNull();
     expect(fixed.coins).toBe(420);
     // and picking a team again works from there
-    const again = startCareer(fixed, 'thunder');
-    expect(again.squad).toEqual(starterIds('thunder'));
+    const again = startCareer(fixed, 'stompers');
+    expect(again.squad).toEqual(starterIds('stompers'));
     expect(again.owned['someone-else']).toBe(2);
   });
 

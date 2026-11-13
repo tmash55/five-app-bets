@@ -127,10 +127,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   teamsBody: {
+    flexGrow: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: space.sm,
     justifyContent: 'center',
+    alignContent: 'center',
     paddingBottom: space.sm,
     paddingTop: space.xs,
   },

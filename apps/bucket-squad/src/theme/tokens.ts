@@ -4,7 +4,52 @@
  *
  * The look: sunny playground sticker book. Thick ink outlines, chunky rounded
  * shapes, hard drop shadows, big friendly type.
+ *
+ * Sizes are written for one screen (a current phone held sideways) and scaled
+ * to the screen the game is running on, the way a game scales its HUD: a small
+ * phone gets the same layout a little smaller, a tablet gets it bigger.
  */
+
+import { Dimensions, PixelRatio } from 'react-native';
+
+/** the screen every size below is written for */
+export const design = { width: 844, height: 390 } as const;
+
+/** the whole look never gets smaller or bigger than this, whatever the screen */
+const SCALE_MIN = 0.8;
+const SCALE_MAX = 1.7;
+/** thumbs do not shrink or grow with the screen, so the game pad follows it only part of the way */
+const PAD_SCALE_MIN = 0.9;
+const PAD_SCALE_MAX = 1.25;
+
+/** How much bigger or smaller than the design screen a screen is, either way up. */
+export function scaleFor(width: number, height: number): number {
+  const long = Math.max(width, height);
+  const short = Math.min(width, height);
+  if (!(short > 0)) return 1;
+  return Math.max(SCALE_MIN, Math.min(SCALE_MAX, long / design.width, short / design.height));
+}
+
+const screen = Dimensions.get('window');
+/**
+ * This screen's scale. Worked out once, as the app starts: the game is locked
+ * to landscape and fills the screen, so it does not change while it runs.
+ */
+export const uiScale = scaleFor(screen.width, screen.height);
+const padScale = Math.max(PAD_SCALE_MIN, Math.min(PAD_SCALE_MAX, uiScale));
+
+/** A design size on this screen, snapped to whole pixels. For the few sizes that are not tokens. */
+export function px(n: number): number {
+  return PixelRatio.roundToNearestPixel(n * uiScale);
+}
+
+type Sized<T> = { readonly [K in keyof T]: number };
+
+function sized<T extends Record<string, number>>(at: T, k: number = uiScale, least = 0): Sized<T> {
+  const out = {} as { [K in keyof T]: number };
+  for (const key of Object.keys(at) as (keyof T)[]) out[key] = Math.max(least, PixelRatio.roundToNearestPixel(at[key] * k));
+  return out;
+}
 
 export const color = {
   // ink and paper
@@ -60,7 +105,7 @@ export const font = {
   bodyBold: 'Fredoka_700Bold',
 } as const;
 
-export const text = {
+export const text = sized({
   tiny: 11,
   small: 13,
   body: 16,
@@ -69,9 +114,9 @@ export const text = {
   big: 40,
   huge: 64,
   giant: 96,
-} as const;
+});
 
-export const space = {
+export const space = sized({
   hair: 2,
   xs: 4,
   sm: 8,
@@ -80,29 +125,36 @@ export const space = {
   xl: 24,
   xxl: 32,
   huge: 48,
-} as const;
+});
 
 export const radius = {
-  sm: 8,
-  md: 14,
-  lg: 22,
-  xl: 30,
+  ...sized({
+    sm: 8,
+    md: 14,
+    lg: 22,
+    xl: 30,
+  }),
+  /** more than half of anything: fully round ends */
   pill: 999,
 } as const;
 
-export const stroke = {
-  hair: 1,
-  thin: 2,
-  regular: 3,
-  thick: 4,
-} as const;
+export const stroke = sized(
+  {
+    hair: 1,
+    thin: 2,
+    regular: 3,
+    thick: 4,
+  },
+  uiScale,
+  1,
+);
 
 /** how far the hard "sticker" shadow sits under a raised shape */
-export const lift = {
+export const lift = sized({
   low: 3,
   mid: 5,
   high: 8,
-} as const;
+});
 
 export const duration = {
   quick: 120,
@@ -115,48 +167,61 @@ export const duration = {
 
 /** sizes of the on-screen game pad */
 export const pad = {
-  stick: 132,
-  knob: 62,
-  button: 92,
-  buttonMid: 78,
-  buttonSmall: 62,
-  /** gap between the pad and the screen edge */
-  inset: 22,
+  ...sized(
+    {
+      stick: 132,
+      knob: 62,
+      button: 92,
+      buttonMid: 78,
+      buttonSmall: 62,
+      /** gap between the pad and the screen edge */
+      inset: 22,
+      /** lettering on the big, middle and small buttons */
+      label: 16,
+      labelMid: 13,
+      labelSmall: 11,
+    },
+    padScale,
+  ),
+  /** one design pixel of pad layout on this screen */
+  unit: padScale,
 } as const;
 
 /** fixed sizes of common pieces */
 export const size = {
-  iconTiny: 14,
-  iconSmall: 18,
-  icon: 24,
-  iconLarge: 32,
-  iconHuge: 48,
-  /** shortest side of anything you can tap */
-  tap: 44,
-  buttonSmall: 40,
-  button: 52,
-  buttonLarge: 68,
-  avatarSmall: 36,
-  avatar: 48,
-  avatarLarge: 72,
-  badgeTiny: 20,
-  badgeSmall: 28,
-  badge: 44,
-  badgeLarge: 64,
-  /** level dots on a card, smallest card first */
-  pipTiny: 5,
-  pipSmall: 6,
-  pip: 8,
-  pipLarge: 10,
-  cardSmall: 96,
-  card: 128,
-  cardLarge: 190,
+  ...sized({
+    iconTiny: 14,
+    iconSmall: 18,
+    icon: 24,
+    iconLarge: 32,
+    iconHuge: 48,
+    /** shortest side of anything you can tap */
+    tap: 44,
+    buttonSmall: 40,
+    button: 52,
+    buttonLarge: 68,
+    avatarSmall: 36,
+    avatar: 48,
+    avatarLarge: 72,
+    badgeTiny: 20,
+    badgeSmall: 28,
+    badge: 44,
+    badgeLarge: 64,
+    /** level dots on a card, smallest card first */
+    pipTiny: 5,
+    pipSmall: 6,
+    pip: 8,
+    pipLarge: 10,
+    cardSmall: 96,
+    card: 128,
+    cardLarge: 190,
+    bar: 10,
+    barThick: 16,
+    panelMax: 560,
+    scoreboard: 300,
+  }),
   /** a card's height for a width of 1 */
   cardRatio: 1.36,
-  bar: 10,
-  barThick: 16,
-  panelMax: 560,
-  scoreboard: 300,
 } as const;
 
 export const opacity = {

@@ -122,6 +122,12 @@ def norm(x: np.ndarray, peak: float = 0.89) -> np.ndarray:
     return x * (peak / m)
 
 
+def punch(x: np.ndarray, drive: float) -> np.ndarray:
+    """Round off the tallest spikes so a hit sounds as loud as its peak allows (1 is gentle, 3 is hard)."""
+    m = float(np.max(np.abs(x))) or 1.0
+    return np.tanh(drive * x / m)
+
+
 def fade_edges(x: np.ndarray, ms: float = 3.0) -> np.ndarray:
     n = max(1, int(SR * ms / 1000))
     y = x.copy()
@@ -243,14 +249,25 @@ def thump(f0: float, f1: float, dur: float, tau: float) -> np.ndarray:
     return tone(f0, dur, f1, 0.5) * decay(dur, tau, 0.001)
 
 
+def ball_hit(dur: float, f0: float, f1: float, tau: float, low: float = 1.0, ring: float = 0.5, slap: float = 0.4) -> np.ndarray:
+    """A basketball meeting something hard: the thud, the hollow ring of the air inside the ball and the slap of its skin.
+
+    A phone speaker cannot play the thud at all, so the ring (the "pok" near 960 Hz) and the slap carry the sound there.
+    """
+    t = t_axis(dur)
+    env = decay(dur, tau * 0.75, 0.001)
+    ping = (np.sin(2 * np.pi * 960 * t) + 0.45 * np.sin(2 * np.pi * 1545 * t) + 0.22 * np.sin(2 * np.pi * 2080 * t)) * env
+    hollow = band(noise(dur), 650, 1500, 2) * env * 1.6
+    smack = band(noise(0.02), 500, 4200) * decay(0.02, 0.005)
+    return mix(dur, (0, thump(f0, f1, dur, tau) * low), (0, (0.6 * ping + 0.4 * hollow) * ring), (0, smack * slap))
+
+
 def sfx_bounce():
-    click = band(noise(0.02), 300, 2500) * decay(0.02, 0.005)
-    return mix(0.16, (0, thump(150, 62, 0.15, 0.045)), (0, click * 0.45))
+    return punch(ball_hit(0.16, 210, 90, 0.045, 0.6, 1.1, 0.8), 1.6)
 
 
 def sfx_dribble():
-    click = band(noise(0.015), 400, 2000) * decay(0.015, 0.004)
-    return mix(0.11, (0, thump(128, 66, 0.1, 0.03)), (0, click * 0.35))
+    return punch(ball_hit(0.11, 230, 110, 0.03, 0.5, 1.2, 0.8), 1.6)
 
 
 def rim_partials(dur: float, scale: float = 1.0) -> np.ndarray:
@@ -266,7 +283,11 @@ def sfx_rim():
 
 
 def sfx_board():
-    return mix(0.2, (0, thump(190, 120, 0.14, 0.04)), (0, band(noise(0.06), 200, 1600) * decay(0.06, 0.014) * 0.8))
+    d = 0.2
+    t = t_axis(d)
+    plate = sum(a * np.sin(2 * np.pi * f * t) * np.exp(-t / tau) for f, tau, a in ((236, 0.05, 0.6), (412, 0.045, 0.9), (688, 0.035, 0.7), (1130, 0.025, 0.45)))
+    knock = band(noise(0.05), 300, 2600) * decay(0.05, 0.012)
+    return punch(mix(d, (0, plate * 1.2), (0, knock * 1.2), (0, thump(190, 120, 0.14, 0.04) * 0.4)), 1.8)
 
 
 def sfx_swish():
@@ -282,7 +303,8 @@ def sfx_dunk():
     t = t_axis(0.6)
     rattle = rim_partials(0.6, 0.82) * (0.6 + 0.4 * np.sin(2 * np.pi * 23 * t))
     crack = band(noise(0.09), 300, 5000) * decay(0.09, 0.02)
-    return mix(0.75, (0, boom * 1.3), (0, crack), (0.01, rattle * 0.8))
+    slam = thump(260, 110, 0.18, 0.05)
+    return punch(mix(0.75, (0, boom * 0.6), (0, slam), (0, crack * 1.8), (0.01, rattle * 1.4)), 1.8)
 
 
 def sfx_shoot():
@@ -296,7 +318,7 @@ def sfx_pass():
 
 
 def sfx_catch():
-    return mix(0.09, (0, band(noise(0.045), 250, 1800) * decay(0.045, 0.012)), (0, thump(210, 130, 0.06, 0.02) * 0.6))
+    return punch(ball_hit(0.09, 300, 180, 0.018, 0.4, 0.5, 2.0), 1.5)
 
 
 def sfx_steal():
@@ -312,8 +334,8 @@ def sfx_swipe():
 
 
 def sfx_block():
-    slap = band(noise(0.08), 500, 3600) * decay(0.08, 0.018)
-    return mix(0.2, (0, slap), (0, thump(160, 70, 0.12, 0.035) * 0.9))
+    slap = band(noise(0.08), 500, 4000) * decay(0.08, 0.018)
+    return punch(mix(0.2, (0, slap * 2.6), (0, ball_hit(0.14, 240, 100, 0.035, 0.7, 0.8, 0.0))), 2.0)
 
 
 def sfx_whistle():
@@ -401,7 +423,8 @@ def sfx_squeak():
 
 
 def sfx_land():
-    return mix(0.14, (0, thump(120, 55, 0.13, 0.035)), (0, band(noise(0.04), 200, 1500) * decay(0.04, 0.01) * 0.6))
+    scuff = band(noise(0.05), 300, 2200) * decay(0.05, 0.012)
+    return punch(mix(0.14, (0, thump(170, 70, 0.13, 0.035) * 0.5), (0, scuff * 2.0), (0, thump(520, 300, 0.04, 0.012) * 0.8)), 1.5)
 
 
 def sfx_hype():
@@ -454,8 +477,12 @@ def sfx_star():
     return mix(0.5, (0, bell(midi(93), 0.5, 0.16)), (0, bell(midi(98), 0.5, 0.12) * 0.6), (0, shimmer(0.4, 0.14)))
 
 
+def clack(f: float) -> np.ndarray:
+    return tone(f, 0.05, f * 0.7) * decay(0.05, 0.012) + 0.5 * band(noise(0.05), 1500, 6000) * decay(0.05, 0.004)
+
+
 def sfx_lock():
-    return mix(0.16, (0, thump(180, 90, 0.08, 0.025)), (0.07, thump(140, 70, 0.08, 0.025) * 0.8))
+    return mix(0.16, (0, thump(180, 90, 0.08, 0.025) * 0.4), (0, clack(900) * 1.4), (0.07, thump(140, 70, 0.08, 0.025) * 0.32), (0.07, clack(700) * 1.26))
 
 
 # --- music -----------------------------------------------------------------
@@ -477,7 +504,10 @@ class Loop:
 
 
 def kick() -> np.ndarray:
-    return mix(0.22, (0, thump(130, 44, 0.22, 0.07)), (0, 0.3 * band(noise(0.012), 800, 5000) * decay(0.012, 0.003)))
+    """The knock in the low mids is the part of the kick a phone speaker can play."""
+    knock = thump(420, 180, 0.05, 0.014)
+    click = band(noise(0.012), 1200, 6000) * decay(0.012, 0.003)
+    return mix(0.22, (0, thump(150, 48, 0.22, 0.07) * 0.8), (0, knock * 0.7), (0, click * 0.5))
 
 
 def snare() -> np.ndarray:
@@ -499,9 +529,12 @@ def hat(open_: bool = False) -> np.ndarray:
 
 
 def bass_note(n: float, dur: float) -> np.ndarray:
+    """A sub for headphones under a body one octave up, which is where the bass line lives on a phone speaker."""
     f = midi(n)
-    x = square(f, dur, 5) * 0.7 + np.sin(2 * np.pi * f * t_axis(dur))
-    return band(x, 0, 900) * shape(dur, 0.006, min(0.06, dur * 0.4))
+    t = t_axis(dur)
+    sub = np.sin(2 * np.pi * f * t)
+    body = np.sin(2 * np.pi * 2 * f * t) + 0.7 * square(2 * f, dur, 5) + 0.35 * saw(f, dur, 10)
+    return (0.45 * sub + band(body, 0, 1500) * (0.55 + 0.45 * np.exp(-t / 0.18))) * shape(dur, 0.006, min(0.06, dur * 0.4))
 
 
 def stab(notes, dur: float) -> np.ndarray:
@@ -521,8 +554,8 @@ def music_menu():
         b0 = bar * 4
         # drums
         for q in (0, 2):
-            L.add(b0 + q, kick(), 0.95)
-        L.add(b0 + 2.5, kick(), 0.6)
+            L.add(b0 + q, kick(), 0.8)
+        L.add(b0 + 2.5, kick(), 0.5)
         for q in (1, 3):
             L.add(b0 + q, clap(), 0.5)
             L.add(b0 + q, snare(), 0.32)
@@ -530,10 +563,10 @@ def music_menu():
             L.add(b0 + e * 0.5, hat(e == 7), 0.2 if e % 2 else 0.12)
         # bass: root, octave bounce
         for q, n, d in ((0, root, 0.45), (0.75, root + 12, 0.2), (1.5, root, 0.4), (2.5, root + 7, 0.3), (3, root + 12, 0.25), (3.5, root + 7, 0.25)):
-            L.add(b0 + q, bass_note(n - 12, d * L.beat * 1.6), 0.5)
+            L.add(b0 + q, bass_note(n, d * L.beat * 1.6), 0.4)
         # off-beat chord stabs
         for q in (0.5, 1.5, 2.5, 3.5):
-            L.add(b0 + q, stab(tri, 0.22), 0.3)
+            L.add(b0 + q, stab(tri, 0.22), 0.36)
     # the tune (beats from the start, midi note, length in beats)
     tune_a = [(0, 76, 0.5), (0.5, 79, 0.5), (1, 84, 1), (2.5, 81, 0.5), (3, 79, 1),
               (4, 76, 0.5), (4.5, 72, 0.5), (5, 76, 1), (6.5, 74, 0.5), (7, 72, 1),
@@ -545,9 +578,9 @@ def music_menu():
               (28, 79, 0.5), (28.5, 83, 0.5), (29, 86, 0.5), (29.5, 91, 1), (31, 86, 0.5), (31.5, 79, 0.5)]
     for beat, n, length in tune_a + tune_b:
         d = max(0.25, length * L.beat * 1.5)
-        L.add(beat, marimba(midi(n), d, 0.16 + 0.05 * length), 0.42)
-        L.add(beat, marimba(midi(n + 12), d, 0.1), 0.1)
-    return band(L.buf, 30, 12000)
+        L.add(beat, marimba(midi(n), d, 0.16 + 0.05 * length), 0.52)
+        L.add(beat, marimba(midi(n + 12), d, 0.1), 0.12)
+    return band(L.buf, 40, 12000)
 
 
 def music_game():
@@ -558,20 +591,20 @@ def music_game():
     for bar in range(8):
         b0 = bar * 4
         for q in (0, 1.75, 2.5):
-            L.add(b0 + q, kick(), 0.95)
+            L.add(b0 + q, kick(), 0.8)
         for q in (1, 3):
-            L.add(b0 + q, snare(), 0.55)
+            L.add(b0 + q, snare(), 0.5)
         for e in range(16):
-            L.add(b0 + e * 0.25, hat(e % 8 == 6), 0.14 if e % 4 == 2 else 0.07)
+            L.add(b0 + e * 0.25, hat(e % 8 == 6), 0.16 if e % 4 == 2 else 0.08)
         for q, n, d in (riff2 if bar % 4 == 3 else riff):
-            L.add(b0 + q, bass_note(n - 12, d * L.beat * 1.5), 0.6)
+            L.add(b0 + q, bass_note(n, d * L.beat * 1.5), 0.5)
         if bar % 2 == 1:
             for q, tri in ((2.5, (69, 72, 76)), (3.25, (67, 72, 76))):
-                L.add(b0 + q, stab(tri, 0.14), 0.2)
+                L.add(b0 + q, stab(tri, 0.14), 0.26)
         if bar % 4 == 3:
             L.add(b0 + 3.5, clap(), 0.4)
             L.add(b0 + 3.75, clap(), 0.45)
-    return band(L.buf, 30, 11000)
+    return band(L.buf, 40, 11000)
 
 
 SOUNDS = {
@@ -595,7 +628,7 @@ SOUNDS = {
     "rim": (sfx_rim, 0.85),
     "board": (sfx_board, 0.85),
     "swish": (sfx_swish, 0.85),
-    "dunk": (sfx_dunk, 0.95),
+    "dunk": (sfx_dunk, 0.88),
     "shoot": (sfx_shoot, 0.5),
     "pass": (sfx_pass, 0.55),
     "catch": (sfx_catch, 0.6),

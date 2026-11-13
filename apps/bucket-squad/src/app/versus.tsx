@@ -16,7 +16,7 @@ import { DIFFICULTY_NAMES, sideOverall } from '@/meta/setups';
 import { tourById } from '@/meta/tour';
 import { useSave } from '@/state/save';
 import { useSession } from '@/state/session';
-import { color, size as sizes, space } from '@/theme/tokens';
+import { color, px, size as sizes, space } from '@/theme/tokens';
 import { Tag, TeamBadge } from '@/ui/Bits';
 import { PlayerCard } from '@/ui/PlayerCard';
 import { Screen, Sunburst } from '@/ui/Screen';
@@ -37,6 +37,11 @@ function modeLine(setup: MatchSetup, ladderPoints: number, homeTeam: string | nu
   return `QUICK GAME  ·  ${DIFFICULTY_NAMES[level].toUpperCase()}`;
 }
 
+/** how far each team slides in from its side */
+const SLIDE = px(160);
+/** what the header, team names and tags need above and below the cards */
+const AROUND_CARDS = px(190);
+
 function SideColumn({ side, perTeam, cardW, mine, from }: { side: Side; perTeam: number; cardW: number; mine: boolean; from: -1 | 1 }) {
   const players = side.players.slice(0, perTeam);
   const team = teamById(side.kitTeam);
@@ -45,7 +50,7 @@ function SideColumn({ side, perTeam, cardW, mine, from }: { side: Side; perTeam:
   useEffect(() => {
     slide.set(withDelay(80, withSpring(1, { damping: 14, stiffness: 150, mass: 0.9 })));
   }, [slide]);
-  const style = useAnimatedStyle(() => ({ opacity: Math.min(1, slide.value * 1.4), transform: [{ translateX: (1 - slide.value) * 160 * from }] }));
+  const style = useAnimatedStyle(() => ({ opacity: Math.min(1, slide.value * 1.4), transform: [{ translateX: (1 - slide.value) * SLIDE * from }] }));
   return (
     <Animated.View style={[styles.side, style]}>
       <View style={styles.sideHead}>
@@ -82,7 +87,7 @@ function Matchup({ setup }: { setup: MatchSetup }) {
   const vs = useAnimatedStyle(() => ({ opacity: Math.min(1, pop.value * 2), transform: [{ scale: 0.3 + pop.value * 0.7 }, { rotate: '-6deg' }] }));
 
   const room = Math.max(space.huge, (width - space.lg * 2 - sizes.avatarLarge * 2) / 2);
-  const cardW = Math.max(sizes.cardSmall - space.md, Math.min(sizes.card + space.md, Math.floor((room - space.sm * (setup.perTeam - 1)) / setup.perTeam), Math.floor((height - 190) / sizes.cardRatio)));
+  const cardW = Math.max(sizes.cardSmall - space.md, Math.min(sizes.card + space.md, Math.floor((room - space.sm * (setup.perTeam - 1)) / setup.perTeam), Math.floor((height - AROUND_CARDS) / sizes.cardRatio)));
 
   const tipOff = () => {
     playSfx('whistle');

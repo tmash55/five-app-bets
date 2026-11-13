@@ -126,6 +126,9 @@ function GainInfo({ gain, copies }: { gain: Gain; copies: number }) {
   );
 }
 
+/** the widest the pack and its cards get, on a screen with room to spare */
+const BIGGEST = Math.round(sizes.cardLarge * 1.25);
+
 export default function OpenPack() {
   const params = useLocalSearchParams<{ pack?: string; first?: string }>();
   const packId = params.pack ?? 'playground';
@@ -238,8 +241,8 @@ export default function OpenPack() {
     setStage('sealed');
   };
 
-  const packW = Math.min(sizes.cardLarge, Math.round((height * 0.56) / PACK_RATIO));
-  const cardW = Math.min(sizes.cardLarge, Math.round((height * 0.6) / sizes.cardRatio));
+  const packW = Math.min(BIGGEST, Math.round((height * 0.56) / PACK_RATIO));
+  const cardW = Math.min(BIGGEST, Math.round((height * 0.6) / sizes.cardRatio));
   const gain = result && stage === 'cards' ? result.cards[index] : null;
   const gainPlayer = gain ? mustPlayer(gain.playerId) : null;
   const rc = gainPlayer ? RARITY_COLOR[gainPlayer.rarity] : null;
@@ -254,19 +257,20 @@ export default function OpenPack() {
           {stage === 'sealed' && (
             <View style={styles.center}>
               <Txt font="display" size="large" color="white" shadow>
-                {count > 0 ? def.name.toUpperCase() : 'NO PACKS LEFT'}
+                {count > 0 || busy ? def.name.toUpperCase() : 'NO PACKS LEFT'}
               </Txt>
               <Animated.View style={packStyle}>
                 <PackArt pack={def} width={packW} />
-                {count > 1 && <Tag label={`x${count}`} fill="coral" textColor="white" style={styles.count} />}
+                {count > 1 && !busy && <Tag label={`x${count}`} fill="coral" textColor="white" style={styles.count} />}
               </Animated.View>
-              {count > 0 && (
+              {/* kept in place while the pack tears so nothing jumps */}
+              <View style={count > 0 && !busy ? null : styles.unseen}>
                 <Animated.View style={hintStyle}>
                   <StickerText size="title" color="sun">
                     TAP TO OPEN!
                   </StickerText>
                 </Animated.View>
-              )}
+              </View>
             </View>
           )}
 
@@ -294,9 +298,10 @@ export default function OpenPack() {
                   </StickerText>
                 )}
                 <View style={styles.dots}>
-                  {result.cards.map((c, i) => (
-                    <View key={i} style={[styles.dot, { backgroundColor: i < index || (i === index && faceUp) ? color[RARITY_COLOR[mustPlayer(c.playerId).rarity].fill] : color.scrimSoft }]} />
-                  ))}
+                  {result.cards.map((c, i) => {
+                    const shown = i < index || (i === index && faceUp);
+                    return <View key={i} style={[styles.dot, shown ? { backgroundColor: color[RARITY_COLOR[mustPlayer(c.playerId).rarity].fill], borderColor: color.white } : null, i === index ? styles.dotNow : null]} />;
+                  })}
                   {faceUp && (
                     <Animated.View style={hintStyle}>
                       <Txt font="display" size="body" color="white" shadow>
@@ -417,6 +422,13 @@ const styles = StyleSheet.create({
     borderRadius: space.md / 2,
     borderWidth: space.hair,
     borderColor: color.ink,
+    backgroundColor: color.scrimSoft,
+  },
+  unseen: {
+    opacity: 0,
+  },
+  dotNow: {
+    transform: [{ scale: 1.3 }],
   },
   haul: {
     flexDirection: 'row',

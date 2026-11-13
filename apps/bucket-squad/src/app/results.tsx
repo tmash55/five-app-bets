@@ -1,7 +1,7 @@
 /** After the final buzzer: the score, the best player, and every coin and prize the game earned. */
 
 import { Redirect, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { playSfx, setMusic } from '@/audio/sound';
@@ -16,7 +16,7 @@ import type { MatchOutcome } from '@/state/logic';
 import { startNext } from '@/state/play';
 import { useSave } from '@/state/save';
 import { useSession } from '@/state/session';
-import { color, size as sizes, space, stroke } from '@/theme/tokens';
+import { color, px, size as sizes, space, stroke } from '@/theme/tokens';
 import { Avatar, ProgressBar, Stars, Tag, TeamBadge, useCountUp } from '@/ui/Bits';
 import { Confetti } from '@/ui/Confetti';
 import { useAfter } from '@/ui/hooks';
@@ -58,7 +58,7 @@ function MomentOverlay({ moment, onClose }: { moment: Moment; onClose: () => voi
     const title = moment.gain.isNew ? 'NEW PLAYER!' : moment.gain.levelAfter > moment.gain.levelBefore ? 'LEVEL UP!' : 'EXTRA COPY!';
     return (
       <Overlay>
-        <Panel width={sizes.panelMax - 60} face={styles.moment}>
+        <Panel width={sizes.panelMax - px(60)} face={styles.moment}>
           <PlayerCard player={player} level={Math.max(1, moment.gain.levelAfter)} width={sizes.card + space.md} shine />
           <View style={styles.momentText}>
             <StickerText size="title" color="coral">
@@ -78,7 +78,7 @@ function MomentOverlay({ moment, onClose }: { moment: Moment; onClose: () => voi
   const { tier } = moment;
   return (
     <Overlay>
-      <Panel width={sizes.panelMax - 140} face={styles.tierPanel}>
+      <Panel width={sizes.panelMax - px(140)} face={styles.tierPanel}>
         <Icon name="trophy" size={sizes.avatarLarge} color={tier.color} />
         <StickerText size="title" color="sun" center>
           {`${tier.name.toUpperCase()} TIER!`}
@@ -101,12 +101,14 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
   const router = useRouter();
   const after = useAfter();
   const packs = useSave((s) => s.packs);
+  const bank = useSave((s) => s.coins);
   const tourProgress = useSave((s) => s.tour);
   const owned = useSave((s) => s.owned);
   const homeTeam = useSave((s) => s.homeTeam);
   const [lines] = useState<RewardLine[]>(() => {
     const all = [...outcome.rewards.lines];
     if (outcome.tour && outcome.tour.coins > 0) all.push({ label: 'First win here', coins: outcome.tour.coins });
+    if (outcome.tour?.unlock && outcome.tour.unlock.coins > 0) all.push({ label: 'Spare star card', coins: outcome.tour.unlock.coins });
     if (outcome.ladder?.promoted && outcome.ladder.promoted.reward.coins > 0) all.push({ label: `${outcome.ladder.promoted.name} tier prize`, coins: outcome.ladder.promoted.reward.coins });
     return all;
   });
@@ -119,6 +121,15 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
   const [shown, setShown] = useState(0);
   const [burst, setBurst] = useState(0);
   const [momentsOn, setMomentsOn] = useState(false);
+  const list = useRef<ComponentRef<typeof ScrollView>>(null);
+  /** how tall the list and one of its lines are */
+  const room = useRef({ list: 0, line: 0 });
+
+  // a long game earns more lines than fit: follow the newest one down, like a till receipt
+  useEffect(() => {
+    const y = shown * room.current.line - room.current.list;
+    if (y > 0) list.current?.scrollTo({ y, animated: false });
+  }, [shown]);
 
   useEffect(() => {
     setMusic(null);
@@ -141,10 +152,10 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
     after(Math.max(2600, done + 600), () => setMusic('menu'));
   }, [after, lines, summary.won]);
 
-  const total = useCountUp(
-    lines.slice(0, shown).reduce((a, l) => a + l.coins, 0),
-    LINE_MS,
-  );
+  const landed = lines.slice(0, shown).reduce((a, l) => a + l.coins, 0);
+  const total = useCountUp(landed, LINE_MS);
+  // the bank in the corner fills up as each line lands, instead of showing the answer before the sum
+  const owed = lines.reduce((a, l) => a + l.coins, 0) - landed;
   const mvp = summary.players.find((p) => p.id === summary.mvp) ?? summary.players[0];
   const mvpDef = mustPlayer(mvp.id);
   const away = teamById(setup.away.kitTeam);
@@ -169,6 +180,7 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
       <Screen
         back={false}
         music={false}
+        coins={Math.max(0, bank - owed)}
         tone={summary.won ? 'orange' : 'sky'}
         left={
           <StickerText size="title" color="white">
@@ -249,9 +261,24 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
 
           <View style={styles.right}>
             <Sticker fill="paper" round="lg" raise="mid" style={styles.panelBox} face={styles.panel}>
-              <ScrollView style={styles.lines} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                ref={list}
+                style={styles.lines}
+                showsVerticalScrollIndicator={false}
+                onLayout={(e) => {
+                  room.current.list = e.nativeEvent.layout.height;
+                }}>
                 {lines.map((l, i) => (
-                  <View key={i} style={[styles.line, i >= shown && styles.hidden]}>
+                  <View
+                    key={i}
+                    style={[styles.line, i >= shown && styles.hidden]}
+                    onLayout={
+                      i === 0
+                        ? (e) => {
+                            room.current.line = e.nativeEvent.layout.height;
+                          }
+                        : undefined
+                    }>
                     <Txt size="small" lines={1} style={styles.lineLabel}>
                       {l.label}
                     </Txt>

@@ -98,12 +98,17 @@ function StageCard({ tour, index, progress, owned, packDone, onPlay }: { tour: T
         </View>
       </View>
       {!open && (
-        <View style={styles.lockOver}>
-          <Icon name="lock" size={sizes.iconHuge} color="paper" />
-          <Txt font="display" size="body" color="white" shadow center>
-            {`Beat the ${tour.stages[index - 1].team.name} to unlock`}
-          </Txt>
-        </View>
+        <>
+          <View style={styles.lockDim} />
+          <View style={styles.lockOver}>
+            <Sticker fill="paper" round="pill" raise="low" face={styles.lockPill}>
+              <Icon name="lock" size={sizes.icon} color="sun" />
+              <Txt font="display" size="body" lines={1}>
+                {`Beat the ${tour.stages[index - 1].team.name} first`}
+              </Txt>
+            </Sticker>
+          </View>
+        </>
       )}
     </Sticker>
   );
@@ -204,13 +209,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.xs,
   },
-  lockOver: {
+  lockDim: {
     ...StyleSheet.absoluteFill,
     backgroundColor: color.scrim,
+    opacity: 1 - opacity.pattern,
+  },
+  lockOver: {
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: space.md,
+  },
+  lockPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: space.sm,
-    padding: space.lg,
-    opacity: 1 - opacity.pattern,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
   },
 });

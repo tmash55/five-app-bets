@@ -3,7 +3,7 @@
 import { useKeepAwake } from 'expo-keep-awake';
 import { Redirect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, StyleSheet, View } from 'react-native';
+import { AppState, BackHandler, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { setMusic } from '@/audio/sound';
@@ -54,7 +54,7 @@ function Match({ setup }: { setup: MatchSetup }) {
       onEvent: (e, m) => director.handle(e, m),
       onFinal: (m) => {
         if (setup.spectate) {
-          router.replace('/');
+          router.dismissTo('/');
           return;
         }
         const summary = summarize(m, setup, director.buzzerBeater);
@@ -85,8 +85,18 @@ function Match({ setup }: { setup: MatchSetup }) {
   }, [seeTip]);
 
   const quit = useCallback(() => {
-    router.replace('/');
+    router.dismissTo('/');
   }, [router]);
+
+  // Android's back button never drops a game by accident: it pauses, and a second press carries on
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (howTo) closeHowTo();
+      else if (runner.m.phase !== 'final') setPaused((p) => !p);
+      return true;
+    });
+    return () => sub.remove();
+  }, [runner, howTo, closeHowTo]);
 
   const names: [string, string] = [setup.home.short, setup.away.short];
   const over = hud?.phase === 'final';

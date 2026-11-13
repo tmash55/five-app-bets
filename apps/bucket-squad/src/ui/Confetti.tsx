@@ -4,7 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 
-import { party, radius, space } from '@/theme/tokens';
+import { party, px, radius, space } from '@/theme/tokens';
 
 interface PieceSpec {
   angle: number;
@@ -29,23 +29,25 @@ function Piece({ t, spec }: { t: SharedValue<number>; spec: PieceSpec }) {
 
 /**
  * Fires once each time `burst` changes to a new non-zero number.
- * Place it where the burst should start; pieces fly out from its centre.
+ * Place it where the burst should start; pieces fly out from its centre,
+ * as far as `reach` (a design size, scaled to the screen like the tokens).
  */
 export function Confetti({ burst, count = 30, reach = 220, colors = party, style }: { burst: number; count?: number; reach?: number; colors?: readonly string[]; style?: StyleProp<ViewStyle> }) {
   const t = useSharedValue(0);
   const specs = useMemo<PieceSpec[]>(() => {
     const out: PieceSpec[] = [];
+    const far = px(reach);
     // a fixed spread (no randomness) so the burst looks the same, and full, every time
     for (let i = 0; i < count; i++) {
       const k = (i * 0.618034) % 1;
       const k2 = (i * 0.754877) % 1;
       out.push({
         angle: -Math.PI / 2 + (k - 0.5) * Math.PI * 1.7,
-        reach: reach * (0.45 + 0.55 * k2),
+        reach: far * (0.45 + 0.55 * k2),
         size: space.sm + space.sm * k2,
         tint: colors[i % colors.length],
         spin: (k - 0.5) * 1400,
-        fall: reach * (0.9 + 0.8 * k),
+        fall: far * (0.9 + 0.8 * k),
       });
     }
     return out;

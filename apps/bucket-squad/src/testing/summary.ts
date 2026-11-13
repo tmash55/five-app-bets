@@ -20,7 +20,7 @@ export function summary(over: Partial<MatchSummary> = {}): MatchSummary {
     mvp: 'dash-bennett',
     buzzerBeater: false,
     difficulty: 0.22,
-    names: ['Your Squad', 'Thunder'],
+    names: ['Your Squad', 'Stompers'],
     ...over,
   };
 }

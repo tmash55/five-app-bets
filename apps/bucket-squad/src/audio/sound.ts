@@ -30,22 +30,32 @@ const VOICES: Partial<Record<SfxName, number>> = {
 
 /** loudness trim per sound, on top of the level baked into the file */
 const TRIM: Partial<Record<SfxName, number>> = {
-  dribble: 0.55,
+  dribble: 0.6,
   bounce: 0.7,
+  board: 0.8,
+  swish: 0.75,
   shoot: 0.6,
   pass: 0.6,
-  catch: 0.6,
+  catch: 0.85,
   swipe: 0.5,
-  land: 0.5,
+  land: 0.6,
   squeak: 0.35,
   cheer: 0.6,
   cheerBig: 0.7,
   ooh: 0.55,
   tap: 0.6,
   back: 0.6,
+  // piercing or sustained tones: easy to overdo next to everything else
+  whistle: 0.5,
+  tick: 0.6,
+  go: 0.65,
+  buzzer: 0.8,
+  ankle: 0.55,
+  hypeEnd: 0.6,
+  lose: 0.7,
 };
 
-const MUSIC_LEVEL: Record<MusicName, number> = { menu: 0.42, game: 0.3 };
+const MUSIC_LEVEL: Record<MusicName, number> = { menu: 0.5, game: 0.36 };
 
 interface Pool {
   players: AudioPlayer[];
@@ -58,6 +68,13 @@ let musicOn = true;
 let music: { name: MusicName; player: AudioPlayer } | null = null;
 let wanted: MusicName | null = null;
 let modeSet = false;
+
+/** Development only: the preview tooling reads this log to lay a soundtrack under a captured video. */
+function note(kind: 'sfx' | 'music', name: string | null, volume: number): void {
+  if (!__DEV__) return;
+  const log = (globalThis as { __soundLog?: { t: number; kind: string; name: string | null; volume: number }[] }).__soundLog;
+  if (log) log.push({ t: performance.now(), kind, name, volume });
+}
 
 function ensureMode(): void {
   if (modeSet) return;
@@ -89,12 +106,14 @@ export function warmSounds(names: readonly SfxName[]): void {
 
 export function playSfx(name: SfxName, volume = 1): void {
   if (!soundOn) return;
+  const level = Math.max(0, Math.min(1, volume * (TRIM[name] ?? 1)));
+  note('sfx', name, level);
   const pool = poolFor(name);
   if (!pool) return;
   const p = pool.players[pool.next];
   pool.next = (pool.next + 1) % pool.players.length;
   try {
-    p.volume = Math.max(0, Math.min(1, volume * (TRIM[name] ?? 1)));
+    p.volume = level;
     p.seekTo(0).catch(() => undefined);
     p.play();
   } catch {
@@ -129,6 +148,7 @@ function startMusic(name: MusicName): void {
 /** Choose the music bed, or `null` for none. Safe to call often. */
 export function setMusic(name: MusicName | null): void {
   wanted = name;
+  note('music', musicOn ? name : null, name ? MUSIC_LEVEL[name] : 0);
   if (!musicOn || name === null) {
     stopMusic();
     return;

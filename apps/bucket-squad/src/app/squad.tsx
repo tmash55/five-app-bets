@@ -9,12 +9,15 @@ import { PLAYERS, byValue, mustPlayer, playerOverall } from '@/data/roster';
 import { levelOf } from '@/meta/collection';
 import { chemistry } from '@/meta/match';
 import { useSave } from '@/state/save';
-import { color, radius, size as sizes, space, stroke } from '@/theme/tokens';
+import { color, px, radius, size as sizes, space, stroke } from '@/theme/tokens';
 import { Tag } from '@/ui/Bits';
 import { Icon, type IconName } from '@/ui/Icon';
 import { PlayerCard } from '@/ui/PlayerCard';
 import { Screen, useBodySize } from '@/ui/Screen';
 import { Txt } from '@/ui/Txt';
+
+/** what the spot labels, tags and hint need around the three squad cards */
+const AROUND_CARDS = px(104);
 
 const SPOTS: readonly { label: string; icon: IconName }[] = [
   { label: 'CAPTAIN', icon: 'crown' },
@@ -62,7 +65,7 @@ export default function Squad() {
   };
 
   const leftW = body.width * 0.46;
-  const spotW = Math.max(sizes.cardSmall - space.md, Math.min(sizes.card, Math.floor((leftW - space.sm * 2) / 3), Math.floor((body.height - 104) / sizes.cardRatio)));
+  const spotW = Math.max(sizes.cardSmall - space.md, Math.min(sizes.card, Math.floor((leftW - space.sm * 2) / 3), Math.floor((body.height - AROUND_CARDS) / sizes.cardRatio)));
   const hint = pick !== null ? `Tap a spot for ${mustPlayer(pick).name}.` : spot !== null ? 'Now tap the player you want there.' : 'Tap a spot, then tap a player. Your squad wears the captain’s uniform.';
 
   return (
@@ -99,8 +102,8 @@ export default function Squad() {
               <View key={p.id}>
                 <PlayerCard player={p} level={level(p.id)} width={sizes.cardSmall - space.sm} selected={pick === p.id} onPress={() => tapPlayer(p.id)} />
                 {at >= 0 && (
-                  <View pointerEvents="none" style={styles.inTag}>
-                    <Tag label={at === 0 ? 'Captain' : 'In squad'} fill="sun" />
+                  <View pointerEvents="none" style={styles.inSquad}>
+                    <Icon name={SPOTS[at].icon} size={sizes.iconTiny} color={at === 0 ? 'sun' : 'white'} />
                   </View>
                 )}
               </View>
@@ -163,10 +166,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingBottom: space.md,
     paddingTop: space.xs,
+    paddingHorizontal: space.xs,
   },
-  inTag: {
+  // the spot's own icon on the corner the card leaves free, so the rating stays readable
+  inSquad: {
     position: 'absolute',
     top: -space.xs,
-    alignSelf: 'center',
+    right: -space.xs,
+    width: sizes.badgeTiny + space.xs,
+    height: sizes.badgeTiny + space.xs,
+    borderRadius: (sizes.badgeTiny + space.xs) / 2,
+    backgroundColor: color.ink,
+    borderWidth: stroke.thin,
+    borderColor: color.white,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -47,6 +47,8 @@ export interface MatchSetup {
   tour?: { tourId: string; stage: number; game: number };
   /** watch two computer teams play (attract mode) */
   spectate?: boolean;
+  /** your squad plays itself with the full HUD on, for trailers and screenshots */
+  demo?: boolean;
 }
 
 /** Rating points a squad gains when its players are real teammates. */
@@ -113,6 +115,7 @@ export function buildMatch(setup: MatchSetup): BuiltMatch {
     timingAssist: setup.timingAssist,
     rubberBand: setup.rubberBand,
     autoSwitch: true,
+    demo: setup.demo === true,
   };
   return { config, visuals: { court: setup.court, looks, teamColors: colors }, colors, lineup };
 }

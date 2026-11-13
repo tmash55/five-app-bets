@@ -20,7 +20,7 @@ export type Role = 'Sharpshooter' | 'High Flyer' | 'Speedster' | 'Playmaker' | '
 
 export interface TeamDef {
   id: string;
-  /** "Rockets" */
+  /** "Comets" */
   name: string;
   /** "Pinecone Park" */
   place: string;

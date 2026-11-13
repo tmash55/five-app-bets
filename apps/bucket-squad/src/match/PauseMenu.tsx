@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { useSave } from '@/state/save';
-import { size as sizes, space } from '@/theme/tokens';
+import { px, size as sizes, space } from '@/theme/tokens';
 import { ToggleChip } from '@/ui/Inputs';
 import { Overlay, Panel } from '@/ui/Overlay';
 import { StickerButton } from '@/ui/Sticker';
@@ -17,7 +17,7 @@ export function PauseMenu({
   onQuit,
   quitNote,
 }: {
-  /** one line about where the game stands, e.g. "RKT 12 - 9 THU" */
+  /** one line about where the game stands, e.g. "COM 12 - 9 STM" */
   line: string;
   onResume: () => void;
   onHowTo: () => void;
@@ -32,7 +32,7 @@ export function PauseMenu({
   if (confirm) {
     return (
       <Overlay>
-        <Panel width={sizes.panelMax - 140} face={styles.panel}>
+        <Panel width={sizes.panelMax - px(140)} face={styles.panel}>
           <StickerText size="title" color="coral" center>
             QUIT GAME?
           </StickerText>
@@ -50,7 +50,7 @@ export function PauseMenu({
 
   return (
     <Overlay>
-      <Panel width={sizes.panelMax - 100} face={styles.panel}>
+      <Panel width={sizes.panelMax - px(100)} face={styles.panel}>
         <StickerText size="title" color="sun" center>
           PAUSED
         </StickerText>

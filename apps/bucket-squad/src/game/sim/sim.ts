@@ -1090,7 +1090,10 @@ function moveFree(m: MatchState, p: PlayerSim, it: Intent, factor: number): void
     want = Math.atan2(b.z - p.z, b.x - p.x);
   }
   p.facing = approachAngle(p.facing, want, MOVE.turn * DT);
+  const bounces = Math.floor(p.dribT);
   p.dribT += DT * (2.1 + sp * 0.2);
+  // the ball meets the floor each time the cycle rolls over
+  if (p.hasBall && Math.floor(p.dribT) !== bounces && m.phase === 'live' && b.state === 'held' && p.state === 'free' && p.catchT >= 0.22) emit(m, { type: 'dribble', by: p.idx });
 }
 
 function updateHand(m: MatchState, p: PlayerSim): void {
@@ -1715,7 +1718,7 @@ function padToIntent(m: MatchState, p: PlayerSim, pad: PadInput, it: Intent): vo
 function stepLive(m: MatchState, pad: PadInput): void {
   updateControl(m, pad);
   for (const p of m.players) {
-    if (p.idx === m.control) padToIntent(m, p, pad, scratchIntent);
+    if (p.idx === m.control && !m.cfg.demo) padToIntent(m, p, pad, scratchIntent);
     else aiIntent(m, p, scratchIntent);
     stepPlayer(m, p, scratchIntent, true);
     if (m.phase !== 'live') break;

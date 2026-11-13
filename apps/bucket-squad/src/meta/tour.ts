@@ -36,12 +36,12 @@ export interface Tour {
 }
 
 /** The road trip through the neighborhood, easiest court first. */
-const NEIGHBORHOOD_ORDER = ['rockets', 'thunder', 'waves', 'coyotes', 'yetis', 'skyhawks', 'throwbacks', 'legends'];
+const NEIGHBORHOOD_ORDER = ['comets', 'stompers', 'waves', 'coyotes', 'yetis', 'skyhawks', 'throwbacks', 'legends'];
 
 /** Who you win at each stop of the neighborhood tour. */
 const NEIGHBORHOOD_STARS: Record<string, string> = {
-  rockets: 'teo-ramirez',
-  thunder: 'jax-monroe',
+  comets: 'teo-ramirez',
+  stompers: 'jax-monroe',
   waves: 'kai-nakoa',
   coyotes: 'sage-yazzie',
   yetis: 'bjorn-iversen',

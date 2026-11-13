@@ -40,9 +40,9 @@ describe('the ladder', () => {
 
   it('fields opponents of the right size and level, from another team', () => {
     for (let seed = 1; seed <= 60; seed++) {
-      const side = ladderOpponent(500, 3, seededRng(seed), 'rockets');
+      const side = ladderOpponent(500, 3, seededRng(seed), 'comets');
       expect(side.players).toHaveLength(3);
-      expect(side.kitTeam).not.toBe('rockets');
+      expect(side.kitTeam).not.toBe('comets');
       for (const p of side.players) {
         expect(p.level).toBe(TIERS[tierIndex(500)].level);
         expect(mustPlayer(p.id).team).toBe(side.kitTeam);
@@ -55,7 +55,7 @@ describe('the tour', () => {
   const plain = toursFor(null)[0];
 
   it('visits every neighborhood court, three games each, with a star to win', () => {
-    expect(plain.stages.map((s) => s.team.id)).toEqual(['rockets', 'thunder', 'waves', 'coyotes', 'yetis', 'skyhawks', 'throwbacks', 'legends']);
+    expect(plain.stages.map((s) => s.team.id)).toEqual(['comets', 'stompers', 'waves', 'coyotes', 'yetis', 'skyhawks', 'throwbacks', 'legends']);
     for (const stage of plain.stages) {
       expect(stage.games).toHaveLength(3);
       const star = stage.games[2].unlock;
@@ -81,14 +81,14 @@ describe('the tour', () => {
   });
 
   it('saves your home court for later in the trip', () => {
-    const mine = toursFor('rockets')[0];
-    expect(mine.stages.map((s) => s.team.id)).toEqual(['thunder', 'waves', 'coyotes', 'yetis', 'skyhawks', 'rockets', 'throwbacks', 'legends']);
+    const mine = toursFor('comets')[0];
+    expect(mine.stages.map((s) => s.team.id)).toEqual(['stompers', 'waves', 'coyotes', 'yetis', 'skyhawks', 'comets', 'throwbacks', 'legends']);
     // a home court that is already a late stop stays where it is
     expect(toursFor('skyhawks')[0].stages.map((s) => s.team.id)).toEqual(plain.stages.map((s) => s.team.id));
     // the first stop is always the gentlest, whoever it is
     expect(mine.stages[0].games[0].difficulty).toBe(plain.stages[0].games[0].difficulty);
-    expect(toursFor('rockets')).toBe(toursFor('rockets'));
-    expect(tourById('neighborhood', 'rockets')).toBe(mine);
+    expect(toursFor('comets')).toBe(toursFor('comets'));
+    expect(tourById('neighborhood', 'comets')).toBe(mine);
     expect(tourById('no-such-tour', null)).toBe(plain);
   });
 

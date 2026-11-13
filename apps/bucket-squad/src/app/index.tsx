@@ -2,7 +2,9 @@
 
 import { Image } from 'expo-image';
 import { Redirect, useRouter, type Href } from 'expo-router';
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import { PLAYERS, cardArt, mustPlayer, playerOverall } from '@/data/roster';
 import { tapFeedback } from '@/fx/feedback';
@@ -18,6 +20,8 @@ import { IconButton, Sticker, StickerButton } from '@/ui/Sticker';
 import { StickerText, Txt } from '@/ui/Txt';
 
 const ALL_IDS = PLAYERS.map((p) => p.id);
+/** one full breath of the squad on the home screen */
+const IDLE_MS = 2400;
 
 function Tile({ label, sub, icon, fill, count = 0, tag, onPress }: { label: string; sub: string; icon: IconName; fill: ColorName; count?: number; tag?: string; onPress: () => void }) {
   return (
@@ -39,10 +43,28 @@ function Tile({ label, sub, icon, fill, count = 0, tag, onPress }: { label: stri
   );
 }
 
+/** One squad member, gently bouncing on their toes. `beat` offsets them so the three never move as one. */
+function Figure({ id, lead, clock, beat }: { id: string; lead: boolean; clock: SharedValue<number>; beat: number }) {
+  const art = cardArt(id);
+  const style = useAnimatedStyle(() => {
+    const wave = Math.sin((clock.value + beat) * Math.PI * 2);
+    return { transform: [{ translateY: -space.xs * 0.5 * (1 + wave) }, { scaleY: 1 + 0.012 * wave }] };
+  });
+  return (
+    <Animated.View style={[styles.figure, lead ? styles.figureLead : styles.figureSide, style]}>
+      {art !== undefined && <Image source={art} style={styles.fill} contentFit="contain" contentPosition="bottom" transition={0} />}
+    </Animated.View>
+  );
+}
+
 /** The three players in your squad, standing together. */
 function SquadStage({ ids, onPress }: { ids: string[]; onPress: () => void }) {
   // captain in the middle and a step in front
   const order = ids.length >= 3 ? [ids[1], ids[0], ids[2]] : ids;
+  const clock = useSharedValue(0);
+  useEffect(() => {
+    clock.set(withRepeat(withTiming(1, { duration: IDLE_MS, easing: Easing.linear }), -1));
+  }, [clock]);
   return (
     <Pressable
       style={styles.stage}
@@ -54,14 +76,9 @@ function SquadStage({ ids, onPress }: { ids: string[]; onPress: () => void }) {
       }}>
       <View style={styles.floor} />
       <View style={styles.figures}>
-        {order.map((id) => {
-          const art = cardArt(id);
-          return (
-            <View key={id} style={[styles.figure, id === ids[0] ? styles.figureLead : styles.figureSide]}>
-              {art !== undefined && <Image source={art} style={styles.fill} contentFit="contain" contentPosition="bottom" transition={0} />}
-            </View>
-          );
-        })}
+        {order.map((id, i) => (
+          <Figure key={id} id={id} lead={id === ids[0]} clock={clock} beat={i * 0.37} />
+        ))}
       </View>
     </Pressable>
   );
@@ -163,6 +180,7 @@ const styles = StyleSheet.create({
   },
   figure: {
     width: '48%',
+    transformOrigin: 'bottom',
   },
   figureLead: {
     height: '100%',
