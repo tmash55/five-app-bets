@@ -13,7 +13,7 @@ import { MatchRunner, type HudState } from '@/game/runner';
 import { Controls } from '@/match/Controls';
 import { MATCH_SOUNDS, MatchDirector } from '@/match/director';
 import { HowToOverlay } from '@/match/HowTo';
-import { CalloutLayer, ControlPlate, Scoreboard, type CalloutHandle } from '@/match/Hud';
+import { CalloutLayer, ControlPlate, Scoreboard, SquadHeat, type CalloutHandle } from '@/match/Hud';
 import { PauseMenu } from '@/match/PauseMenu';
 import { buildMatch, summarize, type MatchSetup } from '@/meta/match';
 import { useSave } from '@/state/save';
@@ -106,6 +106,8 @@ function Match({ setup }: { setup: MatchSetup }) {
   const names: [string, string] = [setup.home.short, setup.away.short];
   const over = hud?.phase === 'final';
   const controlled = hud && hud.control >= 0 ? built.lineup[hud.control] : null;
+  // the person's own players (always the first side), each with their flame meter
+  const squad = hud && !setup.spectate ? built.lineup.flatMap((l, i) => (l.team === 0 ? [{ id: l.def.id, fire: hud.fire[i] ?? 0, you: i === hud.control }] : [])) : [];
 
   return (
     <View style={styles.root}>
@@ -113,7 +115,8 @@ function Match({ setup }: { setup: MatchSetup }) {
       {hud && <Scoreboard hud={hud} names={names} colors={built.colors} />}
       <CalloutLayer ref={callouts} colors={built.colors} />
       {hud && !setup.spectate && !over && <Controls runner={runner} offense={hud.offense} lefty={lefty} turbo={hud.turbo} enabled={!stopped} />}
-      {controlled && !over && <ControlPlate playerId={controlled.def.id} name={shortName(controlled.def)} fill={built.colors[0]} hyped={hud !== null && hud.hype[0] > 20} />}
+      {squad.length > 0 && !over && <SquadHeat players={squad} fill={built.colors[0]} />}
+      {controlled && !over && <ControlPlate playerId={controlled.def.id} name={shortName(controlled.def)} fill={built.colors[0]} hyped={hud !== null && hud.hype[0] > 20} onFire={hud !== null && (hud.fire[hud.control] ?? 0) > 20} />}
       {!over && (
         <View style={[styles.pause, { top: Math.max(insets.top, space.sm), left: Math.max(insets.left, space.md) }]}>
           <IconButton name="pause" label="Pause" onPress={() => setPaused(true)} />

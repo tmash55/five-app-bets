@@ -7,7 +7,8 @@ import { Platform } from 'react-native';
 
 import { perfAdd, perfFrame, perfHud, perfOn, perfReport, perfReset, perfStep } from './perf';
 import { MatchRenderer, type MatchVisuals } from './render/renderer';
-import { DT, RULES } from './sim/constants';
+import { DT, FIRE, RULES } from './sim/constants';
+import { ignite } from './sim/fire';
 import { createMatch, stepMatch } from './sim/sim';
 import type { MatchConfig, MatchState, PadInput, Phase, SimEvent } from './sim/types';
 
@@ -27,6 +28,8 @@ export interface HudState {
   turbo: number;
   /** hype meter per team in twentieths, 21 while Hype is on */
   hype: [number, number];
+  /** each player's flame meter in twentieths, 21 while on fire (simulation order) */
+  fire: number[];
   /** the person's team has the ball in hand: the buttons mean SHOOT and PASS, otherwise JUMP and STEAL */
   offense: boolean;
   /** index of the controlled player, -1 when watching */
@@ -57,7 +60,7 @@ export interface RunnerHooks {
 }
 
 function hudKey(h: HudState): string {
-  return `${h.score[0]},${h.score[1]},${h.quarter},${h.overtime ? 1 : 0},${h.clock},${h.shotClock},${h.phase},${h.countdown},${h.turbo},${h.hype[0]},${h.hype[1]},${h.offense ? 1 : 0},${h.control}`;
+  return `${h.score[0]},${h.score[1]},${h.quarter},${h.overtime ? 1 : 0},${h.clock},${h.shotClock},${h.phase},${h.countdown},${h.turbo},${h.hype[0]},${h.hype[1]},${h.fire.join('.')},${h.offense ? 1 : 0},${h.control}`;
 }
 
 export class MatchRunner {
@@ -211,6 +214,24 @@ export class MatchRunner {
     this.sendHud();
   }
 
+  /** Tooling (development builds only): set a player on fire now, or fill their meter part way (`heat` 0..FIRE.max). */
+  devFire(player: number, heat: number = FIRE.max): void {
+    if (!__DEV__) return;
+    const p = this.m.players[player];
+    if (!p) return;
+    // the last step's events have all been heard already
+    this.m.events.length = 0;
+    if (heat >= FIRE.max) ignite(this.m, p);
+    else p.heat = Math.max(0, heat);
+    // the director and renderer hear about it like any other fire
+    const r = this.renderer;
+    if (r) r.afterStep(this.m);
+    const onEvent = this.hooks.onEvent;
+    if (onEvent) for (const e of this.m.events) onEvent(e, this.m);
+    this.m.events.length = 0;
+    this.sendHud();
+  }
+
   /** Tooling: run forward until the test passes (or `maxSeconds` go by). Returns the seconds advanced. */
   advanceUntil(test: (m: MatchState) => boolean, maxSeconds = 60): number {
     const r = this.renderer;
@@ -242,6 +263,7 @@ export class MatchRunner {
       countdown: m.phase === 'countdown' ? Math.max(0, Math.ceil(RULES.countdown - m.phaseT - 1e-6)) : 0,
       turbo: c >= 0 ? Math.round(m.players[c].turbo * 20) : 0,
       hype: [m.hypeT[0] > 0 ? 21 : Math.round(m.hype[0] / 5), m.hypeT[1] > 0 ? 21 : Math.round(m.hype[1] / 5)],
+      fire: m.players.map((p) => (p.fireT > 0 ? 21 : Math.min(20, Math.floor((p.heat / FIRE.max) * 20)))),
       offense: c >= 0 ? m.possession === m.players[c].team && (b === 'held' || b === 'pass' || b === 'dead') : false,
       control: c,
     };

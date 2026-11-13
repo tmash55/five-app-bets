@@ -13,12 +13,12 @@ import { BALL_R, COURT, DT, RULES } from '../sim/constants';
 import { attackSign, hoopXOf, shotApexTime, shotMeter } from '../sim/core';
 import { clamp, clamp01, lerp, smooth } from '../sim/math';
 import type { MatchState, PlayerSim } from '../sim/types';
-import { color, party, sparkle } from '../../theme/tokens';
+import { color, flame, party, sparkle } from '../../theme/tokens';
 import { DrawnBall, FigureAnimator, type AnimFrame, type Mood } from './animator';
 import { buildCourt, type CourtId, type CourtMeshes } from './court';
 import { FigureView, newLightUniforms, type LightUniforms } from './figure';
 import { rgb, type Rgb } from './geo';
-import { Particles, SHAPE_SOFT, SHAPE_SPARKLE } from './particles';
+import { Particles, SHAPE_FLAME, SHAPE_SOFT, SHAPE_SPARKLE } from './particles';
 import { buildBallGeometry, programCount, warmUp, wrapContext } from './props';
 import {
   ARROW_FRAG,
@@ -53,6 +53,10 @@ const RINGS = 8;
 
 const SPARK: Rgb[] = sparkle.map(rgb);
 const PARTY: Rgb[] = party.map(rgb);
+const FLAME: Rgb[] = flame.map(rgb);
+/** seconds between flame tongues off a player on fire, and off the ball they hold or shoot */
+const FLAME_EVERY = 0.016;
+const BALL_FLAME_EVERY = 0.012;
 const WHITE = rgb(color.white);
 const GRADE: Record<string, Rgb> = {
   perfect: rgb(color.perfect),
@@ -100,7 +104,7 @@ export class MatchRenderer {
   private readonly court: CourtMeshes;
   private readonly figures: FigureView[] = [];
   private readonly anims: FigureAnimator[] = [];
-  private readonly particles = new Particles(360);
+  private readonly particles = new Particles(520);
   private readonly ball: THREE.Mesh;
   private readonly ballQuat = new THREE.Quaternion();
   private readonly sky: THREE.Mesh;
@@ -144,7 +148,12 @@ export class MatchRenderer {
   private meterValue = 0;
   private meterGrade: Rgb = WHITE;
   private trailT = 0;
+  private fireTrailT = 0;
   private stepT = new Float32Array(8);
+  /** per player: time to the next flame, and which spot it comes off next (feet, hands, body) */
+  private flameT = new Float32Array(8);
+  private flameSpot = new Uint8Array(8);
+  private readonly spot = new Float64Array(3);
 
   private readonly tmpV = new THREE.Vector3();
   private readonly tmpQ = new THREE.Quaternion();
@@ -514,6 +523,37 @@ export class MatchRenderer {
             this.cheer = 1;
           }
           break;
+        case 'fire': {
+          const p = m.players[e.player];
+          if (e.on) {
+            // a whoosh of flame round the player and a burst of sparks
+            for (let k = 0; k < 16; k++) {
+              const ang = (k / 16) * Math.PI * 2 + P.rand() * 0.3;
+              const sp = 1.6 + P.rand() * 1.4;
+              P.spawn({
+                x: p.x + Math.cos(ang) * 0.25,
+                y: 0.15 + P.rand() * 0.4,
+                z: p.z + Math.sin(ang) * 0.25,
+                vx: Math.cos(ang) * sp,
+                vy: 2 + P.rand() * 1.6,
+                vz: Math.sin(ang) * sp,
+                life: 0.45 + P.rand() * 0.25,
+                size: 0.22 + P.rand() * 0.1,
+                grow: 0.4,
+                color: FLAME[1 + Math.floor(P.rand() * 3)],
+                drag: 2.4,
+                shape: SHAPE_FLAME,
+              });
+            }
+            P.burst(p.x, p.y + 1.1, p.z, 16, FLAME, 4.4, 0.17);
+            this.cheer = Math.max(this.cheer, 0.9);
+            this.shake = Math.max(this.shake, 0.18);
+          } else {
+            // put out: a puff of smoke
+            P.dust(p.x, p.z, 8, this.dustRgb, 1.2);
+          }
+          break;
+        }
         case 'inbound':
           for (const a of this.anims) a.reset();
           break;
@@ -718,9 +758,14 @@ export class MatchRenderer {
       fig.mesh.matrix.compose(this.tmpV, this.tmpQ, this.tmpS);
       fig.mesh.matrixWorldNeedsUpdate = true;
       fig.setBaseY(y);
-      // hype glow in team colour
+      // fire glow (it wins over Hype's), or hype glow in team colour
       const hot = m.hypeT[p.team] > 0;
-      if (hot) {
+      if (p.fireT > 0) {
+        const c = FLAME[2];
+        const flick = 0.6 + 0.2 * Math.sin(this.time * 17 + i * 2) + 0.1 * Math.sin(this.time * 41 + i);
+        fig.setGlow(c[0] * flick + 0.25, c[1] * flick + 0.1, c[2] * flick * 0.5);
+        this.flames(p, an, x, y, z, dt * scale);
+      } else if (hot) {
         const c = this.teamRgb[p.team];
         const pulse = 0.45 + 0.2 * Math.sin(this.time * 9 + i);
         fig.setGlow(c[0] * pulse + 0.25, c[1] * pulse + 0.25, c[2] * pulse + 0.2);
@@ -782,9 +827,32 @@ export class MatchRenderer {
     shadows[so + 2] = 0.24 + by * 0.04;
     shadows[so + 3] = 0.78 * bFade;
 
+    // a ball held or shot by a player on fire trails flames
+    this.fireTrailT -= dt * scale;
+    const burning = (ball.state === 'held' && m.players[ball.holder].fireT > 0) || (ball.state === 'shot' && ball.shooter >= 0 && m.players[ball.shooter].fireT > 0);
+    while (burning && this.fireTrailT <= 0) {
+      this.fireTrailT += BALL_FLAME_EVERY;
+      const P = this.particles;
+      P.spawn({
+        x: bx + (P.rand() - 0.5) * 0.16,
+        y: by + (P.rand() - 0.3) * 0.16,
+        z: bz + (P.rand() - 0.5) * 0.16,
+        vx: ball.vx * 0.3 + (P.rand() - 0.5) * 0.4,
+        vy: 1.1 + P.rand() * 0.9,
+        vz: ball.vz * 0.3 + (P.rand() - 0.5) * 0.4,
+        life: 0.26 + P.rand() * 0.14,
+        size: 0.2 + P.rand() * 0.1,
+        grow: 0.3,
+        color: FLAME[Math.floor(P.rand() * 4)],
+        drag: 2,
+        shape: SHAPE_FLAME,
+      });
+    }
+    if (!burning) this.fireTrailT = 0;
+
     // sparkle trail when a team is in Hype, or behind a perfect shot
     this.trailT -= dt;
-    const hypeTrail = ball.state !== 'dead' && (m.hypeT[m.possession] > 0 || (ball.state === 'shot' && ball.perfect));
+    const hypeTrail = !burning && ball.state !== 'dead' && (m.hypeT[m.possession] > 0 || (ball.state === 'shot' && ball.perfect));
     if (hypeTrail && this.trailT <= 0) {
       this.trailT = 0.03;
       const hot = m.hypeT[m.possession] > 0;
@@ -880,6 +948,47 @@ export class MatchRenderer {
     this.sky.position.copy(cam.position);
     this.sky.updateMatrix();
     if (draw) this.three.render(this.scene, cam);
+  }
+
+  /** Flame tongues licking up off a player on fire: off the feet, the hands and the body in turn. */
+  private flames(p: PlayerSim, an: FigureAnimator, x: number, y: number, z: number, dt: number): void {
+    const i = p.idx;
+    this.flameT[i] -= dt;
+    const P = this.particles;
+    const at = this.spot;
+    while (this.flameT[i] <= 0) {
+      this.flameT[i] += FLAME_EVERY;
+      const k = this.flameSpot[i]++ % 6;
+      if (k < 2) {
+        const o = k * 3;
+        an.toWorld(an.ankles[o], an.ankles[o + 1], an.ankles[o + 2], at);
+      } else if (k < 4) {
+        const o = (k - 2) * 7;
+        an.toWorld(an.hands[o], an.hands[o + 1], an.hands[o + 2], at);
+      } else {
+        const a = P.rand() * Math.PI * 2;
+        at[0] = x + Math.cos(a) * 0.26;
+        at[1] = y + 0.15 + P.rand() * 0.85;
+        at[2] = z + Math.sin(a) * 0.26;
+      }
+      const feet = k < 2;
+      P.spawn({
+        x: at[0] + (P.rand() - 0.5) * 0.1,
+        y: at[1] + (P.rand() - 0.5) * 0.08,
+        z: at[2] + (P.rand() - 0.5) * 0.1,
+        // the flames run with the player rather than trailing far behind
+        vx: p.vx * 0.8 + (P.rand() - 0.5) * 0.5,
+        vy: 1.6 + P.rand() * 1.2,
+        vz: p.vz * 0.8 + (P.rand() - 0.5) * 0.5,
+        life: 0.3 + P.rand() * 0.15,
+        size: (feet ? 0.28 : 0.22) + P.rand() * 0.1,
+        grow: 0.25,
+        color: FLAME[1 + Math.floor(P.rand() * 3)],
+        alpha: 0.95,
+        drag: 0.6,
+        shape: SHAPE_FLAME,
+      });
+    }
   }
 
   /** Screen position (0..1 from the top left) of a point in the world, for callouts drawn by the HUD. */
