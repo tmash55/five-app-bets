@@ -91,10 +91,12 @@ export interface ScreenProps {
   music?: boolean;
   /** no backdrop: the screen draws its own behind this frame */
   bare?: boolean;
+  /** the header draws over the content, for content that reaches up behind it; taps go through where the header is empty */
+  headerOnTop?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
-export function Screen({ children, title, tone = 'sky', back = true, onBack, coins = true, right, left, music = true, bare, style }: ScreenProps) {
+export function Screen({ children, title, tone = 'sky', back = true, onBack, coins = true, right, left, music = true, bare, headerOnTop, style }: ScreenProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const coinCount = useSave((s) => s.coins);
@@ -117,8 +119,8 @@ export function Screen({ children, title, tone = 'sky', back = true, onBack, coi
   return (
     <View style={[styles.root, bare && styles.bare]}>
       {!bare && <Backdrop tone={tone} />}
-      <View style={[styles.header, { height: HEADER_ROW + padTop, paddingTop: padTop, paddingLeft: padLeft, paddingRight: padRight }]}>
-        <View style={styles.headerSide}>
+      <View pointerEvents="box-none" style={[styles.header, headerOnTop && styles.headerOnTop, { height: HEADER_ROW + padTop, paddingTop: padTop, paddingLeft: padLeft, paddingRight: padRight }]}>
+        <View pointerEvents="box-none" style={styles.headerSide}>
           {back && (
             <IconButton
               name="back"
@@ -137,7 +139,7 @@ export function Screen({ children, title, tone = 'sky', back = true, onBack, coi
               </StickerText>
             ))}
         </View>
-        <View style={styles.headerSide}>
+        <View pointerEvents="box-none" style={styles.headerSide}>
           {right}
           {coins !== false && <CoinPill coins={typeof coins === 'number' ? coins : coinCount} />}
         </View>
@@ -160,6 +162,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: space.md,
+  },
+  headerOnTop: {
+    zIndex: 1,
   },
   headerSide: {
     flexDirection: 'row',

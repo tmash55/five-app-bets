@@ -176,10 +176,14 @@ export default function Home() {
   return (
     <Screen
       back={false}
+      headerOnTop
       left={
-        <StickerText size="title" color="sun">
-          BUCKET SQUAD
-        </StickerText>
+        // the squad warms up behind the name: a hop or a tossed ball passes under it, and a tap on it reaches them
+        <View pointerEvents="none">
+          <StickerText size="title" color="sun">
+            BUCKET SQUAD
+          </StickerText>
+        </View>
       }
       right={<IconButton name="gear" label="Settings" onPress={go('/settings')} />}>
       <View style={styles.row}>

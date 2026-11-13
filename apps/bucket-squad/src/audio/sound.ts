@@ -143,6 +143,15 @@ let modeSet = false;
 let warming: SfxName[] = [];
 let warmTimer: ReturnType<typeof setTimeout> | null = null;
 
+/**
+ * What the engine has done so far. Everything here fails quietly, so on a
+ * phone these counts are the only way to tell that sounds really start, end
+ * and rewind: `finished` and `rewound` should keep up with `started`, and
+ * `failed` should stay at 0. Development builds show them as `__soundStats`.
+ */
+const stats = { players: 0, started: 0, restarted: 0, finished: 0, rewound: 0, failed: 0 };
+if (__DEV__) (globalThis as { __soundStats?: typeof stats }).__soundStats = stats;
+
 /** Development only: the preview tooling reads this log to lay a soundtrack under a captured video. */
 function note(kind: 'sfx' | 'music' | 'amb', name: string | null, volume: number, take = 0, rate = 1): void {
   if (!__DEV__) return;
@@ -174,21 +183,28 @@ function drop(voice: Voice): void {
 /** A sound ended by itself: put it back at its start, so the next play is instant. */
 function rewind(voice: Voice): void {
   if (Date.now() - voice.used < STALE_FINISH_MS) return;
+  stats.finished++;
   const run = voice.run;
   try {
     voice.player.seekTo(0, 0, 0).then(
       () => {
-        if (voice.run === run) voice.parked = true;
+        if (voice.run !== run) return;
+        voice.parked = true;
+        stats.rewound++;
       },
-      () => undefined,
+      () => {
+        stats.failed++;
+      },
     );
   } catch {
-    // ignore: an unparked voice still plays, through the slower path
+    // an unparked voice still plays, through the slower path
+    stats.failed++;
   }
 }
 
 function makeVoice(file: AudioSource): Voice {
   const player = createAudioPlayer(file, PLAYER_OPTIONS);
+  stats.players++;
   const voice: Voice = { player, parked: true, run: 0, used: 0, rate: 1, sub: null };
   try {
     // a change of speed should bend the pitch: that is the point of it
@@ -198,6 +214,7 @@ function makeVoice(file: AudioSource): Voice {
     });
   } catch {
     // a voice that cannot say when it has finished is never parked, and restarts through a seek every time
+    stats.failed++;
   }
   return voice;
 }
@@ -215,6 +232,7 @@ function start(voice: Voice, level: number, rate: number): void {
     if (voice.parked) {
       voice.parked = false;
       p.play();
+      stats.started++;
       return;
     }
     // still sounding, or ended a moment ago: a phone's player stays where it stopped, and playing there
@@ -224,14 +242,19 @@ function start(voice: Voice, level: number, rate: number): void {
         if (voice.run !== run) return;
         try {
           p.play();
+          stats.started++;
+          stats.restarted++;
         } catch {
-          // ignore
+          stats.failed++;
         }
       },
-      () => undefined,
+      () => {
+        stats.failed++;
+      },
     );
   } catch {
-    // ignore: sound is never worth interrupting play for
+    // sound is never worth interrupting play for
+    stats.failed++;
   }
 }
 
@@ -267,6 +290,7 @@ function poolFor(name: SfxName): Pool | null {
     pools.set(name, pool);
     return pool;
   } catch {
+    stats.failed++;
     for (const row of rows) row.forEach(drop);
     return null;
   }
@@ -330,6 +354,7 @@ function startBed<Name>(name: Name, file: AudioSource, level: number): Bed<Name>
     player.play();
     return { name, player };
   } catch {
+    stats.failed++;
     return null;
   }
 }

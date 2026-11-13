@@ -164,6 +164,22 @@ describe('sound engine', () => {
     expect(voice.log.filter((l) => l === 'play')).toHaveLength(2);
   });
 
+  test('it keeps count of what it did, so a check on a phone can tell that sounds start, end and rewind', async () => {
+    const stats = () => (globalThis as { __soundStats?: Record<string, number> }).__soundStats;
+    sound.playSfx('buzzer');
+    expect(stats()).toEqual({ players: 1, started: 1, restarted: 0, finished: 0, rewound: 0, failed: 0 });
+    jest.advanceTimersByTime(1500);
+    mockMade[0].finish();
+    await settle();
+    expect(stats()).toMatchObject({ finished: 1, rewound: 1, failed: 0 });
+    // once from rest, and once more while it sounds
+    sound.playSfx('buzzer');
+    jest.advanceTimersByTime(100);
+    sound.playSfx('buzzer');
+    await settle();
+    expect(stats()).toMatchObject({ players: 1, started: 3, restarted: 1, failed: 0 });
+  });
+
   test('levels are the trim times the volume asked for, never above full', () => {
     sound.playSfx('cheer', 2);
     expect(mockMade.find((p) => p.log.includes('play'))?.volume).toBe(1);
