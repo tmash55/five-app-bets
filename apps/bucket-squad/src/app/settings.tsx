@@ -87,15 +87,10 @@ export default function Settings() {
                 Easy shots gives you more time to let go of a shot. Lefty pad puts the buttons on the left.
               </Print>
               <View style={styles.option}>
-                <View style={styles.optionLabel}>
-                  <Print face="bold" size="tiny" color="textFaint" track="wider">
-                    QUARTER
-                  </Print>
-                  <Print face="bold" size="tiny" color="textFaint" track="wider">
-                    LENGTH
-                  </Print>
-                </View>
-                <PickRow options={QUARTERS} value={settings.quarterSeconds} onChange={(v) => setSetting('quarterSeconds', v)} tube="steel" style={styles.grow} />
+                <Print face="bold" size="tiny" color="textFaint" track="wider" lines={1} style={styles.optionLabel}>
+                  QUARTER LENGTH
+                </Print>
+                <PickRow options={QUARTERS} value={settings.quarterSeconds} onChange={(v) => setSetting('quarterSeconds', v)} tube="cyan" style={styles.grow} />
               </View>
             </NeonPanel>
           </Arrive>
@@ -143,10 +138,11 @@ const styles = StyleSheet.create({
   body: {
     paddingTop: space.md,
   },
+  // both panels hang from the same top line, so their tops match whatever their heights
   row: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: space.lg,
   },
   grow: {

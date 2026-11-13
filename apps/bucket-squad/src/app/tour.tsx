@@ -16,7 +16,7 @@ import { startTour } from '@/state/play';
 import { useSave } from '@/state/save';
 import { arcade, goldButton, halo, night, rarityPaint, ring, tube } from '@/theme/arcade';
 import { px, size as sizes, space } from '@/theme/tokens';
-import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
+import { ArcadeScreen, useArcadeSides } from '@/ui/arcade/ArcadeScreen';
 import { Gems } from '@/ui/arcade/Card';
 import { LockVeil, StarRow, Star, Tabs } from '@/ui/arcade/Controls';
 import { Face } from '@/ui/arcade/Face';
@@ -77,7 +77,7 @@ function GameRow({ game, stars, open, next, onPress }: { game: TourGame; stars: 
         ) : game.pack ? (
           <FoilPack pack={packById(game.pack)} width={px(22)} flat={!open} />
         ) : (
-          <CoinAmount coins={game.coins} size="small" dim={!open} />
+          <CoinAmount coins={game.coins} size="small" dim={!open} onGold={next} />
         )}
       </View>
     </Pressable>
@@ -163,6 +163,7 @@ export default function TourScreen() {
   const tour = tours.find((t) => t.id === tourId) ?? tours[0];
   const stars = tourStars(progress, tour);
   const scroller = useRef<ComponentRef<typeof ScrollView>>(null);
+  const sides = useArcadeSides();
   const next = nextTourGame(progress, tour);
   const focus = next ? next.stage : 0;
 
@@ -192,7 +193,13 @@ export default function TourScreen() {
           </Chip>
         </>
       }>
-      <ScrollView ref={scroller} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      {/* the row of stops runs out under the screen's edges, so it plainly scrolls instead of stopping at a hard line */}
+      <ScrollView
+        ref={scroller}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ marginLeft: -sides.left, marginRight: -sides.right }}
+        contentContainerStyle={[styles.scroll, { paddingLeft: sides.left + space.xs, paddingRight: sides.right + space.lg }]}>
         {tour.stages.map((_, i) => (
           <Arrive key={`${tour.id}${i}`} delay={Math.min(4, Math.abs(i - focus)) * 70} from="up">
             <StageCard tour={tour} index={i} progress={progress} owned={owned} packDone={starPacks[`${tour.id}/${i}`] === true} next={next && next.stage === i ? next.game : null} onPlay={(g) => play(i, g)} />
@@ -211,8 +218,6 @@ const styles = StyleSheet.create({
     gap: GAP,
     paddingTop: space.xs,
     paddingBottom: space.xs,
-    paddingRight: space.lg,
-    paddingLeft: space.xs,
     alignItems: 'center',
     flexGrow: 1,
   },

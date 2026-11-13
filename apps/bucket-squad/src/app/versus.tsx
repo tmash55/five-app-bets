@@ -67,6 +67,8 @@ const STAGE_AIR = px(24);
 const FOOT_GAP = space.sm;
 /** keeps the cards off the VS in the middle */
 const SIDE_ROOM = px(4);
+/** how far the VS slash's ends stay inside the stage: more than its widest glow */
+const SLASH_INSET = px(14);
 
 function SideColumn({ side, perTeam, cardW, mine, from, tube: tb }: { side: Side; perTeam: number; cardW: number; mine: boolean; from: -1 | 1; tube: Tube }) {
   const players = side.players.slice(0, perTeam);
@@ -115,12 +117,15 @@ function ChaseBulbs({ width }: { width: number }) {
 function Slash({ width, height }: { width: number; height: number }) {
   const x1 = width / 2 + px(26);
   const x2 = width / 2 - px(26);
+  // the ends stop short of the stage's edges, glow and all, so the slash never reaches the bulb rows
+  const y1 = SLASH_INSET;
+  const y2 = height - SLASH_INSET;
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <Svg width={width} height={height}>
-        <Line x1={x1} y1={0} x2={x2} y2={height} stroke={tubes.pink.glass} strokeWidth={px(14)} opacity={0.12} />
-        <Line x1={x1} y1={0} x2={x2} y2={height} stroke={tubes.pink.glass} strokeWidth={px(6)} opacity={0.35} />
-        <Line x1={x1} y1={0} x2={x2} y2={height} stroke={tubes.pink.tint} strokeWidth={px(2)} />
+        <Line x1={x1} y1={y1} x2={x2} y2={y2} stroke={tubes.pink.glass} strokeWidth={px(14)} strokeLinecap="round" opacity={0.12} />
+        <Line x1={x1} y1={y1} x2={x2} y2={y2} stroke={tubes.pink.glass} strokeWidth={px(6)} strokeLinecap="round" opacity={0.35} />
+        <Line x1={x1} y1={y1} x2={x2} y2={y2} stroke={tubes.pink.tint} strokeWidth={px(2)} strokeLinecap="round" />
       </Svg>
     </View>
   );

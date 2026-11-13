@@ -1,8 +1,8 @@
 /** The Ladder: ranked games against computer squads, eight tiers from Rookie to Legend. */
 
 import { useRouter } from 'expo-router';
-import { useRef, type ComponentRef } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { useRef } from 'react';
+import { StyleSheet, View } from 'react-native';
 
 import { TIERS, tierProgress } from '@/meta/ladder';
 import { packById } from '@/meta/packs';
@@ -13,6 +13,7 @@ import { px, space } from '@/theme/tokens';
 import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
 import { GoldButton } from '@/ui/arcade/Buttons';
 import { PickRow, SignHead, type Choice } from '@/ui/arcade/Controls';
+import { FadeScroll, type FadeScrollRef } from '@/ui/arcade/FadeScroll';
 import { FoilPack } from '@/ui/arcade/Foil';
 import { LineIcon } from '@/ui/arcade/LineIcon';
 import { TierMedal, tierTube } from '@/ui/arcade/Medal';
@@ -27,6 +28,9 @@ import { Glow, Print } from '@/ui/arcade/Type';
 const TUBE = tube.indigo;
 const MEDAL = px(84);
 const RAYS = px(230);
+const PACK_W = px(18);
+/** room for the biggest coin reward, 1,000, so every tier's coin sits in the same place */
+const COIN_W = px(58);
 
 const FORMATS: readonly Choice<2 | 3>[] = [
   { value: 2, label: '2 on 2', lamps: 2 },
@@ -41,7 +45,7 @@ export default function Ladder() {
   const tp = tierProgress(ladder.points);
   const here = tierTube(tp.index);
   const ahead = tp.next ? tierTube(tp.index + 1) : here;
-  const list = useRef<ComponentRef<typeof ScrollView>>(null);
+  const list = useRef<FadeScrollRef>(null);
   const listHeight = useRef(0);
 
   const play = () => {
@@ -110,7 +114,8 @@ export default function Ladder() {
         <Arrive delay={120} from="right" style={styles.right}>
           <NeonPanel tube="indigo" style={styles.panel}>
             <SignHead title="THE LADDER" tube="indigo" />
-            <ScrollView
+            {/* a row cut off at either end melts into the panel instead of ending on a hard line */}
+            <FadeScroll
               ref={list}
               style={styles.grow}
               contentContainerStyle={styles.tiers}
@@ -142,8 +147,9 @@ export default function Ladder() {
                       </Print>
                       <Print face="medium" size="tiny" color="textFaint" lines={1}>{`${t.floor} points`}</Print>
                     </View>
-                    {t.reward.coins > 0 && <CoinAmount coins={t.reward.coins} size="small" dim={!reached && !now} />}
-                    {t.reward.pack !== undefined && <FoilPack pack={packById(t.reward.pack)} width={px(18)} flat />}
+                    {/* a place for the coins and one for the pack on every tier, even one without them, so the coins and packs line up down the list */}
+                    <View style={styles.coinSlot}>{t.reward.coins > 0 && <CoinAmount coins={t.reward.coins} size="small" dim={!reached && !now} />}</View>
+                    <View style={styles.packSlot}>{t.reward.pack !== undefined && <FoilPack pack={packById(t.reward.pack)} width={PACK_W} flat />}</View>
                     <View style={styles.state}>
                       {now ? (
                         <Breathe depth={0.25}>
@@ -158,7 +164,7 @@ export default function Ladder() {
                   </View>
                 );
               })}
-            </ScrollView>
+            </FadeScroll>
           </NeonPanel>
         </Arrive>
       </View>
@@ -245,6 +251,14 @@ const styles = StyleSheet.create({
     borderWidth: arcade.hairline,
     borderColor: night.line,
     backgroundColor: night.well,
+  },
+  coinSlot: {
+    width: COIN_W,
+    alignItems: 'flex-start',
+  },
+  packSlot: {
+    width: PACK_W,
+    alignItems: 'center',
   },
   state: {
     width: px(38),

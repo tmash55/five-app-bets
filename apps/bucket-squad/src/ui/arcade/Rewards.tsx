@@ -26,6 +26,7 @@ export function CoinAmount({
   plus,
   dim,
   plain,
+  onGold,
   style,
 }: {
   coins: number;
@@ -35,13 +36,15 @@ export function CoinAmount({
   dim?: boolean;
   /** no light round the number: for a line inside a list that scrolls, where a phone would cut the light off square */
   plain?: boolean;
+  /** on a yellow button or row: a dark number, so it is not yellow on yellow */
+  onGold?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
   const c = COIN[size];
   return (
     <View accessible accessibilityLabel={`${coins} coins`} style={[styles.row, { gap: c.coin * 0.32 }, style]}>
       <Coin size={c.coin} />
-      <Print face="bold" size={c.text} color={dim ? 'textFaint' : tubes.gold.glass} track="wide" glow={dim || plain ? undefined : tubes.gold.glass} lines={1}>
+      <Print face="bold" size={c.text} color={onGold ? 'onLight' : dim ? 'textFaint' : tubes.gold.glass} track="wide" glow={dim || plain || onGold ? undefined : tubes.gold.glass} lines={1}>
         {`${plus ? '+' : ''}${coins.toLocaleString('en-US')}`}
       </Print>
     </View>

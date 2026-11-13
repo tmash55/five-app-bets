@@ -32,6 +32,8 @@ const BLOOM = px(170);
 const RAYS = px(260);
 /** two lines of the explanation, so the three signs line up whether theirs takes one line or two */
 const TWO_LINES = Math.round(px(13) * 1.25) * 2;
+/** one row of a sign's foot: the ladder's tier medal, its tallest piece */
+const FOOT_ROW = px(30);
 
 function ModeSign({ title, text, icon, tube: t, delay, onPress, children }: { title: string; text: string; icon: LineIconName; tube: TubeName; delay: number; onPress: () => void; children: (room: number) => React.ReactNode }) {
   const tb = tubes[t];
@@ -95,7 +97,7 @@ export default function Play() {
   return (
     <ArcadeScreen title="PLAY" tube="gold" style={styles.body}>
       <View style={styles.row}>
-        <ModeSign title="TOUR" text="Beat every court and win its star player." icon="flag" tube="orange" delay={40} onPress={go('/tour')}>
+        <ModeSign title="TOUR" text="Beat each court and win its star." icon="flag" tube="orange" delay={40} onPress={go('/tour')}>
           {(room) => (
             <>
               <View style={styles.line}>
@@ -122,11 +124,11 @@ export default function Play() {
           )}
         </ModeSign>
 
-        <ModeSign title="LADDER" text="Climb from Rookie all the way to Legend." icon="ladder" tube="indigo" delay={110} onPress={go('/ladder')}>
+        <ModeSign title="LADDER" text="Climb from Rookie up to Legend." icon="ladder" tube="indigo" delay={110} onPress={go('/ladder')}>
           {() => (
             <>
               <View style={styles.line}>
-                <TierMedal index={tp.index} size={px(30)} />
+                <TierMedal index={tp.index} size={FOOT_ROW} />
                 <Glow face="sign" size="large" tube={tierTube(tp.index)} track="wide">
                   {tp.tier.name.toUpperCase()}
                 </Glow>
@@ -145,7 +147,7 @@ export default function Play() {
           )}
         </ModeSign>
 
-        <ModeSign title="QUICK GAME" text="Pick a team, pick a court and play." icon="bolt" tube="cyan" delay={180} onPress={go('/quick')}>
+        <ModeSign title="QUICK GAME" text="Pick a team and court, then play." icon="bolt" tube="cyan" delay={180} onPress={go('/quick')}>
           {() => (
             <>
               <View style={styles.line}>
@@ -224,13 +226,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: px(8),
   },
+  // every row of every foot is as tall as the ladder's medal, so the three feet line up row for row
   line: {
+    minHeight: FOOT_ROW,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
   },
   bar: {
+    minHeight: FOOT_ROW,
     alignSelf: 'stretch',
+    justifyContent: 'center',
     gap: px(5),
   },
 });
