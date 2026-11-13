@@ -14,7 +14,7 @@ import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { MAX_LEVEL, cardArt, headArt, playerOverall, teamById } from '@/data/roster';
 import { RARITY_LABEL, type PlayerDef, type Rarity } from '@/data/types';
 import { tapFeedback } from '@/fx/feedback';
-import { RIM_STOPS, arcade, blend, fade, halo, night, rarityPaint, ring, tube as tubes, tubeOf, type Tube, type TubeName } from '@/theme/arcade';
+import { RIM_STOPS, arcade, blend, fade, halo, night, rarityPaint, ring, track, tube as tubes, tubeOf, type Tube, type TubeName } from '@/theme/arcade';
 import { duration, px, size as sizes } from '@/theme/tokens';
 import { LineIcon } from './LineIcon';
 import { fitPerson } from './measure';
@@ -114,7 +114,9 @@ export const ArcadeCard = memo(function ArcadeCard({ player, level = 1, width = 
   const wordSize = clamp(width * 0.057, px(8.5), px(13));
   const lampH = Math.max(px(2.5), Math.round(width * 0.018));
   const padY = Math.max(px(3), Math.round(width * 0.022));
-  const name = fitPerson(player.name.toUpperCase(), 'display', nameSize, innerW - edge * 1.2, 0, player.short?.toUpperCase());
+  // measured with the letter spacing it is drawn with, and clear of the card's sides, so a long name shrinks or shortens instead of running to the edge
+  const nameGap = small ? 0 : track.close;
+  const name = fitPerson(player.name.toUpperCase(), 'display', nameSize, innerW - edge * 2.4, nameGap, player.short?.toUpperCase());
 
   const chip = Math.max(px(22), Math.round(width * 0.217));
   const artW = innerW * 1.159;

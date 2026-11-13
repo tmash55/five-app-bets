@@ -2,7 +2,7 @@
 
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { playSfx } from '@/audio/sound';
 import { PLAYERS, byValue, mustPlayer, playerOverall } from '@/data/roster';
@@ -14,6 +14,7 @@ import { px, size as sizes, space } from '@/theme/tokens';
 import { ArcadeScreen, useArcadeBody } from '@/ui/arcade/ArcadeScreen';
 import { ArcadeCard } from '@/ui/arcade/Card';
 import { SignHead } from '@/ui/arcade/Controls';
+import { FadeScroll } from '@/ui/arcade/FadeScroll';
 import { LineIcon, type LineIconName } from '@/ui/arcade/LineIcon';
 import { Arrive, Breathe } from '@/ui/arcade/Motion';
 import { Spotlight, StageRing } from '@/ui/arcade/Room';
@@ -142,7 +143,8 @@ export default function Squad() {
                 </Print>
               }
             />
-            <ScrollView style={styles.bench} contentContainerStyle={styles.benchBody} showsVerticalScrollIndicator={false}>
+            {/* a row cut off by the panel melts into it instead of ending on a hard line; a long melt, as the cards are bright */}
+            <FadeScroll reach={px(40)} style={styles.bench} contentContainerStyle={styles.benchBody} showsVerticalScrollIndicator={false}>
               <View style={styles.benchRows}>
                 {rowsOf(mine, benchColumns).map((row) => (
                   <View key={row[0].id} style={styles.benchRow}>
@@ -163,7 +165,7 @@ export default function Squad() {
                   </View>
                 ))}
               </View>
-            </ScrollView>
+            </FadeScroll>
           </NeonPanel>
         </Arrive>
       </View>
@@ -259,8 +261,9 @@ const styles = StyleSheet.create({
     paddingBottom: space.md,
   },
   // the rows share a left edge, and the whole block sits in the middle
+  // rows far enough apart that a squad badge, half above its card, sits in the gap and covers no card above it
   benchRows: {
-    gap: BENCH_GAP,
+    gap: BADGE / 2 + px(4),
   },
   benchRow: {
     flexDirection: 'row',

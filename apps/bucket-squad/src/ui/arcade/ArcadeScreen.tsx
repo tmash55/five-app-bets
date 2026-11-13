@@ -47,6 +47,12 @@ export function useArcadeBody(): { width: number; height: number } {
   };
 }
 
+/** How far a page's content sits in from the screen's left and right edges: for a row that slides out under the edge. */
+export function useArcadeSides(): { left: number; right: number } {
+  const insets = useSafeAreaInsets();
+  return { left: Math.max(insets.left, EDGE), right: Math.max(insets.right, EDGE) };
+}
+
 /**
  * The gap the frame keeps at a page's left and right edges: past a phone's notch, and never less than the page's own margin.
  * A row that scrolls sideways takes these back with negative margins and gives them to its content as padding,

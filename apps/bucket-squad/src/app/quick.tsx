@@ -17,6 +17,7 @@ import { px, size as sizes, space } from '@/theme/tokens';
 import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
 import { GoldButton } from '@/ui/arcade/Buttons';
 import { PickRow, SignHead, Tabs, type Choice } from '@/ui/arcade/Controls';
+import { FadeScroll } from '@/ui/arcade/FadeScroll';
 import { LineIcon } from '@/ui/arcade/LineIcon';
 import { Arrive } from '@/ui/arcade/Motion';
 import { NeonPanel } from '@/ui/arcade/Surface';
@@ -37,9 +38,14 @@ const LEAGUE_TABS = LEAGUES.map((l) => ({ value: l.id, label: l.name }));
 const LABEL_W = px(66);
 const COURT_W = px(86);
 const COURT_SCENE = px(30);
+/** a court's name keeps clear of its tile's sides, and shrinks to fit */
+const COURT_NAME_PAD = px(5);
+const COURT_NAME_ROOM = COURT_W - arcade.outline * 2 - px(3) * 2 - COURT_NAME_PAD * 2;
 const TEAM_GAP = space.sm;
 /** room round the lit tiles inside their scrolling rows, so their glow is not cut off at the edge */
 const GLOW_ROOM = px(7);
+/** the settings panel's padding */
+const PANEL_PAD = px(10);
 /** above the first row of teams a picked tile's glow reaches further than at its sides */
 const GRID_TOP = GLOW_ROOM * 1.6;
 /** narrower than this a team tile cannot hold its name */
@@ -106,7 +112,7 @@ function CourtPick({ id, selected, onPress }: { id: CourtId | null; selected: bo
           <LineIcon name="home" size={px(20)} tube={selected ? TUBE : undefined} color={selected ? undefined : night.textFaint} />
         </View>
       )}
-      <Print face="bold" size="tiny" color={selected ? 'text' : 'textDim'} center lines={1} room={COURT_W - px(8)} least={0.7}>
+      <Print face="bold" size="tiny" color={selected ? 'text' : 'textDim'} center lines={1} room={COURT_NAME_ROOM} least={0.6} style={styles.courtName}>
         {name}
       </Print>
     </Pressable>
@@ -166,12 +172,13 @@ export default function Quick() {
               <PickRow options={LEVELS} value={difficulty} onChange={(v) => setSetting('difficulty', v)} tube="cyan" />
             </Option>
             <Option label="COURT">
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.courts}>
+              {/* the courts that do not fit melt into the panel at its edge; the row's glow room is pulled back out so it starts in line with the rows above */}
+              <FadeScroll horizontal showsHorizontalScrollIndicator={false} reach={px(30)} style={styles.courtsBox} contentContainerStyle={styles.courts}>
                 <CourtPick id={null} selected={court === null} onPress={() => setCourt(null)} />
                 {COURT_IDS.map((id) => (
                   <CourtPick key={id} id={id} selected={court === id} onPress={() => setCourt(id)} />
                 ))}
-              </ScrollView>
+              </FadeScroll>
             </Option>
           </NeonPanel>
           <GoldButton label="PLAY!" icon="play" onPress={play} />
@@ -198,7 +205,8 @@ export default function Quick() {
                 contentContainerStyle={[styles.teams, { paddingBottom: grid?.window !== undefined ? fadeH : GLOW_ROOM }]}
                 showsVerticalScrollIndicator={false}
                 onLayout={(e) => {
-                  const w = Math.floor(e.nativeEvent.layout.width - GLOW_ROOM * 2);
+                  // a point spare: the browser can round the measured width up by half a point, and a row that is a hair too wide wraps a whole tile onto the next line
+                  const w = Math.floor(e.nativeEvent.layout.width - GLOW_ROOM * 2 - px(1));
                   if (w !== gridW) setGridW(w);
                 }}>
                 {grid && (
@@ -240,7 +248,7 @@ const styles = StyleSheet.create({
     gap: space.md,
   },
   panel: {
-    padding: px(10),
+    padding: PANEL_PAD,
     gap: space.sm,
   },
   option: {
@@ -251,9 +259,17 @@ const styles = StyleSheet.create({
   optionLabel: {
     width: LABEL_W,
   },
+  // out to the panel's tube on the right, so the courts melt away right up to it rather than stopping short
+  courtsBox: {
+    marginLeft: -GLOW_ROOM,
+    marginRight: -PANEL_PAD,
+  },
   courts: {
     gap: space.sm,
     padding: GLOW_ROOM,
+  },
+  courtName: {
+    paddingHorizontal: COURT_NAME_PAD,
   },
   court: {
     width: COURT_W,
