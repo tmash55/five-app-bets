@@ -11,7 +11,7 @@ import { playSfx } from '@/audio/sound';
 import { mustPlayer, teamById } from '@/data/roster';
 import { COURTS } from '@/game/render/court';
 import { TIERS, tierIndex } from '@/meta/ladder';
-import { chemistry, type MatchSetup, type Side } from '@/meta/match';
+import { chemistry, sideWear, type MatchSetup, type Side } from '@/meta/match';
 import { DIFFICULTY_NAMES, sideOverall } from '@/meta/setups';
 import { tourById } from '@/meta/tour';
 import { useSave } from '@/state/save';
@@ -136,7 +136,8 @@ function Matchup({ setup }: { setup: MatchSetup }) {
   const ladderPoints = useSave((s) => s.ladder.points);
   const homeTeam = useSave((s) => s.homeTeam);
   const court = COURTS[setup.court];
-  const homeTube = teamTube(teamById(setup.home.kitTeam));
+  // your side is lit in the colours it wears
+  const homeTube = teamTube(sideWear(setup.home));
   const awayTube = teamTube(teamById(setup.away.kitTeam));
   const [area, setArea] = useState({ width: 0, height: 0 });
   // the button row's own height, measured, so the fight card and the button sit together in the middle of a tall screen

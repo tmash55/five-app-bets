@@ -7,7 +7,9 @@ import { seededRng } from '@/meta/rng';
 import { STARS_PER_GAME, gameKey, tourById } from '@/meta/tour';
 import { summary, totals } from '@/testing/summary';
 
-import { DEFAULT_SETTINGS, SQUAD_SIZE, STARTING_COINS, buyPack, claimFreePack, claimMission, claimMissionBonus, finishMatch, homeTeamChoices, markSeen, newSave, openOwnedPack, repairSave, setSquad, squadLevels, startCareer, starterIds, type SaveData } from '../logic';
+import { teamUniformId, uniformById, type UniformDef } from '@/data/uniforms';
+
+import { DEFAULT_SETTINGS, SQUAD_SIZE, STARTING_COINS, buyPack, buyUniform, claimFreePack, claimMission, claimMissionBonus, finishMatch, hasUniform, homeTeamChoices, markSeen, newSave, openOwnedPack, repairSave, setSquad, squadLevels, squadUniform, startCareer, starterIds, uniformProgress, wearUniform, type SaveData } from '../logic';
 
 const DAY = '2026-03-09';
 const NEXT_DAY = '2026-03-10';
@@ -421,5 +423,102 @@ describe('repairing a save', () => {
       expect(s.squad).toEqual(starterIds(t.id));
       expect(teamPlayers(t.id).filter((p) => s.owned[p.id]).length).toBe(3);
     }
+  });
+});
+
+describe('uniforms', () => {
+  const def = (id: string): UniformDef => {
+    const u = uniformById(id);
+    if (!u) throw new Error(`no uniform ${id}`);
+    return u;
+  };
+  const rich = (coins = 5000): SaveData => ({ ...career(), coins });
+  /** a save that owns these players of a team and nothing else of it */
+  const owning = (ids: string[]): SaveData => ({ ...career(), owned: { ...career().owned, ...Object.fromEntries(ids.map((id) => [id, 1])) } });
+
+  it('starts in the captain’s colours with nothing bought, and the home team’s uniform already earned', () => {
+    const s = career('waves');
+    expect(s.uniform).toBeNull();
+    expect(s.uniforms).toEqual([]);
+    expect(squadUniform(s).def).toBeNull();
+    expect(squadUniform(s).wear.team).toBe('waves');
+    // a new squad is three of its home team's players: that is the team's uniform
+    expect(uniformProgress(s, def(teamUniformId('waves')))).toEqual({ have: 3, need: 3, unlocked: true });
+    expect(hasUniform(s, teamUniformId('waves'))).toBe(true);
+  });
+
+  it('unlocks a team’s uniform with three of its players, counted from the collection', () => {
+    const stompers = teamPlayers('stompers').map((p) => p.id);
+    const u = def(teamUniformId('stompers'));
+    expect(uniformProgress(career(), u)).toEqual({ have: 0, need: 3, unlocked: false });
+    expect(uniformProgress(owning(stompers.slice(0, 2)), u)).toEqual({ have: 2, need: 3, unlocked: false });
+    expect(uniformProgress(owning(stompers.slice(0, 3)), u)).toEqual({ have: 3, need: 3, unlocked: true });
+    // more than three still reads as done
+    expect(uniformProgress(owning(stompers), u)).toEqual({ have: 3, need: 3, unlocked: true });
+    // a card that is not a player (or not of this team) does not count
+    const s = owning(stompers.slice(0, 2));
+    expect(uniformProgress({ ...s, owned: { ...s.owned, 'someone-else': 4, 'kai-nakoa': 1 } }, u).have).toBe(2);
+  });
+
+  it('sells a special once, for its price', () => {
+    const u = def('lava-flow');
+    const s = rich(2500);
+    const bought = buyUniform(s, u.id);
+    expect(bought?.coins).toBe(2500 - (u.price ?? 0));
+    expect(bought?.uniforms).toEqual([u.id]);
+    expect(bought && hasUniform(bought, u.id)).toBe(true);
+    // not twice
+    expect(bought && buyUniform(bought, u.id)).toBeNull();
+    // buying does not change what the squad wears by itself
+    expect(bought?.uniform).toBeNull();
+  });
+
+  it('will not sell a special you cannot pay for, a team uniform, or one that does not exist', () => {
+    const u = def('cotton-candy');
+    expect(buyUniform(rich((u.price ?? 0) - 1), u.id)).toBeNull();
+    expect(buyUniform(rich(u.price), u.id)?.coins).toBe(0);
+    expect(buyUniform(rich(), teamUniformId('stompers'))).toBeNull();
+    expect(buyUniform(rich(), 'no-such-uniform')).toBeNull();
+  });
+
+  it('wears only what is yours, and goes back to the captain’s colours', () => {
+    const s = rich();
+    expect(wearUniform(s, 'ice-pop')).toBeNull();
+    expect(wearUniform(s, teamUniformId('stompers'))).toBeNull();
+    expect(wearUniform(s, 'no-such-uniform')).toBeNull();
+    const bought = buyUniform(s, 'ice-pop') as SaveData;
+    const dressed = wearUniform(bought, 'ice-pop') as SaveData;
+    expect(dressed.uniform).toBe('ice-pop');
+    expect(squadUniform(dressed).def?.id).toBe('ice-pop');
+    expect(squadUniform(dressed).wear.kit).toBe(def('ice-pop').kit);
+    const home = wearUniform(dressed, teamUniformId('comets')) as SaveData;
+    expect(home.uniform).toBe(teamUniformId('comets'));
+    expect(wearUniform(home, null)?.uniform).toBeNull();
+  });
+
+  it('keeps an older save working: no uniforms means captain’s colours', () => {
+    const s = career();
+    const old = JSON.parse(JSON.stringify(s));
+    delete old.uniforms;
+    delete old.uniform;
+    const fixed = repairSave(old);
+    expect(fixed.uniforms).toEqual([]);
+    expect(fixed.uniform).toBeNull();
+    expect(fixed.squad).toEqual(s.squad);
+    // and a save with them keeps them
+    const dressed = wearUniform(buyUniform(rich(), 'glow-stick') as SaveData, 'glow-stick') as SaveData;
+    expect(repairSave(JSON.parse(JSON.stringify(dressed)))).toEqual(dressed);
+  });
+
+  it('drops malformed uniforms and keeps ones this build cannot find', () => {
+    const fixed = repairSave({ ...career(), uniforms: ['ice-pop', 7, null, '', 'ice-pop', 'from-a-later-update'], uniform: 42 });
+    expect(fixed.uniforms).toEqual(['ice-pop', 'from-a-later-update']);
+    expect(fixed.uniform).toBeNull();
+    expect(repairSave({ ...career(), uniforms: 'ice-pop' }).uniforms).toEqual([]);
+    // a team from a pack that is not on this build: kept, and worn as the captain's colours
+    const away = repairSave({ ...career(), uniform: teamUniformId('a-pack-team') });
+    expect(away.uniform).toBe(teamUniformId('a-pack-team'));
+    expect(squadUniform(away).def).toBeNull();
+    expect(squadUniform(away).wear.team).toBe('comets');
   });
 });

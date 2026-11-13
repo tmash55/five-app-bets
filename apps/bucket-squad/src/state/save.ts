@@ -26,6 +26,8 @@ interface SaveActions {
   claimMissionBonus: () => boolean;
   setSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
   seeTip: (id: string) => void;
+  buyUniform: (id: string) => boolean;
+  wearUniform: (id: string | null) => boolean;
   addCoins: (n: number) => void;
   resetAll: () => void;
 }
@@ -51,6 +53,8 @@ function dataOf(s: SaveStore): SaveData {
     stats: s.stats,
     settings: s.settings,
     tips: s.tips,
+    uniforms: s.uniforms,
+    uniform: s.uniform,
   };
 }
 
@@ -102,6 +106,18 @@ export const useSave = create<SaveStore>()(
       setSetting: (key, value) => set({ settings: { ...get().settings, [key]: value } }),
       seeTip: (id) => {
         if (!get().tips[id]) set({ tips: { ...get().tips, [id]: true } });
+      },
+      buyUniform: (id) => {
+        const next = logic.buyUniform(dataOf(get()), id);
+        if (!next) return false;
+        set(next);
+        return true;
+      },
+      wearUniform: (id) => {
+        const next = logic.wearUniform(dataOf(get()), id);
+        if (!next) return false;
+        set(next);
+        return true;
       },
       addCoins: (n) => set({ coins: Math.max(0, get().coins + n) }),
       resetAll: () => set(logic.newSave()),
