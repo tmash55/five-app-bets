@@ -5,7 +5,7 @@ import { memo, useId, useMemo } from 'react';
 import { StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Defs, Ellipse, LinearGradient as SvgLinearGradient, Path, Polygon, RadialGradient, Rect, Stop } from 'react-native-svg';
 
-import { halo, night, tube as tubes, tubeOf, type Tube, type TubeName } from '@/theme/arcade';
+import { halo, night, stop, tube as tubes, tubeOf, type Tube, type TubeName } from '@/theme/arcade';
 import { px } from '@/theme/tokens';
 
 /** An id for a gradient inside an SVG: unique on the page, and safe inside `url(#...)`. */
@@ -190,8 +190,8 @@ export const Spotlight = memo(function Spotlight({ width, height, style }: { wid
       <Svg width={width} height={height} viewBox="0 0 100 100" preserveAspectRatio="none">
         <Defs>
           <SvgLinearGradient id={id} x1={0} y1={0} x2={0} y2={100} gradientUnits="userSpaceOnUse">
-            <Stop offset={0} stopColor={night.beam} />
-            <Stop offset={1} stopColor={night.beamFar} />
+            <Stop offset={0} {...stop(night.beam)} />
+            <Stop offset={1} {...stop(night.beamFar)} />
           </SvgLinearGradient>
         </Defs>
         {beams.map(([top, bottom, strength], i) => (

@@ -222,6 +222,18 @@ export function fade(hex: string, alpha: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
+/**
+ * A colour for a gradient stop inside a drawing: `<Stop offset={0} {...stop(night.beam)} />`.
+ * A phone throws away the see-through part of a stop's colour (a browser keeps it), so a colour
+ * written `rgba(...)` has to hand its opacity over separately or the gradient comes out solid.
+ */
+export function stop(color: string): { stopColor: string; stopOpacity: number } {
+  const m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/.exec(color);
+  if (!m) return { stopColor: color, stopOpacity: 1 };
+  const n = (Number(m[1]) << 16) | (Number(m[2]) << 8) | Number(m[3]);
+  return { stopColor: `#${n.toString(16).padStart(6, '0').toUpperCase()}`, stopOpacity: m[4] === undefined ? 1 : Number(m[4]) };
+}
+
 /** A colour part of the way to another. */
 export function blend(a: string, b: string, t: number): string {
   const x = parseInt(a.slice(1, 7), 16);
