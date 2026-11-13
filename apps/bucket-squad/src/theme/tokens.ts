@@ -91,6 +91,7 @@ export const radius = {
 } as const;
 
 export const stroke = {
+  hair: 1,
   thin: 2,
   regular: 3,
   thick: 4,
@@ -138,8 +139,15 @@ export const size = {
   avatarSmall: 36,
   avatar: 48,
   avatarLarge: 72,
+  badgeTiny: 20,
+  badgeSmall: 28,
   badge: 44,
   badgeLarge: 64,
+  /** level dots on a card, smallest card first */
+  pipTiny: 5,
+  pipSmall: 6,
+  pip: 8,
+  pipLarge: 10,
   cardSmall: 96,
   card: 128,
   cardLarge: 190,

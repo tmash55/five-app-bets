@@ -25,15 +25,19 @@ export const RARITY_COLOR: Record<Rarity, { fill: ColorName; deep: ColorName }> 
   legend: { fill: 'legend', deep: 'legendDeep' },
 };
 
-/** A team's roundel: its colours and three letters. */
+/** A team's roundel: its colours and three letters (colours only when it is too small to read). */
 export function TeamBadge({ team, diameter = sizes.badge, style }: { team: TeamDef; diameter?: number; style?: StyleProp<ViewStyle> }) {
-  const inner = diameter - stroke.regular * 2 - Math.round(diameter * 0.16);
+  const small = diameter < sizes.avatarSmall;
+  const edge = small ? stroke.thin : stroke.regular;
+  const inner = diameter - edge * 2 - Math.round(diameter * 0.16);
   return (
-    <View style={[styles.badge, { width: diameter, height: diameter, borderRadius: diameter / 2, backgroundColor: team.color2 }, style]}>
-      <View style={[styles.badgeInner, { width: inner, height: inner, borderRadius: inner / 2, backgroundColor: team.color }]}>
-        <Txt font="display" size={diameter >= sizes.badgeLarge ? 'large' : diameter >= sizes.badge ? 'small' : 'tiny'} color={readableOn(team.color)}>
-          {team.short}
-        </Txt>
+    <View style={[styles.badge, { width: diameter, height: diameter, borderRadius: diameter / 2, borderWidth: edge, backgroundColor: team.color2 }, style]}>
+      <View style={[styles.badgeInner, { width: inner, height: inner, borderRadius: inner / 2, backgroundColor: team.color }, small && styles.badgeInnerSmall]}>
+        {!small && (
+          <Txt font="display" size={diameter >= sizes.badgeLarge ? 'large' : diameter >= sizes.badge ? 'small' : 'tiny'} color={readableOn(team.color)}>
+            {team.short}
+          </Txt>
+        )}
       </View>
     </View>
   );
@@ -167,6 +171,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: stroke.thin,
     borderColor: color.ink,
+  },
+  badgeInnerSmall: {
+    borderWidth: 0,
   },
   pill: {
     flexDirection: 'row',

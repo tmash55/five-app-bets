@@ -62,6 +62,8 @@ export interface StickerButtonProps extends Omit<StickerProps, 'pressed'> {
   quiet?: boolean;
   hitSlop?: number;
   accessibilityLabel?: string;
+  /** fill the height the button is given (for big cards in a row) */
+  stretch?: boolean;
 }
 
 export function StickerButton({
@@ -76,6 +78,7 @@ export function StickerButton({
   quiet,
   hitSlop = space.xs,
   accessibilityLabel,
+  stretch,
   children,
   style,
   face,
@@ -101,7 +104,7 @@ export function StickerButton({
       onPressIn={() => setDown(true)}
       onPressOut={() => setDown(false)}
       style={[disabled && styles.disabled, style]}>
-      <Sticker {...rest} pressed={down ? 1 : 0} face={[styles.buttonFace, height !== undefined && { height }, face]}>
+      <Sticker {...rest} pressed={down ? 1 : 0} style={stretch ? styles.stretch : undefined} face={[styles.buttonFace, height !== undefined && { height }, stretch && styles.stretch, face]}>
         {children ?? (
           <>
             {icon && <Icon name={icon} size={iconSize} color={iconColor ?? textColor} />}
@@ -126,6 +129,7 @@ export function IconButton({
   diameter = sizes.tap,
   label,
   disabled,
+  quiet,
 }: {
   name: IconName;
   onPress?: () => void;
@@ -135,9 +139,20 @@ export function IconButton({
   /** read by screen readers */
   label: string;
   disabled?: boolean;
+  /** skip the click sound (the caller plays its own) */
+  quiet?: boolean;
 }) {
   return (
-    <StickerButton onPress={onPress} disabled={disabled} fill={fill} round="pill" raise="low" accessibilityLabel={label} face={{ width: diameter, height: diameter, paddingHorizontal: 0 }}>
+    <StickerButton
+      onPress={onPress}
+      disabled={disabled}
+      quiet={quiet}
+      fill={fill}
+      round="pill"
+      raise="low"
+      accessibilityLabel={label}
+      hitSlop={Math.max(space.xs, Math.ceil((sizes.tap - diameter) / 2))}
+      face={{ width: diameter, height: diameter, minHeight: diameter, paddingHorizontal: 0 }}>
       <Icon name={name} size={Math.round(diameter * 0.5)} color={iconColor} />
     </StickerButton>
   );
@@ -163,5 +178,8 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: opacity.dim,
+  },
+  stretch: {
+    flex: 1,
   },
 });

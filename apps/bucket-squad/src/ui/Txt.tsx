@@ -52,16 +52,11 @@ export function Txt({ children, size = 'body', font: f = 'body', color: c = 'ink
   );
 }
 
-const RING: readonly (readonly [number, number])[] = [
-  [-1, -1],
-  [0, -1],
-  [1, -1],
-  [-1, 0],
-  [1, 0],
-  [-1, 1],
-  [0, 1],
-  [1, 1],
-];
+/** unit offsets all the way round: stacked copies of the text at these offsets make a smooth outline */
+const RING: readonly (readonly [number, number])[] = Array.from({ length: 12 }, (_, i) => {
+  const a = (i / 12) * Math.PI * 2;
+  return [Math.round(Math.cos(a) * 100) / 100, Math.round(Math.sin(a) * 100) / 100] as const;
+});
 
 export interface StickerTextProps {
   children: string;
