@@ -41,7 +41,26 @@ the app uses.
 
 `trailer.js` is the script of the walkthrough. It plays a real game with real
 taps; the match runs with `demo: true` so the person's team plays itself, and
-the seed makes it the same game every time.
+the seed makes it the same game every time. `reveals.js` films the pack opening
+with one card of each rarity.
+
+### Black blocks in a film
+
+While the clock is stopped, a layer that has just slid into view can come out
+as a black rectangle: its new tiles are only painted when the browser draws a
+frame. Three settings deal with it:
+
+- `VT_TWICE=1` takes every picture twice and keeps the second (about 4 s a
+  frame instead of 1.4 s). `VT_GAP` sets the pause between the two in ms
+  (default 120); a busy machine needs more.
+- Even then a few frames can come out with a block. Find them with
+  `python3 darkframes.py take` (frames with large black areas; a scene that is
+  dark on purpose shows up too, so look at what it lists).
+- `VT_ONLY=170-177,473` films the whole script again but only pictures those
+  frames; the clock still runs through every frame, so the page is exactly where
+  it was. Picture a window of about 30 frames before each bad frame as well, or
+  the jump makes the blocks worse, and take two or three tries if needed:
+  `VT_TWICE=1 VT_GAP=200 VT_ONLY=140-180 node reveals.js 30 2 retake`.
 
 ## Needs
 

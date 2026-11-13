@@ -134,13 +134,25 @@ async function main() {
       const js = parts.slice(3).join(',');
       vtCount[prefix] = vtCount[prefix] || 0;
       const settle = Number(process.env.VT_WAIT || 35);
+      // VT_ONLY=170-177,473 retakes just those frames: the clock still runs through every frame, so the page is
+      // exactly where it was, but only the listed frames are pictured (fix a few bad frames without a full retake)
+      const only = (process.env.VT_ONLY || '').split(',').filter(Boolean).map((r) => r.split('-').map(Number));
+      const wanted = (k) => !only.length || only.some(([a, b = a]) => k >= a && k <= b);
       for (let i = 0; i < n; i++) {
         await evalJs(`__vt.step(${1000 / fps})`);
         if (js) await evalJs(js);
+        if (!wanted(vtCount[prefix])) {
+          vtCount[prefix]++;
+          continue;
+        }
         await new Promise((r) => setTimeout(r, settle));
         // a layer that has just slid into view can come out as a black block: its new tiles are only painted
         // when a frame is drawn, and the clock is stopped. The first picture draws that frame, the second keeps it.
-        if (process.env.VT_TWICE) await send('Page.captureScreenshot', { format: 'jpeg', quality: 10 });
+        if (process.env.VT_TWICE) {
+          await send('Page.captureScreenshot', { format: 'jpeg', quality: 10 });
+          // and a moment for the tiles that picture asked for to be painted (a busy machine needs it)
+          await new Promise((r) => setTimeout(r, Number(process.env.VT_GAP || 120)));
+        }
         const r = await send('Page.captureScreenshot', { format: 'jpeg', quality: Number(process.env.VT_Q || 92) });
         fs.writeFileSync(`${prefix}${String(vtCount[prefix]++).padStart(5, '0')}.jpg`, Buffer.from(r.data, 'base64'));
       }
