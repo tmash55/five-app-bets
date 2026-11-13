@@ -10,15 +10,15 @@ import * as THREE from 'three';
 
 import { hexToRgb, type Look } from '../kit/look';
 import { BALL_R, COURT, DT, RULES } from '../sim/constants';
-import { attackSign, hoopXOf, shotApexTime, shotMeter } from '../sim/core';
+import { attackSign, shotApexTime, shotMeter } from '../sim/core';
 import { clamp, clamp01, lerp, smooth } from '../sim/math';
-import type { MatchState, PlayerSim } from '../sim/types';
+import type { MatchState } from '../sim/types';
 import { color, hot, party, sparkle } from '../../theme/tokens';
-import { DrawnBall, FigureAnimator, type AnimFrame, type Mood } from './animator';
 import { buildCourt, type CourtId, type CourtMeshes } from './court';
 import { FigureView, newLightUniforms, type LightUniforms } from './figure';
 import { rgb, type Rgb } from './geo';
 import { Particles, SHAPE_SOFT, SHAPE_SPARKLE } from './particles';
+import { CAM_FOV, MatchMotion } from './motion';
 import { buildBallGeometry, programCount, warmUp, wrapContext } from './props';
 import {
   ARROW_FRAG,
@@ -44,10 +44,6 @@ export interface MatchVisuals {
   teamColors: [string, string];
 }
 
-const FOV = 22;
-const PITCH = (15 * Math.PI) / 180;
-const VIEW_H = 7.4;
-const MIN_VIEW_W = 13.6;
 const SHADOWS = 10;
 const RINGS = 8;
 
@@ -98,18 +94,17 @@ class Spring {
 }
 
 export class MatchRenderer {
-  /** how fast the match should run right now (slow motion on big moments) */
-  timeScale = 1;
   /** fixed camera for photos and replays: eye, target and zoom (1 = normal) */
   photo: { eye: [number, number, number]; target: [number, number, number]; fov?: number } | null = null;
 
   private readonly three: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
-  private readonly camera = new THREE.PerspectiveCamera(FOV, 2, 2, 900);
+  private readonly camera = new THREE.PerspectiveCamera(CAM_FOV, 2, 2, 900);
   private readonly lights: LightUniforms = newLightUniforms();
   private readonly court: CourtMeshes;
   private readonly figures: FigureView[] = [];
-  private readonly anims: FigureAnimator[] = [];
+  private readonly motion: MatchMotion;
+  private readonly bones: Float32Array[] = [];
   private readonly particles = new Particles(520);
   private readonly ball: THREE.Mesh;
   private readonly ballQuat = new THREE.Quaternion();
@@ -135,20 +130,6 @@ export class MatchRenderer {
   private height = 1;
   private time = 0;
   private cheer = 0;
-  // camera state
-  private fx = 0;
-  private fxV = 0;
-  private fy = 1;
-  private fz = 0;
-  private zoom = 1.5;
-  private shake = 0;
-  private intro = 1;
-  private slowT = 0;
-  // interpolation
-  private readonly prev: Float32Array;
-  private readonly prevBall = new Float32Array(3);
-  private readonly drawnBall = new DrawnBall();
-  private synced = false;
   // meter
   private meterHold = 0;
   private meterValue = 0;
@@ -164,7 +145,6 @@ export class MatchRenderer {
   private readonly tmpQ = new THREE.Quaternion();
   private readonly tmpM = new THREE.Matrix4();
   private readonly tmpS = new THREE.Vector3();
-  private readonly frame: AnimFrame;
 
   constructor(gl: WebGL2RenderingContext, visuals: MatchVisuals) {
     const w = gl.drawingBufferWidth;
@@ -307,14 +287,16 @@ export class MatchRenderer {
     this.disposables.push(ballGeo);
 
     // --- figures
-    visuals.looks.forEach((look, i) => {
+    for (const look of visuals.looks) {
       const fig = new FigureView(look, L);
       this.figures.push(fig);
-      this.anims.push(new FigureAnimator(fig.data.build, fig.data.hairPivotA, fig.data.hairPivotB, i * 3 + 1));
+      this.bones.push(fig.bones);
       this.scene.add(fig.mesh);
-    });
-    const n = visuals.looks.length;
-    this.prev = new Float32Array(n * 4);
+    }
+    this.motion = new MatchMotion(
+      this.figures.map((f) => f.data.build),
+      this.figures.map((f) => [f.data.hairPivotA, f.data.hairPivotB]),
+    );
 
     this.scene.add(this.particles.mesh);
 
@@ -386,24 +368,6 @@ export class MatchRenderer {
     this.scene.add(this.wipe);
     this.disposables.push(tri, meterMat, arrowMat, wipeMat);
 
-    this.frame = {
-      m: null as unknown as MatchState,
-      p: null as unknown as PlayerSim,
-      x: 0,
-      y: 0,
-      z: 0,
-      facing: 0,
-      bx: 0,
-      by: 0,
-      bz: 0,
-      camX: 0,
-      camY: 6,
-      camZ: 20,
-      dt: 0,
-      lag: 0,
-      time: 0,
-      mood: 'play',
-    };
     this.resize(w, h);
     // every shader the match can ever use is built and queried now, never mid-game
     this.warmPrograms = warmUp(this.three, this.scene, this.camera);
@@ -426,42 +390,32 @@ export class MatchRenderer {
     this.wipeU.uAspect.value = this.camera.aspect;
   }
 
+  /** how fast the match should run right now (slow motion on big moments) */
+  get timeScale(): number {
+    return this.motion.timeScale;
+  }
+
   /** Remember where everything was, so the next frame can draw between ticks. */
   beforeStep(m: MatchState): void {
-    this.synced = true;
-    const pv = this.prev;
-    for (const p of m.players) {
-      const o = p.idx * 4;
-      pv[o] = p.x;
-      pv[o + 1] = p.y;
-      pv[o + 2] = p.z;
-      pv[o + 3] = p.facing;
-    }
-    this.prevBall[0] = m.ball.x;
-    this.prevBall[1] = m.ball.y;
-    this.prevBall[2] = m.ball.z;
+    this.motion.beforeStep(m);
   }
 
   /** React to what just happened in the simulation. */
   afterStep(m: MatchState): void {
+    this.motion.afterStep(m);
     const P = this.particles;
     for (const e of m.events) {
       switch (e.type) {
         case 'jump': {
           const p = m.players[e.by];
-          this.anims[e.by].impulse(1.5);
           P.dust(p.x, p.z, 4, this.dustRgb, 0.8);
           break;
         }
         case 'land': {
           const p = m.players[e.by];
-          this.anims[e.by].impulse(e.hard ? -2.6 : -1.5);
           P.dust(p.x, p.z, e.hard ? 8 : 4, this.dustRgb, e.hard ? 1.4 : 0.9);
           break;
         }
-        case 'dunkStart':
-          this.anims[e.by].impulse(2);
-          break;
         case 'score': {
           const hoop = attackSign(e.team);
           const hi = hoop > 0 ? 1 : 0;
@@ -471,8 +425,6 @@ export class MatchRenderer {
           if (e.kind === 'dunk' || e.kind === 'oop') {
             this.rimSpring[hi].kick(e.kind === 'oop' ? 13 : 10);
             this.boardSpring[hi].kick(1.4);
-            this.shake = Math.max(this.shake, e.kind === 'oop' ? 0.5 : 0.36);
-            this.slowT = 0.16;
             P.burst(hx, COURT.rimY - 0.1, 0, e.kind === 'oop' ? 30 : 20, [team, ...SPARK], 5.5, 0.2);
           } else {
             this.rimSpring[hi].kick(e.perfect ? 1.2 : 2.6);
@@ -507,7 +459,6 @@ export class MatchRenderer {
         }
         case 'block': {
           P.burst(m.ball.x, m.ball.y, m.ball.z, 14, [this.teamRgb[m.players[e.by].team], ...SPARK], 4.5, 0.17);
-          this.shake = Math.max(this.shake, e.stuffed ? 0.4 : 0.22);
           this.cheer = Math.max(this.cheer, 0.8);
           break;
         }
@@ -558,21 +509,12 @@ export class MatchRenderer {
             }
             P.burst(p.x, p.y + 1.1, p.z, 16, [WHITE, ...HOT], 4.4, 0.17);
             this.cheer = Math.max(this.cheer, 0.9);
-            this.shake = Math.max(this.shake, 0.18);
           } else {
             // over: the last of the light pops off the ring
             P.burst(p.x, 0.3, p.z, 8, [HOT[1], HOT[3]], 1.8, 0.11);
           }
           break;
         }
-        case 'inbound':
-          for (const a of this.anims) a.reset();
-          break;
-        case 'period':
-          if (e.start) {
-            for (const a of this.anims) a.reset();
-          }
-          break;
         case 'final': {
           this.cheer = 1;
           for (let k = 0; k < 5; k++) P.confetti(-8 + k * 4, 5.5, -2 + (k % 2) * 3, 34, PARTY, 4);
@@ -593,96 +535,6 @@ export class MatchRenderer {
     }
   }
 
-  private moodOf(m: MatchState, p: PlayerSim): Mood {
-    switch (m.phase) {
-      case 'final':
-        return m.winner === p.team ? 'win' : 'lose';
-      case 'scored': {
-        const s = m.lastScoreBy;
-        if (s < 0) return 'play';
-        if (p.idx === s) return 'celebrate';
-        return m.players[s].team === p.team ? 'cheer' : 'sad';
-      }
-      case 'periodEnd':
-        return m.score[p.team] > m.score[1 - p.team] ? 'cheer' : m.score[p.team] < m.score[1 - p.team] ? 'sad' : 'ready';
-      case 'countdown':
-      case 'inbound':
-        return 'ready';
-      default:
-        return 'play';
-    }
-  }
-
-  private updateCamera(m: MatchState, bx: number, by: number, bz: number, dt: number): void {
-    const cam = this.camera;
-    const ball = m.ball;
-    const s = attackSign(m.possession);
-    let dunker: PlayerSim | null = null;
-    for (const p of m.players) {
-      if (p.state === 'dunk' || p.state === 'oop' || p.state === 'hang') dunker = p;
-    }
-    let tx = bx + s * 1.5;
-    let ty = 1.0 + clamp((by - 3.4) * 0.28, 0, 1.3);
-    let tz = bz * 0.06;
-    let tZoom = 1 + clamp((by - 4.2) * 0.03, 0, 0.1);
-    if (ball.state === 'shot') tx = lerp(bx, hoopXOf(ball.shotTeam), 0.55);
-    if (m.phase === 'countdown' || m.phase === 'inbound') tx = bx + s * 2.6;
-    if (dunker) {
-      tx = hoopXOf(dunker.team) - attackSign(dunker.team) * 1.4;
-      ty = 1.55;
-      tZoom = 0.84;
-    }
-    if (m.phase === 'final' && m.winner >= 0) {
-      let cx = 0;
-      let cz = 0;
-      let n = 0;
-      for (const p of m.players) {
-        if (p.team === m.winner) {
-          cx += p.x;
-          cz += p.z;
-          n++;
-        }
-      }
-      tx = cx / n;
-      tz = (cz / n) * 0.3;
-      tZoom = 0.86;
-    }
-    const aspect = cam.aspect;
-    const viewH = Math.max(VIEW_H, MIN_VIEW_W / aspect);
-    const limit = Math.max(0, COURT.halfL + 2.1 - (viewH * this.zoom * aspect) / 2);
-    tx = clamp(tx, -limit, limit);
-    // critically damped follow
-    const w = 4.4;
-    this.fxV += ((tx - this.fx) * w * w - 2 * w * this.fxV) * dt;
-    this.fx += this.fxV * dt;
-    this.fy += (ty - this.fy) * Math.min(1, dt * 3.5);
-    this.fz += (tz - this.fz) * Math.min(1, dt * 3);
-    this.intro = Math.max(0, this.intro - dt / 2.6);
-    const io = this.intro * this.intro * (3 - 2 * this.intro);
-    this.zoom += (tZoom + 0.5 * io - this.zoom) * Math.min(1, dt * (dunker ? 6 : 3));
-    const dist = ((viewH * this.zoom) / 2 / Math.tan((FOV * Math.PI) / 360)) * 1;
-    const pitch = PITCH + 0.2 * io;
-    // shake
-    this.shake = Math.max(0, this.shake - dt * 1.6);
-    const sh = this.shake * this.shake;
-    const sxo = Math.sin(this.time * 71) * sh * 0.5;
-    const syo = Math.cos(this.time * 83) * sh * 0.5;
-    cam.position.set(this.fx * 0.94 + sxo, this.fy + dist * Math.sin(pitch) + syo, this.fz + dist * Math.cos(pitch));
-    this.tmpV.set(this.fx + sxo * 0.5, this.fy + syo * 0.5, this.fz);
-    const photo = this.photo;
-    const fov = photo?.fov ?? FOV;
-    if (photo) {
-      cam.position.set(photo.eye[0], photo.eye[1], photo.eye[2]);
-      this.tmpV.set(photo.target[0], photo.target[1], photo.target[2]);
-    }
-    if (cam.fov !== fov) {
-      cam.fov = fov;
-      cam.updateProjectionMatrix();
-    }
-    cam.lookAt(this.tmpV);
-    cam.updateMatrixWorld();
-  }
-
   /**
    * Draw one frame.
    * @param alpha how far between the previous tick (0) and the latest (1) this frame sits
@@ -690,29 +542,30 @@ export class MatchRenderer {
    * @param draw  false to update the animation without drawing (fast-forward)
    */
   render(m: MatchState, alpha: number, dt: number, draw = true): void {
-    if (!this.synced) this.beforeStep(m);
     dt = Math.min(0.1, Math.max(0, dt));
     this.time += dt;
     const a = clamp01(alpha);
     const ball = m.ball;
-    let bx = lerp(this.prevBall[0], ball.x, a);
-    let by = lerp(this.prevBall[1], ball.y, a);
-    let bz = lerp(this.prevBall[2], ball.z, a);
-    if (Math.abs(ball.x - this.prevBall[0]) + Math.abs(ball.z - this.prevBall[2]) > 3) {
-      bx = ball.x;
-      by = ball.y;
-      bz = ball.z;
-    }
-    this.updateCamera(m, bx, by, bz, dt);
+    const mo = this.motion;
+    const photo = this.photo;
+    mo.lookEye = photo ? photo.eye : null;
+    mo.frame(m, a, dt, this.camera.aspect, this.bones);
     const cam = this.camera;
-
-    // slow motion for the big moments
-    this.slowT = Math.max(0, this.slowT - dt);
-    let scale = this.slowT > 0 ? 0.4 : 1;
-    for (const p of m.players) {
-      if ((p.state === 'dunk' || p.state === 'oop') && p.t / Math.max(0.01, p.dur) > 0.72) scale = Math.min(scale, 0.5);
+    if (photo) {
+      cam.position.set(photo.eye[0], photo.eye[1], photo.eye[2]);
+      this.tmpV.set(photo.target[0], photo.target[1], photo.target[2]);
+    } else {
+      cam.position.set(mo.cam.eye[0], mo.cam.eye[1], mo.cam.eye[2]);
+      this.tmpV.set(mo.cam.target[0], mo.cam.target[1], mo.cam.target[2]);
     }
-    this.timeScale = scale;
+    const fov = photo?.fov ?? CAM_FOV;
+    if (cam.fov !== fov) {
+      cam.fov = fov;
+      cam.updateProjectionMatrix();
+    }
+    cam.lookAt(this.tmpV);
+    cam.updateMatrixWorld();
+    const scale = mo.timeScale;
 
     this.cheer = Math.max(0, this.cheer - dt * 0.55);
     this.staticU.uTime.value = this.time;
@@ -726,44 +579,15 @@ export class MatchRenderer {
     const sun = this.lights.uSunDir.value;
     const sox = -sun.x / Math.max(0.3, sun.y);
     const soz = -sun.z / Math.max(0.3, sun.y);
-    const f = this.frame;
-    f.m = m;
-    f.bx = bx;
-    f.by = by;
-    f.bz = bz;
-    f.camX = cam.position.x;
-    f.camY = cam.position.y;
-    f.camZ = cam.position.z;
-    f.dt = dt * scale;
-    f.lag = (1 - a) * DT;
-    f.time = this.time;
     const userTeam = m.cfg.userTeam;
     for (const p of m.players) {
       const i = p.idx;
       const o = i * 4;
-      const pv = this.prev;
-      let x = lerp(pv[o], p.x, a);
-      let y = lerp(pv[o + 1], p.y, a);
-      let z = lerp(pv[o + 2], p.z, a);
-      let d = p.facing - pv[o + 3];
-      while (d > Math.PI) d -= Math.PI * 2;
-      while (d < -Math.PI) d += Math.PI * 2;
-      let facing = pv[o + 3] + d * a;
-      if (Math.abs(p.x - pv[o]) + Math.abs(p.z - pv[o + 2]) > 2) {
-        x = p.x;
-        y = p.y;
-        z = p.z;
-        facing = p.facing;
-      }
-      f.p = p;
-      f.x = x;
-      f.y = y;
-      f.z = z;
-      f.facing = facing;
-      f.mood = this.moodOf(m, p);
+      const x = mo.x[i];
+      const y = mo.y[i];
+      const z = mo.z[i];
       const fig = this.figures[i];
-      const an = this.anims[i];
-      an.update(f, fig.bones);
+      const an = mo.anims[i];
       this.tmpQ.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, an.yaw);
       this.tmpV.set(an.px, an.py, an.pz);
       this.tmpS.set(an.sx, an.sy, an.sx);
@@ -812,12 +636,9 @@ export class MatchRenderer {
     }
 
     // --- ball: a held one is drawn where the holder's pose keeps it out of the head and the body
-    const hb = ball.state === 'held' ? ball.holder : -1;
-    const db = this.drawnBall;
-    db.update(bx, by, bz, hb, hb >= 0 ? this.anims[hb].ballPush : null, dt * scale);
-    bx = db.x;
-    by = db.y;
-    bz = db.z;
+    const bx = mo.drawn.x;
+    const by = mo.drawn.y;
+    const bz = mo.drawn.z;
     const bm = this.ball;
     let ax = 0;
     let az = 0;
@@ -914,10 +735,9 @@ export class MatchRenderer {
     const sm = shotMeter(m);
     const ctrl = m.control >= 0 ? m.players[m.control] : null;
     if (ctrl && (sm || this.meterHold > 0)) {
-      const o = ctrl.idx * 4;
-      const px = lerp(this.prev[o], ctrl.x, a);
-      const py = lerp(this.prev[o + 1], ctrl.y, a);
-      const pz = lerp(this.prev[o + 2], ctrl.z, a);
+      const px = mo.x[ctrl.idx];
+      const py = mo.y[ctrl.idx];
+      const pz = mo.z[ctrl.idx];
       this.meter.visible = true;
       this.tmpV.set(1, 0, 0).applyQuaternion(cam.quaternion);
       const sideSign = attackSign(ctrl.team) > 0 ? -1 : 1;
@@ -938,12 +758,11 @@ export class MatchRenderer {
       this.meter.visible = false;
     }
     if (ctrl && m.phase !== 'final') {
-      const o = ctrl.idx * 4;
-      const px = lerp(this.prev[o], ctrl.x, a);
-      const py = lerp(this.prev[o + 1], ctrl.y, a);
-      const pz = lerp(this.prev[o + 2], ctrl.z, a);
+      const px = mo.x[ctrl.idx];
+      const py = mo.y[ctrl.idx];
+      const pz = mo.z[ctrl.idx];
       this.arrow.visible = true;
-      this.arrow.position.set(px, py + 1.95 * this.anims[ctrl.idx].sy + 0.06 * Math.sin(this.time * 6), pz);
+      this.arrow.position.set(px, py + 1.95 * mo.anims[ctrl.idx].sy + 0.06 * Math.sin(this.time * 6), pz);
       this.arrow.quaternion.copy(cam.quaternion);
       this.arrow.scale.set(0.42, 0.42, 1);
     } else {
