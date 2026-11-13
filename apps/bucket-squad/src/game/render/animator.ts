@@ -294,6 +294,16 @@ const YAW_DV = 5;
 const ROOT_DV = 1.2;
 /** match: seconds a caught ball takes into the hands, and the most speed (m/s) it keeps from its flight */
 const CATCH_T = 0.1;
+/** match: how long a shooter reacts to a make or a miss (s), and how near a shooter a defender puts a hand up (m) */
+const REACT_T = 0.9;
+/** the match moments, as bits of `FigureAnimator.moment` */
+export const MOMENT_FOLLOW = 1;
+export const MOMENT_MAKE = 2;
+export const MOMENT_MISS = 4;
+export const MOMENT_CONTEST = 8;
+export const MOMENT_CROSS = 16;
+export const MOMENT_POINT = 32;
+const CONTEST_D = 2.6;
 /** match: the fastest a free hand the guard pushed out of the body comes back (m/s) */
 const HAND_PUSH_RATE = 3;
 const CATCH_VMAX = 10;
@@ -458,6 +468,19 @@ export class FigureAnimator {
   private ballSide = 0.5;
   private swatW = 0;
   private swatWant = 0;
+  /**
+   * match moments: how much the shooting arm holds its follow-through (and seconds since the release, and that arm's side), the
+   * shooter's reaction to how the shot went (1 a make, -1 a miss) and seconds into it, how much a hand goes up to contest a
+   * shooter near by and on which side (1 the figure's left, eased)
+   */
+  private followW = 0;
+  private followT = 0;
+  private shotSide = 1;
+  private wasMyShot = false;
+  private react = 0;
+  private reactT = REACT_T;
+  private contestW = 0;
+  private contestSide = 0.5;
   /** match: held the ball last frame; seconds into pulling a caught ball into the hands, where it was caught (world) and how fast it came */
   private wasHolding = false;
   /** match: the held ball as the simulation has it last frame (figure space) and its speed, the state it was in, and how far it is drawn off that after a jump (and how fast that changes) */
@@ -564,6 +587,23 @@ export class FigureAnimator {
     this.tgt[o] = x;
     this.tgt[o + 1] = y;
     this.tgt[o + 2] = z;
+  }
+
+  /** Moves a hand target `w` of the way to (x, y, z). */
+  private blendHand(side: number, x: number, y: number, z: number, w: number): void {
+    const o = side > 0 ? HL : HR;
+    const c = this.tgt;
+    c[o] = lerp(c[o], x, w);
+    c[o + 1] = lerp(c[o + 1], y, w);
+    c[o + 2] = lerp(c[o + 2], z, w);
+  }
+
+  private blendPole(side: number, x: number, y: number, z: number, w: number): void {
+    const o = side > 0 ? PL : PR;
+    const c = this.tgt;
+    c[o] = lerp(c[o], x, w);
+    c[o + 1] = lerp(c[o + 1], y, w);
+    c[o + 2] = lerp(c[o + 2], z, w);
   }
 
   private wrist(side: number, v: number): void {
@@ -700,6 +740,20 @@ export class FigureAnimator {
     c[TROLL] += side * -0.05;
     c[RY] -= 0.02;
     c[LOOK] = 0.22;
+    if (this.match && p.hand !== p.handTarget) {
+      // a crossover: the ball goes across in front, low; the body sinks and leans the new way and the other hand comes in
+      // to take it (or, past the middle, follows it off)
+      const x = 1 - Math.abs(p.hand);
+      this.moment |= MOMENT_CROSS;
+      const lean = p.handTarget >= 0 ? -1 : 1;
+      this.blendHand(o, b[0] + o * 0.14, Math.max(b[1] + 0.1, 0.52), b[2], 0.65 * x);
+      c[RY] -= 0.05 * x;
+      c[KL] += 0.12 * x;
+      c[KR] += 0.12 * x;
+      c[TROLL] += lean * 0.12 * x;
+      c[RROLL] += lean * 0.05 * x;
+      c[TPITCH] += 0.06 * x;
+    }
   }
 
   private defend(close: number): void {
@@ -735,6 +789,7 @@ export class FigureAnimator {
     const b = this.ballF;
     const ball = m.ball;
     this.stand();
+    this.moment = 0;
     let key = STATE_KEY[p.state] * 100;
     // by default everyone watches the ball
     this.lookX = f.bx;
@@ -890,6 +945,7 @@ export class FigureAnimator {
             }
           }
         }
+        if (this.match && !p.hasBall && p.state !== 'pass') this.overlays();
         break;
       }
 
@@ -1231,6 +1287,95 @@ export class FigureAnimator {
     return true;
   }
 
+  /** Match: follows the moments the overlays show (a shot in the air, how it went, a shooter to contest). */
+  private moments(f: AnimFrame, dt: number): void {
+    const m = f.m;
+    const p = f.p;
+    const ball = m.ball;
+    if (p.state === 'shoot') this.shotSide = p.hand >= 0 ? -1 : 1;
+    const myShot = ball.state === 'shot' && ball.shooter === p.idx && ball.kind === 'jumper' && m.phase === 'live';
+    if (this.wasMyShot && !myShot) {
+      if (m.phase === 'scored' && m.lastScoreBy === p.idx) this.react = 1;
+      else if (ball.state === 'loose' || (ball.state === 'held' && m.players[ball.holder].team !== p.team)) this.react = -1;
+      else this.react = 0;
+      this.reactT = 0;
+    }
+    this.wasMyShot = myShot;
+    this.followT = myShot ? this.followT + dt : 0;
+    // the arm stays up while the ball is in the air, lowering a little as it falls toward the rim
+    const fw = myShot ? 1 - 0.35 * smooth((this.followT - 0.5) / 0.5) : 0;
+    this.followW = fw > this.followW ? fw : damp(this.followW, fw, 7, dt);
+    this.reactT = Math.min(REACT_T, this.reactT + dt);
+    let want = 0;
+    if (m.phase === 'live' && !p.hasBall) {
+      for (const o of m.players) {
+        if (o.team === p.team || o.state !== 'shoot') continue;
+        const d = Math.hypot(o.x - p.x, o.z - p.z);
+        if (d >= CONTEST_D) continue;
+        const w = smooth((CONTEST_D - d) / 0.7);
+        if (w > want) {
+          want = w;
+          this.toFigure(o.x, 0, o.z, v3);
+          this.contestSide = damp(this.contestSide, v3[0] >= 0 ? 1 : 0, 10, dt);
+        }
+      }
+    }
+    this.contestW = damp(this.contestW, want, want > this.contestW ? 12 : 5, dt);
+  }
+
+  /**
+   * Match: what a player without the ball does on top of running about. The shooter holds the follow-through while the ball is
+   * up, then pumps a fist on a make or drops the head on a miss; a defender near a shooter gets a hand up in the shooter's face.
+   */
+  private overlays(): void {
+    const c = this.tgt;
+    const run = lerp(1, 0.45, this.moveW);
+    const fw = this.followW * run;
+    const s = this.shotSide;
+    if (fw > 1e-3) {
+      this.moment |= MOMENT_FOLLOW;
+      // the shooting arm up and the wrist flicked over, the guide hand down
+      this.blendHand(s, s * 0.2, 1.52, 0.44, fw);
+      this.blendPole(s, s * 0.3, -0.6, -0.6, fw);
+      c[s > 0 ? WL : WR] = lerp(c[s > 0 ? WL : WR], 1, fw);
+      this.blendHand(-s, -s * 0.34, 0.8, 0.26, fw * 0.7);
+      this.blendPole(-s, -s, -0.6, -0.2, fw * 0.7);
+    }
+    if (this.reactT < REACT_T && this.react !== 0) {
+      const t = this.reactT;
+      const w = smooth(t / 0.12) * (1 - smooth((t - (REACT_T - 0.3)) / 0.3));
+      this.moment |= this.react > 0 ? MOMENT_MAKE : MOMENT_MISS;
+      if (this.react > 0) {
+        // a make: the shooting hand comes down into a fist and pumps twice
+        const pump = Math.abs(Math.sin(t * 11));
+        this.blendHand(s, s * 0.4, 1.22 + 0.22 * pump, 0.12, w * run);
+        this.blendPole(s, s, -0.4, -0.3, w * run);
+        c[s > 0 ? WL : WR] = lerp(c[s > 0 ? WL : WR], 0.3, w * run);
+        c[TROLL] += s * 0.06 * w;
+        c[RY] += 0.02 * pump * w;
+      } else {
+        // a miss: the head drops and shakes, the shoulders sag
+        c[HPITCH] += 0.3 * w;
+        c[HYAW] += 0.18 * Math.sin(t * 13) * w;
+        c[TPITCH] += 0.1 * w;
+        c[EYE] = lerp(c[EYE], 0.6, w);
+      }
+    }
+    const cw = this.contestW * (1 - this.followW);
+    if (cw > 1e-3) {
+      this.moment |= MOMENT_CONTEST;
+      // a hand straight up on the shooter's side, out past the side of the big head, the other low and wide
+      const h = this.contestSide >= 0.5 ? 1 : -1;
+      const k = Math.abs(this.contestSide - 0.5) * 2;
+      this.blendHand(h, h * JUMP_V[0], JUMP_V[1] + 0.08, 0.26, cw * k);
+      this.blendPole(h, h * 0.7, -0.2, -0.7, cw * k);
+      c[h > 0 ? WL : WR] = lerp(c[h > 0 ? WL : WR], -0.2, cw * k);
+      this.blendHand(-h, -h * 0.52, 0.72, 0.22, cw * k * 0.6);
+      c[TPITCH] -= 0.04 * cw;
+      c[LOOK] = Math.max(c[LOOK], cw);
+    }
+  }
+
   /** Little performances between plays. */
   private emote(f: AnimFrame): void {
     const c = this.tgt;
@@ -1288,6 +1433,26 @@ export class FigureAnimator {
         break;
       }
       case 'cheer': {
+        const scorer = f.m.phase === 'scored' && f.m.lastScoreBy >= 0 && this.match ? f.m.players[f.m.lastScoreBy] : null;
+        if (scorer && scorer.idx !== f.p.idx && v % 2 === 1) {
+          // point at whoever scored, the arm pumping with the beat
+          this.moment |= MOMENT_POINT;
+          this.toFigure(scorer.x, 0, scorer.z, v3);
+          const ang = clamp(Math.atan2(v3[0], v3[2]), -1.1, 1.1);
+          const side = ang >= 0 ? 1 : -1;
+          const pump = 0.05 * Math.sin(beat);
+          this.hand(side, Math.sin(ang) * 0.6 + side * 0.14 * Math.cos(ang), 1.12 + pump, Math.cos(ang) * 0.6);
+          this.pole(side, side, -0.5, -0.3);
+          this.wrist(side, -0.1);
+          this.hand(-side, -side * 0.33, 0.58, 0.1);
+          c[TYAW] += ang * 0.3;
+          c[RY] += 0.02 * hop;
+          this.lookX = scorer.x;
+          this.lookY = 1.2;
+          this.lookZ = scorer.z;
+          c[LOOK] = 0.9;
+          break;
+        }
         // clap along
         const clap = Math.abs(Math.sin(beat * 0.55));
         c[RY] += 0.03 * hop;
@@ -1541,6 +1706,7 @@ export class FigureAnimator {
     this.ballSide = damp(this.ballSide, smooth((bf[0] + 0.12) / 0.24), 12, dt);
     this.swatW = damp(this.swatW, this.swatWant, 14, dt);
     this.swatWant = 0;
+    if (this.match) this.moments(f, dt);
     const key = this.buildPose(f);
     this.tgt[RY] += this.rootOff / this.sy;
     this.contact = this.onBall;
@@ -1691,6 +1857,8 @@ export class FigureAnimator {
   contact = 0;
   /** which feet the act says are flat on the floor: 1 left, 2 right */
   planted = 0;
+  /** match: the moments posed on top of the play this frame (MOMENT_* bits), for the checks */
+  moment = 0;
   /** the figure has been drawn at least once: `hands`, `ankles` and the world placement are there */
   drawnOnce = false;
   /** hands as drawn, figure space: wrist xyz, pointing direction xyz, thickness; left then right */

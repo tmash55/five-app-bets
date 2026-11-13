@@ -22,7 +22,21 @@ import { BALL_R, COURT, DT as SIM_DT } from '../../sim/constants';
 import { createMatch, stepMatch } from '../../sim/sim';
 import type { Attrs, MatchConfig, MatchState, PlayerSim } from '../../sim/types';
 import { ACT_LENGTH, ROLE_ACTS, ROLE_HAS_BALL, actAt, newActSlot, type StageAct, type StageRole } from '../../stage/director';
-import { DRAWN_BALL_BLEND, DrawnBall, FigureAnimator, GUARD_SHAPES, type AnimFrame, type Mood, type ShowFrame } from '../animator';
+import {
+  DRAWN_BALL_BLEND,
+  DrawnBall,
+  FigureAnimator,
+  GUARD_SHAPES,
+  MOMENT_CONTEST,
+  MOMENT_CROSS,
+  MOMENT_FOLLOW,
+  MOMENT_MAKE,
+  MOMENT_MISS,
+  MOMENT_POINT,
+  type AnimFrame,
+  type Mood,
+  type ShowFrame,
+} from '../animator';
 
 const DT = 1 / 60;
 const BONES = 64 * 16;
@@ -1099,6 +1113,8 @@ interface MatchCheck {
   jerk: MatchWorst;
   jerk999: number;
   jerk99: number;
+  /** player-frames measured with each match moment posed (a bit of `FigureAnimator.moment` each) */
+  moments: Map<number, number>;
   /** seconds spent posing (all six players), and frames */
   poseMs: number;
   frames: number;
@@ -1107,7 +1123,7 @@ interface MatchCheck {
 /** The match checks: arms and the held ball against their own body, and the drawn ball against the simulation's. */
 function matchCheck(cfg: MatchConfig, builds: Build[], seconds: number, every = 1, late = DRAWN_BALL_BLEND): MatchCheck {
   const w = (): MatchWorst => ({ d: -Infinity, what: '', time: 0, state: '' });
-  const r: MatchCheck = { heldBall: w(), holderArms: w(), arms: w(), heldBall995: 0, holderArms995: 0, arms995: 0, handGap95: 0, handGap: w(), jerk: w(), jerk999: 0, jerk99: 0, releaseStep: 0, releaseAt: '', lateOff: 0, rim: [], dribbleLow: 0, poseMs: 0, frames: 0 };
+  const r: MatchCheck = { heldBall: w(), holderArms: w(), arms: w(), heldBall995: 0, holderArms995: 0, arms995: 0, handGap95: 0, handGap: w(), jerk: w(), jerk999: 0, jerk99: 0, releaseStep: 0, releaseAt: '', lateOff: 0, rim: [], dribbleLow: 0, moments: new Map(), poseMs: 0, frames: 0 };
   const meas = new Map<FigureAnimator, Measure>();
   const gaps: number[] = [];
   const armsAll: number[] = [];
@@ -1151,6 +1167,7 @@ function matchCheck(cfg: MatchConfig, builds: Build[], seconds: number, every = 
       lastOff = off;
       r.frames++;
     }
+    for (let bit = 1; bit <= an.moment; bit <<= 1) if (an.moment & bit) r.moments.set(bit, (r.moments.get(bit) ?? 0) + 1);
     // elbows and wrists: the change of their step from one frame to the next (kit units)
     let hs = hist.get(p.idx);
     if (!hs) {
@@ -1354,6 +1371,19 @@ describe('match figures keep their arms and the held ball out of their own head 
     const r = get(seed);
     expect(r.lateOff).toBe(0);
     expect([r.releaseStep < 0.1, r.releaseAt]).toEqual([true, r.releaseAt]);
+  }, 30000);
+
+  it('the moments posed on top of the play are all in these matches, so the checks above measure them', () => {
+    const seen = (bit: number) => SEEDS.reduce((n, s) => n + (get(s).moments.get(bit) ?? 0), 0);
+    const counts = {
+      'shot follow-through': seen(MOMENT_FOLLOW),
+      'fist pump on a make': seen(MOMENT_MAKE),
+      'head down on a miss': seen(MOMENT_MISS),
+      'hand up to contest': seen(MOMENT_CONTEST),
+      crossover: seen(MOMENT_CROSS),
+      'pointing at the scorer': seen(MOMENT_POINT),
+    };
+    for (const [what, n] of Object.entries(counts)) expect([what, n >= 10]).toEqual([what, true]);
   }, 30000);
 
   it('a dunk drops the drawn ball through the middle of the rim', () => {
