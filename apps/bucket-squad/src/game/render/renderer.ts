@@ -13,12 +13,12 @@ import { BALL_R, COURT, DT, RULES } from '../sim/constants';
 import { attackSign, hoopXOf, shotApexTime, shotMeter } from '../sim/core';
 import { clamp, clamp01, lerp, smooth } from '../sim/math';
 import type { MatchState, PlayerSim } from '../sim/types';
-import { color, flame, party, sparkle } from '../../theme/tokens';
+import { color, hot, party, sparkle } from '../../theme/tokens';
 import { DrawnBall, FigureAnimator, type AnimFrame, type Mood } from './animator';
 import { buildCourt, type CourtId, type CourtMeshes } from './court';
 import { FigureView, newLightUniforms, type LightUniforms } from './figure';
 import { rgb, type Rgb } from './geo';
-import { Particles, SHAPE_FLAME, SHAPE_SOFT, SHAPE_SPARKLE } from './particles';
+import { Particles, SHAPE_SOFT, SHAPE_SPARKLE } from './particles';
 import { buildBallGeometry, programCount, warmUp, wrapContext } from './props';
 import {
   ARROW_FRAG,
@@ -53,10 +53,16 @@ const RINGS = 8;
 
 const SPARK: Rgb[] = sparkle.map(rgb);
 const PARTY: Rgb[] = party.map(rgb);
-const FLAME: Rgb[] = flame.map(rgb);
-/** seconds between flame tongues off a player on fire, and off the ball they hold or shoot */
-const FLAME_EVERY = 0.016;
-const BALL_FLAME_EVERY = 0.012;
+/** a hot streak: white-hot, gold, orange, hot pink */
+const HOT: Rgb[] = hot.map(rgb);
+/** the ring of light round a hot player dims and shrinks over the streak's last seconds */
+const HOT_FADE = 3;
+/** how fast the ring goes when an opponent's basket ends the streak (per second) */
+const HOT_OUT = 4;
+/** seconds the shockwave takes to roll out when a streak starts */
+const SHOCK = 0.5;
+/** seconds between dots of light behind a hot player's shot */
+const HOT_TRAIL_EVERY = 0.012;
 const WHITE = rgb(color.white);
 const GRADE: Record<string, Rgb> = {
   perfect: rgb(color.perfect),
@@ -148,12 +154,11 @@ export class MatchRenderer {
   private meterValue = 0;
   private meterGrade: Rgb = WHITE;
   private trailT = 0;
-  private fireTrailT = 0;
+  private hotTrailT = 0;
   private stepT = new Float32Array(8);
-  /** per player: time to the next flame, and which spot it comes off next (feet, hands, body) */
-  private flameT = new Float32Array(8);
-  private flameSpot = new Uint8Array(8);
-  private readonly spot = new Float64Array(3);
+  /** per player: how hot their ring is drawn (0..1), and seconds since their streak started */
+  private readonly hotLv = new Float32Array(8);
+  private readonly shockT = new Float32Array(8).fill(SHOCK);
 
   private readonly tmpV = new THREE.Vector3();
   private readonly tmpQ = new THREE.Quaternion();
@@ -221,6 +226,8 @@ export class MatchRenderer {
       uShadows: { value: new Float32Array(SHADOWS * 4) },
       uRings: { value: new Float32Array(RINGS * 4) },
       uRingCol: { value: new Float32Array(RINGS * 3) },
+      uHot: { value: new Float32Array(RINGS * 4) },
+      uHotCol: { value: new Float32Array(HOT.flat()) },
       uTime: { value: 0 },
     };
     const floorMat = new THREE.RawShaderMaterial({
@@ -526,31 +533,35 @@ export class MatchRenderer {
         case 'fire': {
           const p = m.players[e.player];
           if (e.on) {
-            // a whoosh of flame round the player and a burst of sparks
-            for (let k = 0; k < 16; k++) {
-              const ang = (k / 16) * Math.PI * 2 + P.rand() * 0.3;
-              const sp = 1.6 + P.rand() * 1.4;
+            // the ring lights with a shockwave across the floor (drawn by the floor), a ring of sparkles
+            // skimming out with it and a burst off the player
+            this.shockT[p.idx] = 0;
+            for (let k = 0; k < 18; k++) {
+              const ang = (k / 18) * Math.PI * 2 + P.rand() * 0.2;
+              const sp = 5.5 + P.rand() * 1.5;
               P.spawn({
-                x: p.x + Math.cos(ang) * 0.25,
-                y: 0.15 + P.rand() * 0.4,
-                z: p.z + Math.sin(ang) * 0.25,
+                x: p.x + Math.cos(ang) * 0.4,
+                y: 0.12 + P.rand() * 0.1,
+                z: p.z + Math.sin(ang) * 0.4,
                 vx: Math.cos(ang) * sp,
-                vy: 2 + P.rand() * 1.6,
+                vy: 0.4 + P.rand() * 0.6,
                 vz: Math.sin(ang) * sp,
-                life: 0.45 + P.rand() * 0.25,
-                size: 0.22 + P.rand() * 0.1,
-                grow: 0.4,
-                color: FLAME[1 + Math.floor(P.rand() * 3)],
-                drag: 2.4,
-                shape: SHAPE_FLAME,
+                life: 0.38 + P.rand() * 0.14,
+                size: 0.15 + P.rand() * 0.06,
+                grow: 0.3,
+                color: HOT[k % 2 === 0 ? 0 : 1 + Math.floor(P.rand() * 3)],
+                drag: 3.2,
+                spin: P.rand() * 3,
+                spinV: (P.rand() - 0.5) * 6,
+                shape: SHAPE_SPARKLE,
               });
             }
-            P.burst(p.x, p.y + 1.1, p.z, 16, FLAME, 4.4, 0.17);
+            P.burst(p.x, p.y + 1.1, p.z, 16, [WHITE, ...HOT], 4.4, 0.17);
             this.cheer = Math.max(this.cheer, 0.9);
             this.shake = Math.max(this.shake, 0.18);
           } else {
-            // put out: a puff of smoke
-            P.dust(p.x, p.z, 8, this.dustRgb, 1.2);
+            // over: the last of the light pops off the ring
+            P.burst(p.x, 0.3, p.z, 8, [HOT[1], HOT[3]], 1.8, 0.11);
           }
           break;
         }
@@ -711,6 +722,7 @@ export class MatchRenderer {
     const shadows = this.floorU.uShadows.value as Float32Array;
     const rings = this.floorU.uRings.value as Float32Array;
     const ringCol = this.floorU.uRingCol.value as Float32Array;
+    const hotRings = this.floorU.uHot.value as Float32Array;
     const sun = this.lights.uSunDir.value;
     const sox = -sun.x / Math.max(0.3, sun.y);
     const soz = -sun.z / Math.max(0.3, sun.y);
@@ -758,14 +770,20 @@ export class MatchRenderer {
       fig.mesh.matrix.compose(this.tmpV, this.tmpQ, this.tmpS);
       fig.mesh.matrixWorldNeedsUpdate = true;
       fig.setBaseY(y);
-      // fire glow (it wins over Hype's), or hype glow in team colour
-      const hot = m.hypeT[p.team] > 0;
-      if (p.fireT > 0) {
-        const c = FLAME[2];
-        const flick = 0.6 + 0.2 * Math.sin(this.time * 17 + i * 2) + 0.1 * Math.sin(this.time * 41 + i);
-        fig.setGlow(c[0] * flick + 0.25, c[1] * flick + 0.1, c[2] * flick * 0.5);
-        this.flames(p, an, x, y, z, dt * scale);
-      } else if (hot) {
+      // a hot streak: its ring of light comes up fast, dims over the last seconds, and goes quickly when put out
+      const want = p.fireT > 0 ? smooth(p.fireT / HOT_FADE) : 0;
+      const lv = (this.hotLv[i] = want > this.hotLv[i] ? Math.min(want, this.hotLv[i] + dt * 6) : Math.max(want, this.hotLv[i] - dt * HOT_OUT));
+      this.shockT[i] = Math.min(SHOCK, this.shockT[i] + dt * scale);
+      // a hot glow (it wins over Hype's), or hype glow in team colour
+      const hyped = m.hypeT[p.team] > 0;
+      if (lv > 0.001) {
+        const pulse = 0.5 + 0.5 * Math.sin(this.time * 5.5 + i * 1.7);
+        const g = lv * (0.8 + 0.3 * pulse);
+        const gold = HOT[1];
+        const pink = HOT[3];
+        const t = 0.2 + 0.25 * pulse;
+        fig.setGlow(lerp(gold[0], pink[0], t) * g + 0.15 * lv, lerp(gold[1], pink[1], t) * g + 0.1 * lv, lerp(gold[2], pink[2], t) * g + 0.05 * lv);
+      } else if (hyped) {
         const c = this.teamRgb[p.team];
         const pulse = 0.45 + 0.2 * Math.sin(this.time * 9 + i);
         fig.setGlow(c[0] * pulse + 0.25, c[1] * pulse + 0.25, c[2] * pulse + 0.2);
@@ -789,6 +807,8 @@ export class MatchRenderer {
       ringCol[i * 3] = you ? Math.min(1, tc[0] * 0.5 + 0.6) : tc[0];
       ringCol[i * 3 + 1] = you ? Math.min(1, tc[1] * 0.5 + 0.6) : tc[1];
       ringCol[i * 3 + 2] = you ? Math.min(1, tc[2] * 0.5 + 0.6) : tc[2];
+      hotRings[o] = lv;
+      hotRings[o + 1] = this.shockT[i] < SHOCK ? 1 - this.shockT[i] / SHOCK : 0;
     }
 
     // --- ball: a held one is drawn where the holder's pose keeps it out of the head and the body
@@ -827,36 +847,40 @@ export class MatchRenderer {
     shadows[so + 2] = 0.24 + by * 0.04;
     shadows[so + 3] = 0.78 * bFade;
 
-    // a ball held or shot by a player on fire trails flames
-    this.fireTrailT -= dt * scale;
-    const burning = (ball.state === 'held' && m.players[ball.holder].fireT > 0) || (ball.state === 'shot' && ball.shooter >= 0 && m.players[ball.shooter].fireT > 0);
-    while (burning && this.fireTrailT <= 0) {
-      this.fireTrailT += BALL_FLAME_EVERY;
+    // a hot player's shot trails a ribbon of light, with sparkles in it
+    this.hotTrailT -= dt * scale;
+    const hotShot = ball.state === 'shot' && ball.shooter >= 0 && this.hotLv[ball.shooter] > 0.05;
+    while (hotShot && this.hotTrailT <= 0) {
+      this.hotTrailT += HOT_TRAIL_EVERY;
       const P = this.particles;
+      const glint = P.rand() < 0.3;
+      // a little behind the ball, so the ball itself stays clear
       P.spawn({
-        x: bx + (P.rand() - 0.5) * 0.16,
-        y: by + (P.rand() - 0.3) * 0.16,
-        z: bz + (P.rand() - 0.5) * 0.16,
-        vx: ball.vx * 0.3 + (P.rand() - 0.5) * 0.4,
-        vy: 1.1 + P.rand() * 0.9,
-        vz: ball.vz * 0.3 + (P.rand() - 0.5) * 0.4,
-        life: 0.26 + P.rand() * 0.14,
-        size: 0.2 + P.rand() * 0.1,
-        grow: 0.3,
-        color: FLAME[Math.floor(P.rand() * 4)],
-        drag: 2,
-        shape: SHAPE_FLAME,
+        x: bx - ball.vx * 0.016 + (P.rand() - 0.5) * 0.08,
+        y: by - ball.vy * 0.016 + (P.rand() - 0.5) * 0.08,
+        z: bz - ball.vz * 0.016 + (P.rand() - 0.5) * 0.08,
+        vx: (P.rand() - 0.5) * 0.3,
+        vy: (P.rand() - 0.5) * 0.3,
+        vz: (P.rand() - 0.5) * 0.3,
+        life: glint ? 0.45 : 0.3 + P.rand() * 0.1,
+        size: glint ? 0.2 : 0.15,
+        grow: glint ? 0.4 : 0.15,
+        color: glint ? HOT[P.rand() < 0.5 ? 0 : 3] : HOT[P.rand() < 0.5 ? 0 : 1],
+        alpha: 0.9,
+        spin: P.rand() * 3,
+        spinV: glint ? (P.rand() - 0.5) * 8 : 0,
+        shape: glint ? SHAPE_SPARKLE : SHAPE_SOFT,
       });
     }
-    if (!burning) this.fireTrailT = 0;
+    if (!hotShot) this.hotTrailT = 0;
 
     // sparkle trail when a team is in Hype, or behind a perfect shot
     this.trailT -= dt;
-    const hypeTrail = !burning && ball.state !== 'dead' && (m.hypeT[m.possession] > 0 || (ball.state === 'shot' && ball.perfect));
+    const hypeTrail = !hotShot && ball.state !== 'dead' && (m.hypeT[m.possession] > 0 || (ball.state === 'shot' && ball.perfect));
     if (hypeTrail && this.trailT <= 0) {
       this.trailT = 0.03;
-      const hot = m.hypeT[m.possession] > 0;
-      const c = hot ? this.teamRgb[m.possession] : SPARK[1];
+      const hyped = m.hypeT[m.possession] > 0;
+      const c = hyped ? this.teamRgb[m.possession] : SPARK[1];
       this.particles.spawn({
         x: bx + (this.particles.rand() - 0.5) * 0.15,
         y: by + (this.particles.rand() - 0.5) * 0.15,
@@ -948,47 +972,6 @@ export class MatchRenderer {
     this.sky.position.copy(cam.position);
     this.sky.updateMatrix();
     if (draw) this.three.render(this.scene, cam);
-  }
-
-  /** Flame tongues licking up off a player on fire: off the feet, the hands and the body in turn. */
-  private flames(p: PlayerSim, an: FigureAnimator, x: number, y: number, z: number, dt: number): void {
-    const i = p.idx;
-    this.flameT[i] -= dt;
-    const P = this.particles;
-    const at = this.spot;
-    while (this.flameT[i] <= 0) {
-      this.flameT[i] += FLAME_EVERY;
-      const k = this.flameSpot[i]++ % 6;
-      if (k < 2) {
-        const o = k * 3;
-        an.toWorld(an.ankles[o], an.ankles[o + 1], an.ankles[o + 2], at);
-      } else if (k < 4) {
-        const o = (k - 2) * 7;
-        an.toWorld(an.hands[o], an.hands[o + 1], an.hands[o + 2], at);
-      } else {
-        const a = P.rand() * Math.PI * 2;
-        at[0] = x + Math.cos(a) * 0.26;
-        at[1] = y + 0.15 + P.rand() * 0.85;
-        at[2] = z + Math.sin(a) * 0.26;
-      }
-      const feet = k < 2;
-      P.spawn({
-        x: at[0] + (P.rand() - 0.5) * 0.1,
-        y: at[1] + (P.rand() - 0.5) * 0.08,
-        z: at[2] + (P.rand() - 0.5) * 0.1,
-        // the flames run with the player rather than trailing far behind
-        vx: p.vx * 0.8 + (P.rand() - 0.5) * 0.5,
-        vy: 1.6 + P.rand() * 1.2,
-        vz: p.vz * 0.8 + (P.rand() - 0.5) * 0.5,
-        life: 0.3 + P.rand() * 0.15,
-        size: (feet ? 0.28 : 0.22) + P.rand() * 0.1,
-        grow: 0.25,
-        color: FLAME[1 + Math.floor(P.rand() * 3)],
-        alpha: 0.95,
-        drag: 0.6,
-        shape: SHAPE_FLAME,
-      });
-    }
   }
 
   /** Screen position (0..1 from the top left) of a point in the world, for callouts drawn by the HUD. */
