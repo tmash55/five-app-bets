@@ -18,7 +18,7 @@ import { clock, msToMidnight, shortBy, shortClock, type ShopSlot } from '@/meta/
 import type { slotBlock } from '@/state/logic';
 import { RIM_STOPS, arcade, fade, halo, inner, neonText, night, rarityPaint, track, tube, type Tube } from '@/theme/arcade';
 import { px, size as sizes, space } from '@/theme/tokens';
-import { GhostButton, GoldButton, PriceButton, RoundButton } from '@/ui/arcade/Buttons';
+import { GhostButton, GoldButton, RoundButton } from '@/ui/arcade/Buttons';
 import { ArcadeCard, Gems } from '@/ui/arcade/Card';
 import { fitText } from '@/ui/arcade/fitText';
 import { JERSEY_FULL_RATIO, Jersey } from '@/ui/arcade/Jersey';
@@ -47,6 +47,8 @@ const CARD_PAD = px(8);
 const RIBBON = px(22);
 const FOOT = sizes.tap;
 const INNER_GAP = px(6);
+/** above a card in a slot: the room its NEW! tag reaches up into, clear of the ribbon */
+const TAG_ROOM = px(10);
 /** the foil rim round the LIMITED card */
 const RIM = px(3);
 /** the name under a uniform on its card */
@@ -133,6 +135,21 @@ function SoldStamp({ width }: { width: number }) {
   );
 }
 
+/**
+ * The price along a card's foot, drawn like the kit's price button: the whole card is the thing to press (a button
+ * cannot sit inside another), and pressing it opens the pop-up with BUY.
+ */
+function PriceTag({ amount, can }: { amount: number; can: boolean }) {
+  return (
+    <View style={[styles.price, can ? { borderColor: tube.gold.glass, boxShadow: [halo(tube.gold.glass, 10, 0.6)] } : styles.priceOff]}>
+      <Coin size={px(20)} />
+      <Print face="bold" size={px(20)} color={can ? tube.gold.glass : 'textDim'} track="widest">
+        {amount.toLocaleString('en-US')}
+      </Print>
+    </View>
+  );
+}
+
 /** A small icon and a word in the card's foot, in place of its price. */
 function FootNote({ icon, label, color }: { icon: LineIconName; label: string; color: string }) {
   return (
@@ -179,9 +196,9 @@ function SlotArt({ slot, copies, width, height, number }: { slot: ShopSlot; copi
     );
   }
   const player = mustPlayer(slot.item.id);
-  const cardW = Math.max(px(56), Math.min(width, height / sizes.cardRatio));
+  const cardW = Math.max(px(56), Math.min(width, (height - TAG_ROOM) / sizes.cardRatio));
   return (
-    <View style={styles.artCenter}>
+    <View style={[styles.artCenter, styles.cardArt]}>
       <ArcadeCard player={player} level={Math.max(1, levelOf(copies))} width={cardW} fresh={copies === 0} shine={slot.limited} />
     </View>
   );
@@ -264,7 +281,7 @@ export function SlotCard({ slot, block, coins, copies, number, width, height, on
           ) : block === 'owned' ? (
             <FootNote icon="check" label="YOURS" color={tube.green.soft} />
           ) : (
-            <PriceButton price={slot.price.amount} can={can} onPress={onPress} accessibilityLabel={`${name}: ${slot.price.amount} coins`} style={styles.price} />
+            <PriceTag amount={slot.price.amount} can={can} />
           )}
         </View>
       </View>
@@ -289,7 +306,7 @@ export function SlotRow({ slots, blockOf, coins, owned, number, onPick }: SlotRo
   const total = weights.reduce((a, b) => a + b, 0);
   const unit = total > 0 ? (box.w - GAP * (slots.length - 1)) / total : 0;
   // a deal card never wider than its picture needs, so on a wide screen the row sits in the middle instead of stretching
-  const most = (box.h - CARD_PAD * 2 - arcade.outline * 2 - RIBBON - FOOT - INNER_GAP * 2) / sizes.cardRatio + CARD_PAD * 2 + arcade.outline * 2 + px(16);
+  const most = (box.h - CARD_PAD * 2 - arcade.outline * 2 - RIBBON - FOOT - INNER_GAP * 2 - TAG_ROOM) / sizes.cardRatio + CARD_PAD * 2 + arcade.outline * 2 + px(26);
   const deal = Math.min(unit, most);
   return (
     <View style={styles.row} onLayout={(e: LayoutChangeEvent) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
@@ -519,6 +536,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  cardArt: {
+    paddingTop: TAG_ROOM,
+  },
   lightLayer: {
     ...StyleSheet.absoluteFill,
     overflow: 'hidden',
@@ -551,7 +571,18 @@ const styles = StyleSheet.create({
   },
   price: {
     alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: px(7),
+    height: sizes.tap,
     paddingHorizontal: px(8),
+    backgroundColor: night.pit,
+    borderWidth: arcade.outline,
+    borderRadius: arcade.rButton,
+  },
+  priceOff: {
+    borderColor: night.lineLit,
   },
   stampBox: {
     ...StyleSheet.absoluteFill,

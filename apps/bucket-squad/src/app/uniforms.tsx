@@ -107,12 +107,12 @@ function TileFoot({ entry, state, coins }: { entry: Entry; state: EntryState; co
     );
   if (entry?.limited) {
     // a limited edition is never bought here: today's shows it is in the shop, the others where to look for them
-    if (limitedToday() === entry.id) return <Tag label="IN SHOP TODAY" tube="gold" small />;
+    if (limitedToday() === entry.id) return <Tag label="TODAY!" tube="gold" small />;
     return (
       <View style={styles.footRow}>
-        <LineIcon name="clock" size={px(13)} color={night.textFaint} weight={2.4} />
+        <LineIcon name="tag" size={px(13)} color={night.textFaint} weight={2.4} />
         <Print face="bold" size="micro" color="textFaint" track="wide">
-          DAILY SHOP
+          SHOP
         </Print>
       </View>
     );
@@ -191,7 +191,7 @@ function Wearing({ entry, state, squad, number, width, height }: { entry: Entry;
   const face = Math.min(px(34), Math.floor((inside - space.sm * 2) / 3));
   const jerseyW = Math.max(px(50), Math.min(inside * 0.72, (height - px(150) - face) / JERSEY_FULL_RATIO));
   const name = fitText(state.name.toUpperCase(), 'display', neonText.sign, inside, 'close', MIN_FIT_LABEL);
-  const kind = entry === null ? `${state.team?.name ?? ''} · CAPTAIN’S TEAM` : entry.kind === 'team' ? 'TEAM UNIFORM' : `SPECIAL · ${RARITY_LABEL[entry.rarity]}`;
+  const kind = entry === null ? `${state.team?.name ?? ''} · CAPTAIN’S TEAM` : entry.kind === 'team' ? 'TEAM UNIFORM' : entry.limited ? 'LIMITED EDITION' : `SPECIAL · ${RARITY_LABEL[entry.rarity]}`;
   return (
     <NeonPanel tube={tb} style={[styles.wearing, { width, height }]}>
       <Print face="bold" size="tiny" color="textFaint" track="wider" center>
