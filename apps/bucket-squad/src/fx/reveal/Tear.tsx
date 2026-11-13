@@ -97,6 +97,7 @@ export function Tear({ clock, def, lay, light }: TearProps) {
     return { opacity: span(t, TEAR.rip, TEAR.rip + 120) * (1 - span(t, TEAR.flash, TEAR.flash + 120)), transform: [{ scaleX: backOut(span(t, TEAR.rip, TEAR.rip + 220)) }] };
   });
   const quiet = useAnimatedStyle(() => ({ opacity: 1 - span(clock.value, TEAR.rip, TEAR.flash) }));
+  const calm = useAnimatedStyle(() => ({ opacity: 1 - span(clock.value, 0, TEAR.rip * 0.6) }));
   const flash = useAnimatedStyle(() => ({ opacity: 0.9 * flashAt(clock.value, TEAR.flash, 520) }));
   const ringW = pack.width * 1.75;
   const ringH = px(56);
@@ -104,6 +105,10 @@ export function Tear({ clock, def, lay, light }: TearProps) {
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <Animated.View style={[styles.point, { left: pack.x, top: pack.y }, quiet]}>
+        {/* the slow rays the sealed pack sat in, going out with the room's light rather than cut off at the tap */}
+        <Animated.View style={[around(pack.width * 3.8), calm]}>
+          <Rays size={pack.width * 3.8} color={glow} alpha={0.2} count={20} fill={0.3} fadeAt={[0.12, 0.9]} />
+        </Animated.View>
         <View style={[around(ringW, ringH), { top: packH / 2 - ringH / 2 + px(6) }]}>
           <StageRing width={ringW} height={ringH} tube={packTube(def)} />
         </View>
