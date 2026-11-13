@@ -3,7 +3,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 
 import { playSfx } from '@/audio/sound';
 import { teamById } from '@/data/roster';
@@ -12,13 +12,15 @@ import { tapFeedback } from '@/fx/feedback';
 import { SHOP_PACKS, packById, type PackDef } from '@/meta/packs';
 import { dayKey } from '@/meta/rng';
 import { useSave } from '@/state/save';
-import { arcade, blend, fade, night, rarityPaint, tube, type Tube } from '@/theme/arcade';
+import { arcade, blend, fade, neonText, night, rarityPaint, tube, type Tube } from '@/theme/arcade';
 import { px, space } from '@/theme/tokens';
 import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
 import { GhostButton, GoldButton, PriceButton } from '@/ui/arcade/Buttons';
 import { Gems } from '@/ui/arcade/Card';
 import { FOIL_RATIO, FoilPack, foilFor } from '@/ui/arcade/Foil';
+import { fitText, type FittedText } from '@/ui/arcade/fitText';
 import { LineIcon } from '@/ui/arcade/LineIcon';
+import { MIN_FIT_LABEL } from '@/ui/arcade/measure';
 import { Popup } from '@/ui/arcade/Popup';
 import { Bulbs } from '@/ui/arcade/Room';
 import { CountBadge, NeonPanel, Well } from '@/ui/arcade/Surface';
@@ -28,7 +30,9 @@ import { useAfter } from '@/ui/hooks';
 /** the right-hand panel of packs waiting to be opened */
 const READY_W = px(236);
 /** the room for a waiting pack's name: the panel less its padding, the well's, and the small pack beside it */
-const WELL_WORDS = READY_W - px(22) - px(4) - px(18) - px(36) - px(10) - px(4);
+const WELL_WORDS = READY_W - px(22) - px(4) - px(18) - px(36) - px(10);
+/** the corner of a waiting pack's row that its "?" takes from the name */
+const HELP_ROOM = px(14);
 /** the marquee bulbs swap every so often: a slow chase, never a flash */
 const CHASE_MS = 900;
 /** the strip of bulbs along the top of the machine's window */
@@ -61,6 +65,28 @@ function inside(pack: PackDef): string {
   return pack.guarantee ? `1 ${RARITY_LABEL[pack.guarantee]} or better inside` : 'Any rarity inside';
 }
 
+/** Fitted lettering: one line, or two when it had to break (see `fitText`); never cut off. */
+function PrintFit({ fit, ...rest }: { fit: FittedText } & Omit<React.ComponentProps<typeof Print>, 'children' | 'size' | 'lines' | 'room'>) {
+  return (
+    <Print size={fit.size} {...rest}>
+      {fit.text}
+    </Print>
+  );
+}
+
+/** A fitted sign: a neon line can only be one line, so a sign that had to break is two of them. */
+function GlowLines({ fit, tube: t, center, style }: { fit: FittedText; tube: Tube; center?: boolean; style?: StyleProp<ViewStyle> }) {
+  return (
+    <View style={style}>
+      {fit.text.split('\n').map((line) => (
+        <Glow key={line} face="sign" size={fit.size} tube={t} track="close" center={center}>
+          {line}
+        </Glow>
+      ))}
+    </View>
+  );
+}
+
 /** A small round "what is inside" button. */
 function OddsButton({ pack, onPress }: { pack: PackDef; onPress: () => void }) {
   return (
@@ -89,18 +115,12 @@ function ShopColumn({ pack, coins, packW, onBuy, onOdds }: { pack: PackDef; coin
     <View style={styles.column} onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}>
       <LinearGradient colors={[fade(foilFor(pack).glow, 0.22), fade(night.panel, 0)]} locations={[0, 0.58]} style={[StyleSheet.absoluteFill, styles.columnLight]} />
       <FoilPack pack={pack} width={packW} />
-      <Glow face="sign" size="large" tube={tb} track="close" center room={width > 0 ? width - px(14) : undefined} style={styles.packName}>
-        {pack.name.toUpperCase()}
-      </Glow>
-      <Print face="body" size="tiny" color="textMuted" center room={width > 0 ? width - px(12) : undefined} style={styles.packInside}>
-        {inside(pack)}
-      </Print>
+      <GlowLines fit={fitText(pack.name.toUpperCase(), 'sign', neonText.large, width > 0 ? width - px(14) : READY_W, 'close', MIN_FIT_LABEL)} tube={tb} center style={styles.packName} />
+      <PrintFit fit={fitText(inside(pack), 'body', neonText.tiny, width > 0 ? width - px(12) : READY_W)} face="body" color="textMuted" center style={styles.packInside} />
       <PriceButton price={pack.price} can={short <= 0} quiet onPress={onBuy} accessibilityLabel={`Buy the ${pack.name} for ${pack.price} coins`} style={styles.price} />
       <View style={styles.noteBox}>
         {short > 0 && (
-          <Print face="bold" size="micro" color={tube.pink.soft} track="normal" center room={width > 0 ? width - px(8) : undefined}>
-            {`${short.toLocaleString('en-US')} MORE TO GO`}
-          </Print>
+          <PrintFit fit={fitText(`${short.toLocaleString('en-US')} MORE TO GO`, 'bold', neonText.micro, width > 0 ? width - px(8) : READY_W, 'normal')} face="bold" color={tube.pink.soft} track="normal" center />
         )}
       </View>
       <OddsButton pack={pack} onPress={onOdds} />
@@ -110,6 +130,8 @@ function ShopColumn({ pack, coins, packW, onBuy, onOdds }: { pack: PackDef; coin
 
 /** One kind of pack waiting to be opened: a small pack, its name, a line about it, and its button. */
 function ReadyWell({ pack, line, onOdds, children }: { pack: PackDef; line: string; onOdds: () => void; children: React.ReactNode }) {
+  // the words get whatever the row leaves them, measured, so the longest team pack's name still fits
+  const [room, setRoom] = useState(WELL_WORDS);
   return (
     <Well style={styles.well}>
       <Pressable
@@ -121,13 +143,10 @@ function ReadyWell({ pack, line, onOdds, children }: { pack: PackDef; line: stri
         }}
         style={({ pressed }) => [styles.wellHead, pressed && styles.pressed]}>
         <FoilPack pack={pack} width={px(36)} flat />
-        <View style={styles.wellWords}>
-          <Print face="bold" size="body" track="tight" lines={1} room={WELL_WORDS}>
-            {pack.name}
-          </Print>
-          <Print face="medium" size="tiny" color="textDim" lines={1} room={WELL_WORDS}>
-            {line}
-          </Print>
+        <View style={styles.wellWords} onLayout={(e: LayoutChangeEvent) => setRoom(e.nativeEvent.layout.width)}>
+          {/* the name keeps clear of the "?" in the corner above it */}
+          <PrintFit fit={fitText(pack.name, 'bold', neonText.body, room - HELP_ROOM, 'tight', 0.8)} face="bold" track="tight" />
+          <PrintFit fit={fitText(line, 'medium', neonText.tiny, room)} face="medium" color="textDim" />
         </View>
         <View style={styles.wellHelp}>
           <LineIcon name="help" size={px(12)} color={night.textFaint} weight={2.6} />
@@ -144,9 +163,7 @@ function OddsPopup({ pack, onClose }: { pack: PackDef; onClose: () => void }) {
       <View style={styles.oddsHead}>
         <FoilPack pack={pack} width={px(56)} />
         <View style={styles.grow}>
-          <Glow face="sign" size="sign" tube={packTube(pack)} track="close" room={px(330)}>
-            {pack.name.toUpperCase()}
-          </Glow>
+          <GlowLines fit={fitText(pack.name.toUpperCase(), 'sign', neonText.sign, px(330), 'close', MIN_FIT_LABEL)} tube={packTube(pack)} />
           <Print face="medium" size="small" color="textMuted" style={styles.oddsLead}>
             {`${pack.cards} players in every pack. Each one has these chances:`}
           </Print>

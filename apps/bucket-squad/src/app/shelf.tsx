@@ -13,13 +13,14 @@ import { tapFeedback } from '@/fx/feedback';
 import { RATING_KEYS } from '@/game/sim/ratings';
 import { countOwned, levelOf, levelProgress, type Owned } from '@/meta/collection';
 import { useSave } from '@/state/save';
-import { arcade, halo, night, rarityPaint, tube } from '@/theme/arcade';
+import { arcade, halo, neonText, night, rarityPaint, track, tube } from '@/theme/arcade';
 import { px } from '@/theme/tokens';
 import { ArcadeScreen, useArcadeBody } from '@/ui/arcade/ArcadeScreen';
 import { GhostButton, GoldButton } from '@/ui/arcade/Buttons';
 import { HeadCell } from '@/ui/arcade/Card';
 import { LineIcon } from '@/ui/arcade/LineIcon';
-import { MIN_FIT_LABEL, fitPerson } from '@/ui/arcade/measure';
+import { SPARE, firstThatFits, fitText } from '@/ui/arcade/fitText';
+import { MIN_FIT_LABEL, fitPerson, widthOf } from '@/ui/arcade/measure';
 import { Portrait } from '@/ui/arcade/Portrait';
 import { Meter, Pips, StatRow } from '@/ui/arcade/SegBar';
 import { Chip, NeonPanel, Well, teamLine } from '@/ui/arcade/Surface';
@@ -33,6 +34,9 @@ const ALL_IDS = PLAYERS.map((p) => p.id);
 const GAP = px(5);
 /** a team's name and count over its column, and the lit line under them */
 const HEAD_H = px(22);
+/** a column head's padding, left and right, and the size of its count */
+const HEAD_PAD = px(7);
+const HEAD_COUNT = px(11);
 /** the space kept above and below the grid and the panel */
 const EDGE_Y = px(6);
 /** between the grid and the panel */
@@ -79,7 +83,7 @@ function LeagueTabs({ value, onChange }: { value: string; onChange: (id: string)
               onChange(l.id);
             }}
             style={({ pressed }) => [styles.tab, on && { borderColor: tube.cyan.glass, boxShadow: [halo(tube.cyan.glass, 8, 0.6)] }, pressed && styles.pressed]}>
-            <Print face="bold" size="tiny" color={on ? tube.cyan.tint : 'textDim'} track="wide" upper lines={1}>
+            <Print face="bold" size="tiny" color={on ? tube.cyan.tint : 'textDim'} track="wide" upper>
               {l.name}
             </Print>
           </Pressable>
@@ -94,7 +98,7 @@ function Found({ have, of, meter }: { have: number; of: number; meter: boolean }
   return (
     <View accessible accessibilityLabel={`${have} of ${of} players found`}>
       <Chip style={styles.found}>
-        <Print face="bold" size="body" color={tube.green.glass} glow={tube.green.glass} track="wider" lines={1}>
+        <Print face="bold" size="body" color={tube.green.glass} glow={tube.green.glass} track="wider">
           {`${have} OF ${of}`}
         </Print>
         {meter && <Meter value={have / Math.max(1, of)} />}
@@ -111,15 +115,19 @@ function TeamColumn({ team, owned, fresh, picked, cellW, cellH, onPick }: { team
   );
   const line = teamLine(team);
   const full = have === players.length;
+  const count = `${have}/${players.length}`;
+  // the letters and the count share the column's width: on the narrowest columns both get a little smaller
+  const wide = widthOf(team.short, 'bold', neonText.tiny, track.normal) + widthOf(count, 'bold', HEAD_COUNT) + px(4);
+  const k = Math.max(MIN_FIT_LABEL, Math.min(1, ((cellW - HEAD_PAD) * SPARE) / wide));
   return (
     <View style={[styles.column, { width: cellW }]}>
       <View accessible accessibilityLabel={`${team.name}: ${have} of ${players.length} found`} style={styles.head}>
         <View style={styles.headWords}>
-          <Print face="bold" size="tiny" track="normal" lines={1}>
+          <Print face="bold" size={neonText.tiny * k} track="normal">
             {team.short}
           </Print>
-          <Print face="bold" size={px(11)} color={full ? tube.green.glass : 'textDim'} lines={1}>
-            {`${have}/${players.length}`}
+          <Print face="bold" size={HEAD_COUNT * k} color={full ? tube.green.glass : 'textDim'}>
+            {count}
           </Print>
         </View>
         {/* the team's colour as a lit line, throwing a little light down onto its players */}
@@ -137,19 +145,19 @@ function TeamColumn({ team, owned, fresh, picked, cellW, cellH, onPick }: { team
 function LevelLine({ copies, small, room }: { copies: number; small: boolean; room: number }) {
   const prog = levelProgress(copies);
   const left = prog.need - prog.have;
-  const words = prog.maxed ? 'TOP LEVEL' : `${left} MORE ${left === 1 ? 'COPY' : 'COPIES'}`;
   const label = small ? px(11) : px(12.5);
+  const words = fitText(firstThatFits(prog.maxed ? ['TOP LEVEL', 'TOP'] : [`${left} MORE ${left === 1 ? 'COPY' : 'COPIES'}`, `${left} MORE`, `+${left}`], 'bold', label, room, 'normal'), 'bold', label, room, 'normal', MIN_FIT_LABEL);
   return (
     <View
       accessible
       accessibilityLabel={prog.maxed ? `Level ${prog.level}, the top level` : `Level ${prog.level}. ${left} more ${left === 1 ? 'copy' : 'copies'} to level ${prog.level + 1}`}
       style={[styles.level, { height: small ? ROW_SMALL : ROW }]}>
-      <Print face="bold" size={label} color="textDim" track="normal" lines={1}>
+      <Print face="bold" size={label} color="textDim" track="normal">
         {`LEVEL ${prog.level}`}
       </Print>
       <Pips have={prog.level} of={MAX_LEVEL} tube="gold" size={small ? px(8) : px(10)} style={styles.grow} />
-      <Print face="bold" size={label} color={prog.maxed ? tube.gold.glass : 'textDim'} track="normal" right room={room} least={MIN_FIT_LABEL}>
-        {words}
+      <Print face="bold" size={words.size} color={prog.maxed ? tube.gold.glass : 'textDim'} track="normal" right>
+        {words.text}
       </Print>
     </View>
   );
@@ -170,17 +178,18 @@ function Detail({ player, width, height }: { player: PlayerDef; width: number; h
   const ratings = boosted(player.ratings, levelBonus(Math.max(1, level)));
   const best = RATING_KEYS.reduce((a, k) => (ratings[k] > ratings[a] ? k : a), RATING_KEYS[0]);
   const stop = found ? null : tourStop(player.id);
+  const teamWords = fitText(`${team.name} · ${player.role}`.toUpperCase(), 'bold', small ? neonText.tiny : neonText.small, inside, 'wide');
   const open = () => router.push({ pathname: '/player/[id]', params: { id: player.id } });
 
   return (
     <NeonPanel tube={rp.tube} round={arcade.rBig} style={[styles.panel, { width, height }]}>
       <Portrait player={player} level={level} onPress={open} style={styles.portrait} />
       <View style={styles.words}>
-        <Print face="display" size={name.size} track="tight" lines={1} style={{ lineHeight: Math.round(name.size * 1.04) }}>
+        <Print face="display" size={name.size} track="tight" style={{ lineHeight: Math.round(name.size * 1.04) }}>
           {name.text}
         </Print>
-        <Print face="bold" size={small ? 'tiny' : 'small'} color={tube.cyan.soft} track="wide" upper room={inside}>
-          {`${team.name} · ${player.role}`}
+        <Print face="bold" size={teamWords.size} color={tube.cyan.soft} track="wide">
+          {teamWords.text}
         </Print>
       </View>
       {found ? (
@@ -194,11 +203,11 @@ function Detail({ player, width, height }: { player: PlayerDef; width: number; h
         <Well style={styles.missing}>
           <View style={styles.missingHead}>
             <LineIcon name="lock" size={px(16)} color={night.textFaint} weight={2.4} />
-            <Print face="display" size={small ? 'small' : 'body'} color="textDim" track="close" lines={1}>
+            <Print face="display" size={small ? 'small' : 'body'} color="textDim" track="close">
               NOT FOUND YET
             </Print>
           </View>
-          <Print face="body" size={small ? 'tiny' : 'small'} color="textMuted" lines={3}>
+          <Print face="body" size={small ? 'tiny' : 'small'} color="textMuted">
             {stop !== null ? `Find them in packs, or win the ${stop} Showdown on the Tour.` : 'Find them in packs. Their ratings show up once you do.'}
           </Print>
         </Well>
@@ -303,7 +312,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingLeft: px(4),
+    paddingLeft: HEAD_PAD - px(3),
     paddingRight: px(3),
   },
   headLine: {

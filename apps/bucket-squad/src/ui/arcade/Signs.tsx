@@ -51,6 +51,9 @@ const HOOP: readonly Bend[] = [
   { d: 'M31 62l5 26M61 62l-5 26M41 62l2 26M51 62l-2 26M34 76h24', tube: 'pink', weight: 2.2 },
 ];
 
+/** the hoop sign's shape for hanging it: its height for a width of 1, and where its board (with the rim) is on it */
+export const HOOP_SHAPE = { ratio: 96 / 92, left: 6 / 92, right: 86 / 92, bottom: 62 / 96 } as const;
+
 /** A neon hoop: the backboard in cyan, the rim and net in pink. `width` in screen points. */
 export const HoopSign = memo(function HoopSign({ width, style }: { width: number; style?: StyleProp<ViewStyle> }) {
   return <NeonDrawing bends={HOOP} w={92} h={96} width={width} height={(width * 96) / 92} style={style} />;
