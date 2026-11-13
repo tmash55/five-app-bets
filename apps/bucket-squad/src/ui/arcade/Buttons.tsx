@@ -55,6 +55,8 @@ export interface GoldButtonProps {
   sub?: string;
   /** a picture before the label */
   icon?: LineIconName;
+  /** a small drawing before the label instead of the icon (a coin by a price) */
+  art?: React.ReactNode;
   /** a picture after the label */
   iconAfter?: LineIconName;
   size?: GoldSize;
@@ -68,14 +70,14 @@ export interface GoldButtonProps {
 }
 
 /** The yellow button: the one thing on the page that is lit all the way through. */
-export function GoldButton({ label, sub, icon, iconAfter, size = 'regular', onPress, disabled, quiet, sound, accessibilityLabel, style }: GoldButtonProps) {
+export function GoldButton({ label, sub, icon, art, iconAfter, size = 'regular', onPress, disabled, quiet, sound, accessibilityLabel, style }: GoldButtonProps) {
   const g = GOLD[size];
   const [width, onLayout] = useWidth(label);
   const press = useCallback(() => {
     if (!quiet) tapFeedback(sound);
     onPress?.();
   }, [onPress, quiet, sound]);
-  const used = g.padX * 2 + (icon ? g.icon + g.gap : 0) + (iconAfter ? g.icon + g.gap : 0);
+  const used = g.padX * 2 + (icon || art !== undefined ? g.icon + g.gap : 0) + (iconAfter ? g.icon + g.gap : 0);
   const room = width > 0 ? width - used : undefined;
   const big = size === 'big';
   return (
@@ -97,7 +99,7 @@ export function GoldButton({ label, sub, icon, iconAfter, size = 'regular', onPr
         <LinearGradient colors={[goldButton.top, goldButton.bottom]} style={StyleSheet.absoluteFill} />
         {/* the darker band along the bottom edge that makes it a button and not a label */}
         <View style={[styles.lip, { height: g.lip }]} />
-        {icon && <LineIcon name={icon} size={g.icon} color={night.onLight} weight={big ? 2 : 3.4} />}
+        {art !== undefined ? art : icon && <LineIcon name={icon} size={g.icon} color={night.onLight} weight={big ? 2 : 3.4} />}
         <View style={big ? styles.goldWords : undefined}>
           <Print face="display" size={g.label} color="onLight" track="wide" room={room} least={MIN_FIT_LABEL} style={big ? styles.goldBigLabel : undefined}>
             {label}
