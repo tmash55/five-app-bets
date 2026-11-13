@@ -1,8 +1,8 @@
-import { GLView } from 'expo-gl';
 import { useEffect, useRef } from 'react';
-import { AppState, Pressable, StyleSheet, type GestureResponderEvent, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
+import { AppState, Pressable, type GestureResponderEvent, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 
 import { tapFeedback } from '@/fx/feedback';
+import { DENSITY, GLSurface } from './GLSurface';
 import { StageRenderer, type StageFocus, type StageSetup } from './render/stage';
 import { waitForGL, type GLContextLike } from './runner';
 import type { StageAct } from './stage/director';
@@ -181,7 +181,7 @@ export function StageView({ setup, focus, onReady, onError, onPressEmpty, style 
 
   return (
     <Pressable style={style} onPress={onPress} onLayout={onLayout} accessibilityRole="button" accessibilityLabel="Your squad warming up. Tap a player to say hi.">
-      <GLView style={StyleSheet.absoluteFill} msaaSamples={4} onContextCreate={onContextCreate} />
+      <GLSurface density={DENSITY.stage} onContextCreate={onContextCreate} />
     </Pressable>
   );
 }
