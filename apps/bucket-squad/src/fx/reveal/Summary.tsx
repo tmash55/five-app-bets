@@ -26,11 +26,13 @@ const MOST = px(150);
 const GAP = px(16);
 /** room the headline, the tags and the buttons take from the card's height */
 const ROOM = px(186);
+/** how far each card rises as it pops in (worked out here: a worklet can't call `px`) */
+const POP_RISE = px(26);
 
 function Popping({ clock, at, children }: { clock: SharedValue<number>; at: number; children: React.ReactNode }) {
   const style = useAnimatedStyle(() => {
     const u = span(clock.value, at, at + POP);
-    return { opacity: Math.min(1, u * 2.5), transform: [{ translateY: (1 - u) * px(26) }, { scale: 0.6 + 0.4 * backOut(u, 2) }] };
+    return { opacity: Math.min(1, u * 2.5), transform: [{ translateY: (1 - u) * POP_RISE }, { scale: 0.6 + 0.4 * backOut(u, 2) }] };
   });
   return <Animated.View style={[styles.item, style]}>{children}</Animated.View>;
 }

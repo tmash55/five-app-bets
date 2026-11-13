@@ -28,6 +28,13 @@ export function landings(cards: number): number[] {
   return Array.from({ length: cards }, (_, i) => TEAR.deal + i * TEAR.dealGap + TEAR.fly);
 }
 
+/** sizes the worklets below move by, worked out here because a worklet can't call `px` */
+const FLY_ARC = px(110);
+const SHAKE_X = px(4);
+const STRIP_X = px(90);
+const STRIP_UP = px(190);
+const STRIP_FALL = px(120);
+
 function Flyer({ clock, i, from, to, width }: { clock: SharedValue<number>; i: number; from: Point; to: Point; width: number }) {
   const start = TEAR.deal + i * TEAR.dealGap;
   const height = Math.round(width * 1.36);
@@ -37,7 +44,7 @@ function Flyer({ clock, i, from, to, width }: { clock: SharedValue<number>; i: n
     const e = easeInOut(u);
     return {
       opacity: 1,
-      transform: [{ translateX: (to.x - from.x) * e }, { translateY: (to.y - from.y) * e - px(110) * Math.sin(Math.PI * u) }, { rotate: `${lerp(-320, 0, easeOut(u))}deg` }, { scale: lerp(1.9, 1, e) }],
+      transform: [{ translateX: (to.x - from.x) * e }, { translateY: (to.y - from.y) * e - FLY_ARC * Math.sin(Math.PI * u) }, { rotate: `${lerp(-320, 0, easeOut(u))}deg` }, { scale: lerp(1.9, 1, e) }],
     };
   });
   return (
@@ -75,12 +82,12 @@ export function Tear({ clock, def, lay, light }: TearProps) {
     const pop = easeOut(span(t, TEAR.flash - 140, TEAR.flash + 60));
     return {
       opacity: 1 - span(t, TEAR.flash, TEAR.flash + 180),
-      transform: [{ translateX: t < TEAR.rip ? Math.sin(phase * 1.3) * px(4) * s : 0 }, { rotate: `${angle}deg` }, { scale: 1 + 0.07 * s + 0.12 * pop }],
+      transform: [{ translateX: t < TEAR.rip ? Math.sin(phase * 1.3) * SHAKE_X * s : 0 }, { rotate: `${angle}deg` }, { scale: 1 + 0.07 * s + 0.12 * pop }],
     };
   });
   const flyOff = useAnimatedStyle(() => {
     const u = span(clock.value, TEAR.rip, TEAR.rip + 560);
-    return { opacity: 1 - span(clock.value, TEAR.rip + 320, TEAR.rip + 560), transform: [{ translateX: px(90) * easeOut(u) }, { translateY: -px(190) * easeOut(u) + px(120) * u * u }, { rotate: `${55 * easeOut(u)}deg` }] };
+    return { opacity: 1 - span(clock.value, TEAR.rip + 320, TEAR.rip + 560), transform: [{ translateX: STRIP_X * easeOut(u) }, { translateY: -STRIP_UP * easeOut(u) + STRIP_FALL * u * u }, { rotate: `${55 * easeOut(u)}deg` }] };
   });
   const raysSize = px(500);
   const pour = useAnimatedStyle(() => {

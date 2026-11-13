@@ -54,6 +54,8 @@ const HAUL_END = 2600;
 const RATTLE_TICKS = [210, 390, 530, 640, 730, 805, 865, 915] as const;
 /** how far the music steps back while a card is revealed: the better the card, the quieter the room */
 const DUCK = { common: 1, rare: 0.7, epic: 0.35, legend: 0.12 } as const;
+/** how high a card arcs on its way in (worked out here: a worklet can't call `px`) */
+const ARRIVE_ARC = px(36);
 const NO_PULSES: { shakes: readonly Pulse[]; flashes: readonly Pulse[] } = { shakes: [], flashes: [] };
 
 function safePack(id: string): PackDef | null {
@@ -152,7 +154,7 @@ export default function OpenPack() {
   const arriveStyle = useAnimatedStyle(() => {
     const u = span(clock.value, -ARRIVE, 0);
     const e = easeInOut(u);
-    return { opacity: Math.min(1, u * 6), transform: [{ translateX: fromX * (1 - e) }, { translateY: fromY * (1 - e) - px(36) * Math.sin(Math.PI * u) }, { scale: lerp(small, 1, e) }] };
+    return { opacity: Math.min(1, u * 6), transform: [{ translateX: fromX * (1 - e) }, { translateY: fromY * (1 - e) - ARRIVE_ARC * Math.sin(Math.PI * u) }, { scale: lerp(small, 1, e) }] };
   });
   const leaveTo = leaving !== null ? lay.slots[leaving] : lay.rest;
   const leaveStyle = useAnimatedStyle(() => {

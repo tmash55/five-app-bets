@@ -28,10 +28,14 @@ import { INFO } from './times';
  * One piece of the side, fading and sliding in at `at` on the info clock. Only the button takes touches: a tap
  * anywhere else on the words goes through to the stage behind and moves on, as a tap anywhere does.
  */
+/** how far each piece slides in, and how far each letter of LEGEND drops (worked out here: a worklet can't call `px`) */
+const PIECE_SLIDE = px(28);
+const LETTER_FALL = px(40);
+
 function Piece({ clock, at, children, style, touch }: { clock: SharedValue<number>; at: number; children: React.ReactNode; style?: StyleProp<ViewStyle>; touch?: boolean }) {
   const anim = useAnimatedStyle(() => {
     const u = span(clock.value, at, at + INFO.piece);
-    return { opacity: u, transform: [{ translateX: (1 - easeOut(u)) * px(28) }] };
+    return { opacity: u, transform: [{ translateX: (1 - easeOut(u)) * PIECE_SLIDE }] };
   });
   return (
     <Animated.View pointerEvents={touch ? 'box-none' : 'none'} style={[style, anim]}>
@@ -49,7 +53,7 @@ const LETTER_DROP = 300;
 function Letter({ clock, at, size, children }: { clock: SharedValue<number>; at: number; size: number; children: string }) {
   const style = useAnimatedStyle(() => {
     const u = span(clock.value, at, at + LETTER_DROP);
-    return { opacity: Math.min(1, u * 3), transform: [{ translateY: -px(40) * (1 - backOut(u, 2.2)) }] };
+    return { opacity: Math.min(1, u * 3), transform: [{ translateY: -LETTER_FALL * (1 - backOut(u, 2.2)) }] };
   });
   return (
     <Animated.View style={style}>

@@ -42,13 +42,16 @@ const SPARKLES: readonly (readonly [number, number, number, number])[] = [
 ];
 
 /** The pack floating: up and down, swaying a little, a sheen crossing its foil now and then. */
+/** how far the pack bobs up and down, worked out here because a worklet can't call `px` */
+const BOB_LIFT = px(6);
+
 export function FloatingPack({ def, width, count, dim }: { def: PackDef; width: number; count: number; dim?: boolean }) {
   const height = Math.round(width * FOIL_RATIO);
   const bob = useLoop(BOB);
   const sheen = useLoop(SHEEN);
   const float = useAnimatedStyle(() => {
     const a = (bob.value / BOB) * Math.PI * 2;
-    return { transform: [{ translateY: Math.sin(a) * px(6) }, { rotate: `${Math.sin(a + 1.2) * 1.6}deg` }] };
+    return { transform: [{ translateY: Math.sin(a) * BOB_LIFT }, { rotate: `${Math.sin(a + 1.2) * 1.6}deg` }] };
   });
   const band = width * 0.5;
   const sweep = useAnimatedStyle(() => {

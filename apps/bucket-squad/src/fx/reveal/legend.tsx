@@ -33,6 +33,8 @@ const FALL = 3540;
 const IMPACT = 3700;
 /** how hard it trembles just before it goes */
 const SHAKE = px(4.5);
+/** how high the card hops when it lands (sizes used inside a worklet are worked out up here: it can't call `px`) */
+const LAND_HOP = px(12);
 const CONFETTI = [GOLD.glass, tube.gold.glass, GOLD.soft, tube.gold.tint, tube.orange.glass, night.white];
 
 /** How far the marquee's chase has gone: three steps a second at first, twenty-six by the time the card goes, then slowing to four. */
@@ -166,7 +168,7 @@ function Card({ clock, face, width, height, at }: CardProps) {
       scale = lerp(1.3, 1, v * v);
       tilt = lerp(-9, 0, v);
     } else if (t >= IMPACT) {
-      y = -px(12) * bump(t, IMPACT + 70, 130, 220);
+      y = -LAND_HOP * bump(t, IMPACT + 70, 130, 220);
       scale = 1;
       tilt = restTilt(t, IMPACT + 240, T.length);
     }

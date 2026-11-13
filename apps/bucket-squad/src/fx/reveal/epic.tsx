@@ -30,6 +30,9 @@ const SWING = 52;
 const LIFT = 1300;
 const SPIN = { from: 1420, to: 1960 } as const;
 const RISE = px(18);
+/** how far the held card trembles and floats (worked out here: a worklet can't call `px`) */
+const TREMBLE_X = px(1.6);
+const FLOAT_Y = px(2);
 const CLOSE = 80;
 const OPEN = 170;
 const CONFETTI = [PURPLE.glass, tube.pink.glass, PURPLE.soft, tube.pink.soft, tube.violet.glass, night.white];
@@ -47,8 +50,8 @@ function Card({ clock, face, width, height }: CardProps) {
     const pop = backOut(span(t, T.flipAt, T.flipAt + 320)) * (1 - span(t, T.flipAt + 320, T.flipAt + 700));
     return {
       transform: [
-        { translateX: wobble(t, 0.12, 3) * px(1.6) * hold },
-        { translateY: -RISE * up + Math.sin(t * 0.006) * px(2) * up },
+        { translateX: wobble(t, 0.12, 3) * TREMBLE_X * hold },
+        { translateY: -RISE * up + Math.sin(t * 0.006) * FLOAT_Y * up },
         { rotate: `${restTilt(t, 2300, T.length) + wobble(t, 0.05, 1) * 1.5 * up}deg` },
         { scale: 1 + 0.08 * up + 0.05 * pop },
         { scaleX: (Math.abs(spin) < 0.001 ? 0.001 : spin) * flipWidth(t, T.flipAt - CLOSE, CLOSE, OPEN) },
