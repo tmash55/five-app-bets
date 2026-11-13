@@ -406,7 +406,7 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
                 badge={packCount}
                 tube="pink"
                 accessibilityLabel={`Open ${packCount === 1 ? 'your pack' : `your ${packCount} packs`}`}
-                onPress={() => (packIds.length > 0 ? router.push({ pathname: '/open', params: { pack: packIds[0] } }) : router.push('/packs'))}
+                onPress={() => (packIds.length > 0 ? router.push({ pathname: '/open', params: { pack: packIds[0] } }) : router.push({ pathname: '/packs', params: { tab: 'packs' } }))}
                 style={styles.grow}
               />
             )}

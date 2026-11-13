@@ -16,6 +16,7 @@ import { countOwned, levelOf } from '@/meta/collection';
 import { tierProgress } from '@/meta/ladder';
 import { currentMissions, missionsToClaim } from '@/meta/missions';
 import { dayKey } from '@/meta/rng';
+import { shopIsNew } from '@/meta/shop';
 import { nextTourGame, preferredTour, toursFor } from '@/meta/tour';
 import { useSave } from '@/state/save';
 import { arcade, blend, neonText, night, rarityPaint, track, tube } from '@/theme/arcade';
@@ -346,6 +347,7 @@ export default function Home() {
   const ladder = useSave((s) => s.ladder);
   const tour = useSave((s) => s.tour);
   const homeTeam = useSave((s) => s.homeTeam);
+  const shop = useSave((s) => s.shop);
 
   if (!onboarded || squad.length === 0) return <Redirect href="/welcome" />;
 
@@ -395,7 +397,7 @@ export default function Home() {
           <GoldButton size="big" label="PLAY" sub={playSub} icon="play" onPress={go('/play')} accessibilityLabel={`Play. ${playSub}`} />
           <View style={styles.tiles}>
             <View style={styles.tileRow}>
-              <BreathingTile delay={0} tube="pink" icon="pack" title="PACKS" sub={packSub} badge={packCount + (freePack ? 1 : 0)} onPress={go('/packs')} />
+              <BreathingTile delay={0} tube="pink" icon="pack" title="PACKS" sub={packSub} badge={packCount + (freePack ? 1 : 0)} fresh={shopIsNew(shop, today)} onPress={go('/packs')} />
               <BreathingTile delay={900} tube="cyan" icon="grid" title="COLLECTION" sub={collectionSub} badge={fresh.length} onPress={go('/shelf')} />
             </View>
             <View style={styles.tileRow}>

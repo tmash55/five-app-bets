@@ -27,6 +27,9 @@ interface SaveActions {
   setSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
   seeTip: (id: string) => void;
   buyUniform: (id: string) => boolean;
+  /** mark today's Daily Shop as seen (and keep its deals for the day) */
+  visitShop: (day?: string) => void;
+  buyShopSlot: (slotId: string, day?: string) => logic.ShopBuy | null;
   wearUniform: (id: string | null) => boolean;
   addCoins: (n: number) => void;
   resetAll: () => void;
@@ -55,6 +58,7 @@ function dataOf(s: SaveStore): SaveData {
     tips: s.tips,
     uniforms: s.uniforms,
     uniform: s.uniform,
+    shop: s.shop,
   };
 }
 
@@ -112,6 +116,16 @@ export const useSave = create<SaveStore>()(
         if (!next) return false;
         set(next);
         return true;
+      },
+      visitShop: (day = dayKey()) => {
+        const cur = dataOf(get());
+        const next = logic.visitShop(cur, day);
+        if (next !== cur) set(next);
+      },
+      buyShopSlot: (slotId, day = dayKey()) => {
+        const res = logic.buyShopSlot(dataOf(get()), slotId, day);
+        if (res) set(res.data);
+        return res;
       },
       wearUniform: (id) => {
         const next = logic.wearUniform(dataOf(get()), id);

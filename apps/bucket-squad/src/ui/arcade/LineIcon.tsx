@@ -60,6 +60,8 @@ const DRAWINGS = {
   spark: { shapes: [{ p: 'M12 1l2.2 8.8L23 12l-8.8 2.2L12 23l-2.2-8.8L1 12l8.8-2.2z' }], solid: true },
   gem: { shapes: [{ p: 'M12 2.5l7.5 9.5-7.5 9.5L4.5 12z' }], solid: true },
   dot: { shapes: [{ c: [12, 12, 5] }], solid: true },
+  clock: { shapes: [{ c: [12, 12, 8.5] }, { p: 'M12 7v5.2l3.4 2.1' }] },
+  tag: { shapes: [{ p: 'M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1.4 1.4 0 0 1 0 2l-6.6 6.6a1.4 1.4 0 0 1-2 0z' }, { c: [8, 8, 1.4] }] },
 } as const satisfies Record<string, Drawing>;
 
 export type LineIconName = keyof typeof DRAWINGS;

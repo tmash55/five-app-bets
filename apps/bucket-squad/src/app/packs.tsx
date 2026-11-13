@@ -1,21 +1,28 @@
-/** The pack shop: a prize machine's window of packs to buy with coins, and the packs waiting to be opened beside it. */
+/**
+ * The shop, in two tabs. DAILY (first): today's Daily Shop, a LIMITED item and three deals with a countdown to midnight.
+ * PACKS: a prize machine's window of packs to buy with coins, and the packs waiting to be opened beside it. Both fill
+ * a landscape phone on their own, so they take turns rather than share the page.
+ */
 
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 
 import { playSfx } from '@/audio/sound';
-import { teamById } from '@/data/roster';
+import { mustPlayer, teamById } from '@/data/roster';
 import { RARITIES, RARITY_LABEL } from '@/data/types';
 import { tapFeedback } from '@/fx/feedback';
 import { SHOP_PACKS, packById, type PackDef } from '@/meta/packs';
 import { dayKey } from '@/meta/rng';
+import { shopIsNew, shopSlots, type ShopSlot } from '@/meta/shop';
+import { slotBlock, todaysShop } from '@/state/logic';
 import { useSave } from '@/state/save';
-import { arcade, blend, fade, neonText, night, rarityPaint, tube, type Tube } from '@/theme/arcade';
+import { arcade, blend, fade, halo, neonText, night, rarityPaint, tube, type Tube } from '@/theme/arcade';
 import { px, size as sizes, space } from '@/theme/tokens';
 import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
 import { GhostButton, GoldButton, PriceButton } from '@/ui/arcade/Buttons';
+import type { Gain } from '@/meta/collection';
 import { Gems } from '@/ui/arcade/Card';
 import { FOIL_RATIO, FoilPack, foilFor } from '@/ui/arcade/Foil';
 import { fitText, type FittedText } from '@/ui/arcade/fitText';
@@ -26,6 +33,7 @@ import { Bulbs } from '@/ui/arcade/Room';
 import { CountBadge, NeonPanel, Well } from '@/ui/arcade/Surface';
 import { Glow, Print } from '@/ui/arcade/Type';
 import { UniformsButton } from '@/ui/arcade/UniformLinks';
+import { Countdown, NewDot, ShopDetail, SlotRow, useShopDay } from '@/ui/shop/DailyShop';
 import { useAfter } from '@/ui/hooks';
 
 /** the right-hand panel of packs waiting to be opened */
@@ -41,6 +49,8 @@ const CHASE_MS = 900;
 const STRIP_H = px(18);
 /** everything in a shop column but the pack: the gaps, the name, the line under it, the price and the note */
 const COLUMN_REST = px(150);
+/** the sound after a purchase, once the card is up */
+const REVEAL_SOUND_MS = 280;
 
 function percent(p: number): string {
   const v = p * 100;
@@ -201,14 +211,54 @@ function OddsPopup({ pack, onClose }: { pack: PackDef; onClose: () => void }) {
   );
 }
 
-export default function Packs() {
+type Tab = 'daily' | 'packs';
+
+/** a tab is a slim strip inside its chip: its tap area reaches the bar's full height */
+const TAB_SLOP = { top: px(11), bottom: px(11), left: px(2), right: px(2) };
+
+/** DAILY and PACKS in the top bar, each with a lit dot when something new waits behind it. */
+function ShopTabs({ value, onChange, dots }: { value: Tab; onChange: (t: Tab) => void; dots: Record<Tab, boolean> }) {
+  const tabs: { id: Tab; label: string; icon: 'clock' | 'pack' }[] = [
+    { id: 'daily', label: 'DAILY', icon: 'clock' },
+    { id: 'packs', label: 'PACKS', icon: 'pack' },
+  ];
+  return (
+    <View accessibilityRole="tablist" style={styles.tabs}>
+      {tabs.map((t) => {
+        const on = t.id === value;
+        const tb = t.id === 'daily' ? tube.gold : tube.cyan;
+        return (
+          <Pressable
+            key={t.id}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: on }}
+            accessibilityLabel={`${t.label === 'DAILY' ? 'Daily shop' : 'Packs'}${dots[t.id] ? ', something new' : ''}`}
+            hitSlop={TAB_SLOP}
+            onPress={() => {
+              tapFeedback();
+              onChange(t.id);
+            }}
+            style={({ pressed }) => [styles.tab, on && { borderColor: tb.glass, boxShadow: [halo(tb.glass, 8, 0.6)] }, pressed && styles.pressed]}>
+            <LineIcon name={t.icon} size={px(15)} tube={on ? tb : undefined} color={on ? undefined : night.textFaint} weight={2.4} />
+            <Print face="bold" size="tiny" color={on ? tb.tint : 'textDim'} track="wide">
+              {t.label}
+            </Print>
+            {dots[t.id] && <NewDot style={styles.tabDot} />}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** The PACKS tab: the prize machine and the packs waiting to be opened. */
+function PackShop({ onOdds }: { onOdds: (pack: PackDef) => void }) {
   const router = useRouter();
   const coins = useSave((s) => s.coins);
   const packs = useSave((s) => s.packs);
   const freePackDay = useSave((s) => s.freePackDay);
   const buyPack = useSave((s) => s.buyPack);
   const claimFreePack = useSave((s) => s.claimFreePack);
-  const [odds, setOdds] = useState<PackDef | null>(null);
   const [phase, setPhase] = useState(0);
   const [stripW, setStripW] = useState(0);
   const [row, setRow] = useState({ w: 0, h: 0 });
@@ -250,55 +300,136 @@ export default function Packs() {
   const packW = row.h > 0 ? Math.round(Math.max(px(64), Math.min(colW * 0.7, (row.h - COLUMN_REST) / FOIL_RATIO))) : px(100);
 
   return (
+    <View style={styles.panels}>
+      <NeonPanel tube="cyan" style={styles.machine}>
+        <View style={styles.strip} onLayout={(e) => setStripW(e.nativeEvent.layout.width)}>
+          {stripW > 0 && <Bulbs width={stripW - px(16)} phase={phase} />}
+        </View>
+        <View style={styles.columns} onLayout={(e) => setRow({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
+          {SHOP_PACKS.map((p) => (
+            <ShopColumn key={p.id} pack={p} coins={coins} packW={packW} onBuy={() => buy(p)} onOdds={() => onOdds(p)} />
+          ))}
+        </View>
+      </NeonPanel>
+
+      <NeonPanel tube="pink" style={styles.ready}>
+        <View style={styles.readyHead}>
+          <Glow face="sign" size={px(18)} tube="pink" track="close">
+            READY TO OPEN
+          </Glow>
+          <CountBadge count={waiting} tube="pink" />
+        </View>
+        <ScrollView style={styles.grow} contentContainerStyle={styles.wells} showsVerticalScrollIndicator={false}>
+          <ReadyWell pack={playground} line={free ? 'Free every day' : 'Free again tomorrow'} onOdds={() => onOdds(playground)}>
+            {free ? (
+              <GoldButton size="small" label="OPEN" quiet onPress={claim} accessibilityLabel="Open today's free Playground Pack" />
+            ) : (
+              <GhostButton label="TOMORROW" lit={false} disabled accessibilityLabel="The next free pack comes tomorrow" />
+            )}
+          </ReadyWell>
+          {mine.map((p) => (
+            <ReadyWell key={p.id} pack={p} line={packs[p.id] > 1 ? `${packs[p.id]} to open` : p.team ? inside(p) : `${p.cards} players inside`} onOdds={() => onOdds(p)}>
+              <GoldButton size="small" label={packs[p.id] > 1 ? `OPEN  x${packs[p.id]}` : 'OPEN'} onPress={() => open(p.id)} accessibilityLabel={`Open the ${p.name}`} />
+            </ReadyWell>
+          ))}
+          {/* with nothing else waiting, say where the next pack comes from instead of leaving the panel empty */}
+          {mine.length === 0 && (
+            <View style={styles.none}>
+              <LineIcon name="pack" size={px(26)} color={night.lineLit} weight={2} />
+              <Print face="body" size="small" color="textFaint" center>
+                Packs you get wait here until you open them.
+              </Print>
+            </View>
+          )}
+        </ScrollView>
+      </NeonPanel>
+    </View>
+  );
+}
+
+/** The DAILY tab: the sign and the countdown, then today's slots. */
+function DailyTab({ slots, blockOf, onTick, onPick }: { slots: ShopSlot[]; blockOf: (slot: ShopSlot) => ReturnType<typeof slotBlock>; onTick: (now: number) => void; onPick: (slot: ShopSlot) => void }) {
+  const coins = useSave((s) => s.coins);
+  const owned = useSave((s) => s.owned);
+  const squad = useSave((s) => s.squad);
+  const number = squad.length > 0 ? mustPlayer(squad[0]).number : 1;
+  return (
+    <View style={styles.daily}>
+      <View style={styles.dailyHead}>
+        <LineIcon name="tag" size={px(20)} tube="gold" weight={2.2} />
+        <Glow face="sign" size="sign" tube="gold" track="wide" tight>
+          DAILY SHOP
+        </Glow>
+        <View style={styles.grow} />
+        <Countdown onTick={onTick} />
+      </View>
+      <SlotRow slots={slots} blockOf={blockOf} coins={coins} owned={owned} number={number} onPick={onPick} />
+    </View>
+  );
+}
+
+export default function Shop() {
+  const params = useLocalSearchParams<{ tab?: string; day?: string }>();
+  const [tab, setTab] = useState<Tab>(params.tab === 'packs' ? 'packs' : 'daily');
+  const [day, onTick] = useShopDay(params.day);
+  const [odds, setOdds] = useState<PackDef | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [bought, setBought] = useState<{ gain?: Gain } | null>(null);
+  const shop = useSave((s) => s.shop);
+  const owned = useSave((s) => s.owned);
+  const uniforms = useSave((s) => s.uniforms);
+  const coins = useSave((s) => s.coins);
+  const squad = useSave((s) => s.squad);
+  const packs = useSave((s) => s.packs);
+  const freePackDay = useSave((s) => s.freePackDay);
+  const visitShop = useSave((s) => s.visitShop);
+  const buyShopSlot = useSave((s) => s.buyShopSlot);
+  const wearUniform = useSave((s) => s.wearUniform);
+  const after = useAfter();
+
+  // looking at the daily tab is what puts the NEW dot out, and keeps today's deals for the day
+  useEffect(() => {
+    if (tab === 'daily') visitShop(day);
+  }, [tab, day, visitShop]);
+
+  const today = todaysShop({ shop, owned }, day);
+  const slots = shopSlots(today);
+  const blockOf = (slot: ShopSlot) => slotBlock({ shop: today, owned, uniforms }, slot, day);
+  const slot = slots.find((s) => s.id === picked) ?? null;
+  const waiting = Object.values(packs).some((n) => n > 0) || freePackDay !== dayKey();
+  const number = squad.length > 0 ? mustPlayer(squad[0]).number : 1;
+
+  const pick = (s: ShopSlot) => {
+    setBought(null);
+    setPicked(s.id);
+  };
+  const close = () => {
+    setPicked(null);
+    setBought(null);
+  };
+  const buy = () => {
+    if (!slot) return;
+    const res = buyShopSlot(slot.id, day);
+    if (!res) {
+      playSfx('back');
+      return;
+    }
+    playSfx('buy');
+    // a uniform is bought to be worn: the squad puts it straight on, as on the Uniforms page
+    if (slot.item.kind === 'uniform') wearUniform(slot.item.id);
+    const gain = res.gain;
+    after(REVEAL_SOUND_MS, () => playSfx(!gain ? 'sparkle' : gain.isNew ? 'star' : gain.levelAfter > gain.levelBefore ? 'levelUp' : 'sparkle'));
+    setBought({ gain });
+  };
+
+  return (
     <View style={styles.root}>
       {/* coins buy uniforms too: the way to them sits by the coins */}
-      <ArcadeScreen title="PACKS" tube="pink" right={<UniformsButton />} style={styles.body}>
-        <View style={styles.panels}>
-          <NeonPanel tube="cyan" style={styles.machine}>
-            <View style={styles.strip} onLayout={(e) => setStripW(e.nativeEvent.layout.width)}>
-              {stripW > 0 && <Bulbs width={stripW - px(16)} phase={phase} />}
-            </View>
-            <View style={styles.columns} onLayout={(e) => setRow({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
-              {SHOP_PACKS.map((p) => (
-                <ShopColumn key={p.id} pack={p} coins={coins} packW={packW} onBuy={() => buy(p)} onOdds={() => setOdds(p)} />
-              ))}
-            </View>
-          </NeonPanel>
-
-          <NeonPanel tube="pink" style={styles.ready}>
-            <View style={styles.readyHead}>
-              <Glow face="sign" size={px(18)} tube="pink" track="close">
-                READY TO OPEN
-              </Glow>
-              <CountBadge count={waiting} tube="pink" />
-            </View>
-            <ScrollView style={styles.grow} contentContainerStyle={styles.wells} showsVerticalScrollIndicator={false}>
-              <ReadyWell pack={playground} line={free ? 'Free every day' : 'Free again tomorrow'} onOdds={() => setOdds(playground)}>
-                {free ? (
-                  <GoldButton size="small" label="OPEN" quiet onPress={claim} accessibilityLabel="Open today's free Playground Pack" />
-                ) : (
-                  <GhostButton label="TOMORROW" lit={false} disabled accessibilityLabel="The next free pack comes tomorrow" />
-                )}
-              </ReadyWell>
-              {mine.map((p) => (
-                <ReadyWell key={p.id} pack={p} line={packs[p.id] > 1 ? `${packs[p.id]} to open` : p.team ? inside(p) : `${p.cards} players inside`} onOdds={() => setOdds(p)}>
-                  <GoldButton size="small" label={packs[p.id] > 1 ? `OPEN  x${packs[p.id]}` : 'OPEN'} onPress={() => open(p.id)} accessibilityLabel={`Open the ${p.name}`} />
-                </ReadyWell>
-              ))}
-              {/* with nothing else waiting, say where the next pack comes from instead of leaving the panel empty */}
-              {mine.length === 0 && (
-                <View style={styles.none}>
-                  <LineIcon name="pack" size={px(26)} color={night.lineLit} weight={2} />
-                  <Print face="body" size="small" color="textFaint" center>
-                    Packs you get wait here until you open them.
-                  </Print>
-                </View>
-              )}
-            </ScrollView>
-          </NeonPanel>
-        </View>
+      <ArcadeScreen title="SHOP" tube="pink" after={<ShopTabs value={tab} onChange={setTab} dots={{ daily: shopIsNew(shop, day), packs: waiting }} />} right={<UniformsButton />} style={styles.body}>
+        {tab === 'daily' ? <DailyTab slots={slots} blockOf={blockOf} onTick={onTick} onPick={pick} /> : <PackShop onOdds={setOdds} />}
       </ArcadeScreen>
       {odds && <OddsPopup pack={odds} onClose={() => setOdds(null)} />}
+      {slot && <ShopDetail key={slot.id} slot={slot} block={bought ? null : blockOf(slot)} coins={coins} copies={slot.item.kind === 'player' ? (owned[slot.item.id] ?? 0) : 0} number={number} bought={bought} onBuy={buy} onClose={close} />}
     </View>
   );
 }
@@ -310,6 +441,39 @@ const styles = StyleSheet.create({
   body: {
     paddingTop: px(12),
     paddingBottom: px(12),
+  },
+  tabs: {
+    flexDirection: 'row',
+    gap: px(4),
+    height: arcade.chip,
+    padding: px(3),
+    backgroundColor: night.pit,
+    borderWidth: arcade.hairline,
+    borderColor: night.line,
+    borderRadius: arcade.rChip,
+  },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: px(5),
+    paddingHorizontal: px(9),
+    borderRadius: px(5),
+    borderWidth: arcade.hairline,
+    borderColor: night.clear,
+  },
+  tabDot: {
+    position: 'absolute',
+    top: -px(5),
+    right: -px(5),
+  },
+  daily: {
+    flex: 1,
+    gap: px(8),
+  },
+  dailyHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: px(8),
   },
   grow: {
     flex: 1,

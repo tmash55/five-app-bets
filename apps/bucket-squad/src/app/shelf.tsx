@@ -192,7 +192,7 @@ function Detail({ player, width, height }: { player: PlayerDef; width: number; h
         </Well>
       )}
       {!found ? (
-        <GoldButton label="GO TO PACKS" icon="pack" size="small" onPress={() => router.push('/packs')} />
+        <GoldButton label="GO TO PACKS" icon="pack" size="small" onPress={() => router.push({ pathname: '/packs', params: { tab: 'packs' } })} />
       ) : inSquad ? (
         <GhostButton label="IN YOUR SQUAD" icon="check" tube="green" onPress={() => router.push('/squad')} />
       ) : (

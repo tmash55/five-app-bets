@@ -7,13 +7,14 @@
 import { TEAMS, byValue, mustPlayer, playerById, playerOverall, teamById, teamPlayers } from '@/data/roster';
 import type { PlayerDef, TeamDef } from '@/data/types';
 import { teamWear, uniformById, uniformNeed, wearOf, type UniformDef, type Wear } from '@/data/uniforms';
-import { addCopy, levelOf, type Gain, type Owned } from '@/meta/collection';
+import { MAX_COPIES, addCopy, levelOf, type Gain, type Owned } from '@/meta/collection';
 import { TIERS, ladderResult, tierIndex, type Tier } from '@/meta/ladder';
 import type { MatchSummary } from '@/meta/match';
 import { ALL_DONE_PACK, currentMissions, missionDone, missionsAfterMatch, missionsAfterPack, type Mission, type MissionDay } from '@/meta/missions';
 import { openPack, packById, type PackResult } from '@/meta/packs';
 import { matchRewards, type Rewards } from '@/meta/rewards';
 import type { Rng } from '@/meta/rng';
+import { coins as coinPrice, pay, shopDay, shopSlots, type ShopDay, type ShopSlot } from '@/meta/shop';
 import { STARS_PER_GAME, gameKey, stageStars, starsFor, tourById, type TourProgress } from '@/meta/tour';
 
 export const SAVE_VERSION = 1;
@@ -73,6 +74,8 @@ export interface SaveData {
   uniforms: string[];
   /** the uniform the whole squad wears, or null for the captain's team's */
   uniform: string | null;
+  /** the Daily Shop as last opened: the day, its deals and what was bought (null until it is first opened) */
+  shop: ShopDay | null;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -110,6 +113,7 @@ export function newSave(): SaveData {
     tips: {},
     uniforms: [],
     uniform: null,
+    shop: null,
   };
 }
 
@@ -165,8 +169,9 @@ function withPack(packs: Record<string, number>, id: string, n = 1): Record<stri
 
 export function buyPack(data: SaveData, packId: string): SaveData | null {
   const def = packById(packId);
-  if (def.price <= 0 || data.coins < def.price) return null;
-  return { ...data, coins: data.coins - def.price, packs: withPack(data.packs, packId) };
+  if (def.price <= 0) return null;
+  const paid = pay(data, coinPrice(def.price));
+  return paid && { ...paid, packs: withPack(data.packs, packId) };
 }
 
 export function claimFreePack(data: SaveData, day: string): SaveData | null {
@@ -255,17 +260,70 @@ export function squadUniform(data: Pick<SaveData, 'squad' | 'uniform' | 'homeTea
   return { def, wear: def ? wearOf(def) : teamWear(captainTeam), captainTeam };
 }
 
-/** Buy a special uniform: one this build has, not yours yet, and coins enough. */
+/** Buy a special uniform: one this build has, not yours yet, and coins enough. A limited edition is sold only in the Daily Shop. */
 export function buyUniform(data: SaveData, id: string): SaveData | null {
   const def = uniformById(id);
-  if (!def || def.kind !== 'special' || def.price === undefined || data.uniforms.includes(id) || data.coins < def.price) return null;
-  return { ...data, coins: data.coins - def.price, uniforms: [...data.uniforms, id] };
+  if (!def || def.kind !== 'special' || def.limited || def.price === undefined || data.uniforms.includes(id)) return null;
+  const paid = pay(data, coinPrice(def.price));
+  return paid && { ...paid, uniforms: [...data.uniforms, id] };
 }
 
 /** Dress the squad in a uniform you have, or (null) back in the captain's colours. */
 export function wearUniform(data: SaveData, id: string | null): SaveData | null {
   if (id !== null && !hasUniform(data, id)) return null;
   return { ...data, uniform: id };
+}
+
+// ---------------------------------------------------------------------------
+// The Daily Shop
+// ---------------------------------------------------------------------------
+
+/** One copy of a player into the collection, the way a pack card goes in: a new player is marked fresh, and a copy past the top level pays coins. */
+export function addCard(data: SaveData, playerId: string): { data: SaveData; gain: Gain } | null {
+  const p = playerById(playerId);
+  if (!p) return null;
+  const res = addCopy(data.owned, playerId, p.rarity);
+  const fresh = res.gain.isNew && !data.fresh.includes(playerId) ? [...data.fresh, playerId] : data.fresh;
+  return { gain: res.gain, data: { ...data, owned: res.owned, fresh, coins: data.coins + res.gain.coins } };
+}
+
+/** Today's shop for this save (see meta/shop `shopDay`). */
+export function todaysShop(data: Pick<SaveData, 'shop' | 'owned'>, day: string): ShopDay {
+  return shopDay(data.shop, day, data.owned);
+}
+
+/** Open the shop: today's deals are kept from now on, and the NEW dot goes out. */
+export function visitShop(data: SaveData, day: string): SaveData {
+  const today = todaysShop(data, day);
+  return today === data.shop ? data : { ...data, shop: today };
+}
+
+/** Why a slot cannot be bought right now, or null when it can (coins aside). */
+export function slotBlock(data: Pick<SaveData, 'shop' | 'owned' | 'uniforms'>, slot: ShopSlot, day: string): 'sold' | 'owned' | 'maxed' | null {
+  if (todaysShop(data, day).sold.includes(slot.id)) return 'sold';
+  if (slot.item.kind === 'uniform') return data.uniforms.includes(slot.item.id) ? 'owned' : null;
+  return (data.owned[slot.item.id] ?? 0) >= MAX_COPIES ? 'maxed' : null;
+}
+
+export interface ShopBuy {
+  data: SaveData;
+  slot: ShopSlot;
+  /** the card, for a player */
+  gain?: Gain;
+}
+
+/** Buy one of today's slots: pay its price, add the card (as a pack would) or the uniform, and mark the slot SOLD for the day. */
+export function buyShopSlot(data: SaveData, slotId: string, day: string): ShopBuy | null {
+  const today = todaysShop(data, day);
+  const slot = shopSlots(today).find((s) => s.id === slotId);
+  if (!slot || slotBlock({ ...data, shop: today }, slot, day) !== null) return null;
+  const paid = pay(data, slot.price);
+  if (!paid) return null;
+  const shop: ShopDay = { ...today, sold: [...today.sold, slot.id] };
+  if (slot.item.kind === 'uniform') return { slot, data: { ...paid, shop, uniforms: [...paid.uniforms, slot.item.id] } };
+  const added = addCard(paid, slot.item.id);
+  if (!added) return null;
+  return { slot, gain: added.gain, data: { ...added.data, shop } };
 }
 
 // ---------------------------------------------------------------------------
@@ -519,5 +577,18 @@ export function repairSave(raw: unknown): SaveData {
     uniforms: Array.isArray(r.uniforms) ? r.uniforms.filter((id, i, all): id is string => typeof id === 'string' && id !== '' && all.indexOf(id) === i) : [],
     // a uniform this build cannot find is worn as the captain's colours (see meta/match `sideWear`), not thrown away
     uniform: typeof r.uniform === 'string' && r.uniform !== '' ? r.uniform : null,
+    shop: repairShop(r.shop),
   };
+}
+
+function strings(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x, i, all): x is string => typeof x === 'string' && x !== '' && all.indexOf(x) === i) : [];
+}
+
+/** The day's shop as saved, or null (a fresh roll) when it is missing or not readable. */
+function repairShop(raw: unknown): ShopDay | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Partial<ShopDay>;
+  if (typeof r.day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(r.day)) return null;
+  return { day: r.day, deals: Array.isArray(r.deals) ? r.deals.filter((id): id is string => typeof id === 'string') : [], sold: strings(r.sold) };
 }
