@@ -18,11 +18,11 @@
 import fs from 'fs';
 
 import { getPart, KIT_BONE_INDEX, KIT_METRICS } from '../../kit/kit';
-import { DT as SIM_DT } from '../../sim/constants';
+import { BALL_R, COURT, DT as SIM_DT } from '../../sim/constants';
 import { createMatch, stepMatch } from '../../sim/sim';
-import type { Attrs, MatchState, PlayerSim } from '../../sim/types';
+import type { Attrs, MatchConfig, MatchState, PlayerSim } from '../../sim/types';
 import { ACT_LENGTH, ROLE_ACTS, ROLE_HAS_BALL, actAt, newActSlot, type StageAct, type StageRole } from '../../stage/director';
-import { FigureAnimator, GUARD_SHAPES, type AnimFrame, type Mood, type ShowFrame } from '../animator';
+import { DRAWN_BALL_BLEND, DrawnBall, FigureAnimator, GUARD_SHAPES, type AnimFrame, type Mood, type ShowFrame } from '../animator';
 
 const DT = 1 / 60;
 const BONES = 64 * 16;
@@ -619,8 +619,17 @@ function resetExcess(): void {
   excess = { d: -Infinity, t: 0, act: '', what: '', build: '', time: 0 };
 }
 
+/** the worst part of the frame being measured, past its limit: the ball, an arm against its own body or head, anything else */
+const frameWorst = [0, 1, 2].map(() => ({ x: -Infinity, d: 0, what: '' }));
+
 function note(p: Pair, d: number, what: string): void {
   const x = d - allowed(p, what);
+  const fw = frameWorst[what.startsWith('ball') ? 0 : /^(up|fore|hand)[LR]>/.test(what) ? 1 : 2];
+  if (x > fw.x) {
+    fw.x = x;
+    fw.d = d;
+    fw.what = what;
+  }
   if (x > excess.d) excess = { d: x, t: frameT, act: frameAct, what: `${p} ${what} ${d.toFixed(3)}`, build: buildLabel, time: frameTime };
   const w = rowCur[p];
   if (d > w.d) {
@@ -888,8 +897,8 @@ function moodOf(m: MatchState, p: PlayerSim): Mood {
   }
 }
 
-/** A computer-only match, every player posed each tick through the match path and measured: one row per player state. */
-export function matchAudit(seed: number, seconds: number, b: Build = { height: 1, bulk: 1, head: 1 }): Table {
+/** A computer-only match between two made-up teams: one shooter, one dunker and one ball handler a side. */
+function testMatch(seed: number): MatchConfig {
   const team = () => ({
     players: [
       { id: 'a', attrs: attrs({ shot: 0.85, dunk: 0.35 }) },
@@ -897,42 +906,32 @@ export function matchAudit(seed: number, seconds: number, b: Build = { height: 1
       { id: 'c', attrs: attrs({ speed: 0.85, handle: 0.85 }) },
     ],
   });
-  const m = createMatch({ seed, teams: [team(), team()], userTeam: -1, quarters: 4, quarterSeconds: 60, difficulty: 0.6, mateSkill: 0.6, timingAssist: 1, rubberBand: 0, autoSwitch: true });
-  const anims = m.players.map((p, i) => new FigureAnimator(b, null, null, 1 + i * 3));
-  const bones = m.players.map(() => new Float32Array(BONES));
-  const meas = anims.map((an, i) => new Measure(an, bones[i], b.height));
+  return { seed, teams: [team(), team()], userTeam: -1, quarters: 4, quarterSeconds: 60, difficulty: 0.6, mateSkill: 0.6, timingAssist: 1, rubberBand: 0, autoSwitch: true };
+}
+
+/** A computer-only match, every player posed each tick through the match path and measured: one row per player state. */
+export function matchAudit(seed: number, seconds: number, b: Build = { height: 1, bulk: 1, head: 1 }): Table {
   const table: Table = new Map();
-  const f: AnimFrame = { m, p: m.players[0], x: 0, y: 0, z: 0, facing: 0, bx: 0, by: 0, bz: 0, camX: 0, camY: 6, camZ: 20, dt: SIM_DT, lag: 0, time: 0, mood: 'play' };
+  const meas = new Map<FigureAnimator, Measure>();
   buildLabel = label(b);
-  const ticks = Math.round(seconds / SIM_DT);
-  for (let k = 0; k < ticks && m.phase !== 'final'; k++) {
-    stepMatch(m, { mx: 0, mz: 0, turbo: false, a: false, b: false, sw: false });
-    f.time = k * SIM_DT;
-    f.bx = m.ball.x;
-    f.by = m.ball.y;
-    f.bz = m.ball.z;
-    for (const p of m.players) {
-      f.p = p;
-      f.x = p.x;
-      f.y = p.y;
-      f.z = p.z;
-      f.facing = p.facing;
-      f.mood = moodOf(m, p);
-      const an = anims[p.idx];
-      an.update(f, bones[p.idx]);
-      const key = `match: ${p.state}${p.hasBall ? ' +ball' : ''}`;
-      let row = table.get(key);
-      if (!row) {
-        row = emptyRow();
-        table.set(key, row);
-      }
-      rowCur = row;
-      frameAct = `${p.state}/${f.mood}`;
-      frameT = p.t;
-      frameTime = f.time;
-      measureMatch(meas[p.idx], p.hasBall, m);
+  playMatch(testMatch(seed), [b], seconds, (m, k, p, an, bones) => {
+    let me = meas.get(an);
+    if (!me) {
+      me = new Measure(an, bones, b.height);
+      meas.set(an, me);
     }
-  }
+    const key = `match: ${p.state}${p.hasBall ? ' +ball' : ''}`;
+    let row = table.get(key);
+    if (!row) {
+      row = emptyRow();
+      table.set(key, row);
+    }
+    rowCur = row;
+    frameAct = `${p.state}/${moodOf(m, p)}`;
+    frameT = p.t;
+    frameTime = k * SIM_DT;
+    measureMatch(me, p.hasBall, m);
+  });
   return table;
 }
 
@@ -955,9 +954,9 @@ function measureMatch(me: Measure, holder: boolean, m: MatchState): void {
   }
   const h = me.height;
   an.toWorld(0, 0, 0, P0);
-  ball[0] = (m.ball.x - P0[0]) / h;
-  ball[1] = (m.ball.y - P0[1]) / h;
-  ball[2] = (m.ball.z - P0[2]) / h;
+  ball[0] = (drawn.x - P0[0]) / h;
+  ball[1] = (drawn.y - P0[1]) / h;
+  ball[2] = (drawn.z - P0[2]) / h;
   // only a ball near this player can touch it
   if (Math.hypot(ball[0], ball[1] - 0.8, ball[2]) > 1.6) return;
   const t0 = me.ballInVol(ball, 0);
@@ -968,6 +967,272 @@ function measureMatch(me: Measure, holder: boolean, m: MatchState): void {
     if (holder && CAPS[i].member === 'hand') continue;
     note(CAPS[i].member === 'hand' ? 'ball-hand' : 'ball-limb', me.ballCap(ball, i), `ball~${CAPS[i].name}`);
   }
+}
+
+/** where the match draws the ball (the renderer's own rule), and the animation time of the frame */
+let drawn = new DrawnBall();
+let frameDt = 0;
+/** milliseconds spent in the animators' update, over the last match played */
+let poseMs = 0;
+
+/**
+ * A match posed the way the renderer poses it: one tick, then one frame at the tick (as the runner's `advance` does), with the
+ * renderer's kicks on take-offs and landings and its slow motion at the end of a dunk. `each` sees every player after its pose.
+ */
+function playMatch(cfg: MatchConfig, builds: Build[], seconds: number, each: (m: MatchState, k: number, p: PlayerSim, an: FigureAnimator, bones: Float32Array) => void): void {
+  const m = createMatch(cfg);
+  const anims = m.players.map((p, i) => new FigureAnimator(builds[i % builds.length], null, null, i * 3 + 1));
+  const bones = m.players.map(() => new Float32Array(BONES));
+  const f: AnimFrame = { m, p: m.players[0], x: 0, y: 0, z: 0, facing: 0, bx: 0, by: 0, bz: 0, camX: 0, camY: 6, camZ: 20, dt: SIM_DT, lag: 0, time: 0, mood: 'play' };
+  const pad = { mx: 0, mz: 0, turbo: false, a: false, b: false, sw: false };
+  let slowT = 0;
+  drawn = new DrawnBall();
+  poseMs = 0;
+  const ticks = Math.round(seconds / SIM_DT);
+  for (let k = 1; k <= ticks && m.phase !== 'final'; k++) {
+    stepMatch(m, pad);
+    for (const e of m.events) {
+      if (e.type === 'jump') anims[e.by].impulse(1.5);
+      else if (e.type === 'land') anims[e.by].impulse(e.hard ? -2.6 : -1.5);
+      else if (e.type === 'dunkStart') anims[e.by].impulse(2);
+      else if (e.type === 'score' && (e.kind === 'dunk' || e.kind === 'oop')) slowT = 0.16;
+    }
+    slowT = Math.max(0, slowT - SIM_DT);
+    let scale = slowT > 0 ? 0.4 : 1;
+    for (const p of m.players) if ((p.state === 'dunk' || p.state === 'oop') && p.t / Math.max(0.01, p.dur) > 0.72) scale = Math.min(scale, 0.5);
+    f.time = k * SIM_DT;
+    f.dt = SIM_DT * scale;
+    f.bx = m.ball.x;
+    f.by = m.ball.y;
+    f.bz = m.ball.z;
+    // the camera sits off the side line, level with the ball
+    f.camX = m.ball.x;
+    f.camZ = 20;
+    for (const p of m.players) {
+      f.p = p;
+      f.x = p.x;
+      f.y = p.y;
+      f.z = p.z;
+      f.facing = p.facing;
+      f.mood = moodOf(m, p);
+      const t0 = performance.now();
+      anims[p.idx].update(f, bones[p.idx]);
+      poseMs += performance.now() - t0;
+    }
+    const hb = m.ball.state === 'held' ? m.ball.holder : -1;
+    drawn.update(m.ball.x, m.ball.y, m.ball.z, hb, hb >= 0 ? anims[hb].ballPush : null, f.dt);
+    frameDt = f.dt;
+    for (const p of m.players) each(m, k, p, anims[p.idx], bones[p.idx]);
+  }
+}
+
+/** Every player of a match measured each frame: the worst moments of each state, apart in time, to film. */
+function scanMatch(cfg: MatchConfig, builds: Build[], seconds: number): string {
+  const meas = new Map<FigureAnimator, Measure>();
+  const moments = new Map<string, { x: number; d: number; what: string; k: number; who: number; t: number }[]>();
+  const out: string[] = [];
+  playMatch(cfg, builds, seconds, (m, k, p, an, bones) => {
+    let me = meas.get(an);
+    if (!me) {
+      me = new Measure(an, bones, builds[p.idx % builds.length].height);
+      meas.set(an, me);
+    }
+    for (const fw of frameWorst) fw.x = -Infinity;
+    rowCur = emptyRow();
+    measureMatch(me, p.hasBall, m);
+    for (let c = 0; c < 3; c++) {
+      const fw = frameWorst[c];
+      if (fw.x <= 0) continue;
+      const kind = c === 0 ? (p.hasBall ? 'held ball' : 'loose ball') : c === 1 ? 'arms' : 'other';
+      const key = `[${kind}] ${p.state}${p.hasBall ? ' +ball' : ''}${p.state === 'free' || p.state === 'celebrate' ? ` ${moodOf(m, p)}` : ''}`;
+      let list = moments.get(key);
+      if (!list) {
+        list = [];
+        moments.set(key, list);
+      }
+      // one moment per player per second: keep its worst frame
+      const near = list.find((e) => e.who === p.idx && Math.abs(e.k - k) < 60);
+      if (near) {
+        if (fw.x > near.x) Object.assign(near, { x: fw.x, d: fw.d, what: fw.what, k, t: p.t });
+      } else list.push({ x: fw.x, d: fw.d, what: fw.what, k, who: p.idx, t: p.t });
+    }
+  });
+  for (const [key, list] of [...moments].sort((a, b) => Math.max(...b[1].map((e) => e.x)) - Math.max(...a[1].map((e) => e.x)))) {
+    list.sort((a, b) => b.x - a.x);
+    out.push(`${key}: ${list.length} moments`);
+    for (const e of list.slice(0, 6)) out.push(`  tick ${e.k} (${(e.k * SIM_DT).toFixed(2)}s) p${e.who} t=${e.t.toFixed(2)} ${e.what} ${(e.d * CM).toFixed(1)}cm (+${(e.x * CM).toFixed(1)})`);
+  }
+  return out.join('\n');
+}
+
+interface MatchWorst {
+  /** depth (figure units of a figure 1 tall) and what */
+  d: number;
+  what: string;
+  time: number;
+  state: string;
+}
+
+interface MatchCheck {
+  /** the held ball in its holder's head or body */
+  heldBall: MatchWorst;
+  /** the holder's forearms and hands in its own head or body */
+  holderArms: MatchWorst;
+  /** anyone's upper arms, forearms and hands in their own head or body, past what the warm-up allows */
+  arms: MatchWorst;
+  /** the widest gap between a hand posed on the held ball and the ball, once the hold has settled (95th percentile, and the worst) */
+  handGap95: number;
+  handGap: MatchWorst;
+  /** the drawn ball against the simulation's: the most it moved off in one frame after a release (world), and how far off it still was so long after one */
+  releaseStep: number;
+  releaseAt: string;
+  lateOff: number;
+  /** the dunks: how far (world, across) the drawn ball is from the middle of the rim as the simulation drops it through */
+  rim: number[];
+  /** a dribble low by the floor: how far the drawn ball is from the simulation's */
+  dribbleLow: number;
+  /** the same three, frame by frame: what 1 player-frame in 200 goes past */
+  heldBall995: number;
+  holderArms995: number;
+  arms995: number;
+  /** the elbows and wrists frame to frame (figure space): the biggest change of step between frames, and the 1-in-1000 one (kit units) */
+  jerk: MatchWorst;
+  jerk999: number;
+  jerk99: number;
+  /** seconds spent posing (all six players), and frames */
+  poseMs: number;
+  frames: number;
+}
+
+/** The match checks: arms and the held ball against their own body, and the drawn ball against the simulation's. */
+function matchCheck(cfg: MatchConfig, builds: Build[], seconds: number, every = 1, late = DRAWN_BALL_BLEND): MatchCheck {
+  const w = (): MatchWorst => ({ d: -Infinity, what: '', time: 0, state: '' });
+  const r: MatchCheck = { heldBall: w(), holderArms: w(), arms: w(), heldBall995: 0, holderArms995: 0, arms995: 0, handGap95: 0, handGap: w(), jerk: w(), jerk999: 0, jerk99: 0, releaseStep: 0, releaseAt: '', lateOff: 0, rim: [], dribbleLow: 0, poseMs: 0, frames: 0 };
+  const meas = new Map<FigureAnimator, Measure>();
+  const gaps: number[] = [];
+  const armsAll: number[] = [];
+  const holderAll: number[] = [];
+  const ballAll: number[] = [];
+  let since = Infinity;
+  let lastOff = 0;
+  let prevHolder = -1;
+  let lastK = -1;
+  const jerks: number[] = [];
+  // the ends of the forearms: elbows and wrists
+  const joints = CAPS.filter((c) => c.member === 'fore').flatMap((c) => [{ bone: c.bone, q: c.a }, { bone: c.bone, q: c.b }]);
+  const hist = new Map<number, Float64Array>();
+  const jd = new Float64Array(3);
+  const put = (o: MatchWorst, d: number, what: string, k: number, p: PlayerSim) => {
+    if (d > o.d) Object.assign(o, { d, what, time: k * SIM_DT, state: `${p.state}${p.hasBall ? ' +ball' : ''} p${p.idx} t=${p.t.toFixed(2)}` });
+  };
+  playMatch(cfg, builds, seconds, (m, k, p, an, bones) => {
+    let me = meas.get(an);
+    if (!me) {
+      me = new Measure(an, bones, builds[p.idx % builds.length].height);
+      meas.set(an, me);
+    }
+    if (k !== lastK) {
+      // once a frame: the drawn ball against the simulation's
+      lastK = k;
+      const b = m.ball;
+      const holder = b.state === 'held' ? b.holder : -1;
+      const off = Math.hypot(drawn.x - b.x, drawn.y - b.y, drawn.z - b.z);
+      if (holder < 0) {
+        since = prevHolder >= 0 ? frameDt : since + frameDt;
+        if (since >= late) r.lateOff = Math.max(r.lateOff, off);
+        else if (Math.abs(off - lastOff) > r.releaseStep) {
+          r.releaseStep = Math.abs(off - lastOff);
+          r.releaseAt = `${(k * SIM_DT).toFixed(2)}s ${b.state} by p${prevHolder >= 0 ? prevHolder : b.lastHolder}`;
+        }
+      } else if (b.y < BALL_R + 0.03 && m.players[holder].state === 'free') r.dribbleLow = Math.max(r.dribbleLow, off);
+      // the simulation drops a dunk through the middle of the rim
+      if (prevHolder >= 0 && holder < 0 && b.z === 0 && Math.abs(Math.abs(b.x) - COURT.hoopX) < 1e-9 && b.y > COURT.rimY - 0.2) r.rim.push(Math.hypot(drawn.x - b.x, drawn.z - b.z));
+      prevHolder = holder;
+      lastOff = off;
+      r.frames++;
+    }
+    // elbows and wrists: the change of their step from one frame to the next (kit units)
+    let hs = hist.get(p.idx);
+    if (!hs) {
+      hs = new Float64Array(joints.length * 6).fill(NaN);
+      hist.set(p.idx, hs);
+    }
+    let fj = 0;
+    const to = KIT_BONE_INDEX.torso * 16;
+    for (let j = 0; j < joints.length; j++) {
+      const o = joints[j].bone * 16;
+      const jq = joints[j].q;
+      // in the chest's own frame, so that the whole figure moving, turning or landing does not count
+      for (let c = 0; c < 3; c++) jd[c] = bones[o + c] * jq[0] + bones[o + 4 + c] * jq[1] + bones[o + 8 + c] * jq[2] + bones[o + 12 + c] - (bones[to + 4 + c] * 0.525 + bones[to + 12 + c]);
+      let q = 0;
+      for (let c = 0; c < 3; c++) {
+        const cx = bones[to + c * 4];
+        const cy = bones[to + c * 4 + 1];
+        const cz = bones[to + c * 4 + 2];
+        const x = (cx * jd[0] + cy * jd[1] + cz * jd[2]) / (cx * cx + cy * cy + cz * cz);
+        const a = hs[j * 6 + c];
+        const b = hs[j * 6 + 3 + c];
+        q += (x - 2 * a + b) ** 2;
+        hs[j * 6 + 3 + c] = a;
+        hs[j * 6 + c] = x;
+      }
+      if (q === q) fj = Math.max(fj, Math.sqrt(q));
+    }
+    jerks.push(fj);
+    put(r.jerk, fj, 'elbow/wrist', k, p);
+    if (k % every !== 0) return;
+    me.prepare();
+    let fa = -Infinity;
+    let fh = -Infinity;
+    for (let i = 0; i < CAPS.length; i++) {
+      const c = CAPS[i];
+      if (c.kind !== 'arm') continue;
+      for (let v = 0; v < 3; v++) {
+        const what = `${c.name}>${VOLS[v].name}`;
+        const x = me.capInVol(i, v) - allowed(v === 2 ? 'limb-head' : 'limb-torso', what);
+        put(r.arms, x, what, k, p);
+        fa = Math.max(fa, x);
+        if (p.hasBall && c.member !== 'up') {
+          put(r.holderArms, x, what, k, p);
+          fh = Math.max(fh, x);
+        }
+      }
+    }
+    armsAll.push(fa);
+    if (!p.hasBall) return;
+    holderAll.push(fh);
+    const h = me.height;
+    an.toWorld(0, 0, 0, P0);
+    ball[0] = (drawn.x - P0[0]) / h;
+    ball[1] = (drawn.y - P0[1]) / h;
+    ball[2] = (drawn.z - P0[2]) / h;
+    let fb = -Infinity;
+    for (let v = 0; v < 3; v++) {
+      const x = me.ballInVol(ball, v) - allowed(v === 2 ? 'ball-head' : 'ball-torso', '');
+      put(r.heldBall, x, `ball>${VOLS[v].name}`, k, p);
+      fb = Math.max(fb, x);
+    }
+    ballAll.push(fb);
+    // hands on the ball, once the hold has settled (a hand blends onto the ball over a few frames when the pose changes)
+    const off = (an as unknown as { off: Float32Array }).off;
+    for (let i = 0; i < CAPS.length; i++) {
+      const c = CAPS[i];
+      if (c.member !== 'hand' || !(an.contact & (c.side > 0 ? 1 : 2))) continue;
+      const o = c.side > 0 ? 12 : 15;
+      if (Math.hypot(off[o], off[o + 1], off[o + 2]) > 0.01) continue;
+      const gap = -me.ballCap(ball, i);
+      gaps.push(gap);
+      put(r.handGap, gap, `${c.name} off the ball`, k, p);
+    }
+  });
+  r.handGap95 = gaps.length ? pct(gaps, 0.95) : 0;
+  r.jerk999 = pct(jerks, 0.999);
+  r.jerk99 = pct(jerks, 0.99);
+  r.arms995 = pct(armsAll, 0.995);
+  r.holderArms995 = pct(holderAll, 0.995);
+  r.heldBall995 = pct(ballAll, 0.995);
+  r.poseMs = poseMs;
+  return r;
 }
 
 // --- the checks ---------------------------------------------------------------------------
@@ -1044,7 +1309,114 @@ describe('warm-up figures keep their parts out of each other', () => {
   });
 });
 
+describe('match figures keep their arms and the held ball out of their own head and body', () => {
+  // 45 s of two computer-only matches (seed 7 has a dunk in it), both builds of the warm-up's checks taking turns down the roster, measured every third frame
+  // (centimetres of a figure 120 cm tall: before the fix, over a minute of these matches, the held ball went 21-27 cm past its limit, the holder's hands 14 cm and the arms 22-24 cm)
+  const SEEDS = [7, 12];
+  const runs = new Map<number, MatchCheck>();
+  const get = (seed: number) => {
+    let r = runs.get(seed);
+    if (!r) {
+      r = matchCheck(testMatch(seed), LOCK, 45, 3);
+      runs.set(seed, r);
+    }
+    return r;
+  };
+  const cm = (x: number) => Math.round(x * CM * 10) / 10;
+  const at = (o: MatchWorst) => `${o.what} @${o.time.toFixed(2)}s ${o.state}`;
+
+  it.each(SEEDS)('seed %i: the held ball stays out of its holder, and the holder keeps hands and forearms out of its own head and body', (seed) => {
+    const r = get(seed);
+    expect([cm(r.heldBall.d) <= 2, at(r.heldBall)]).toEqual([true, at(r.heldBall)]);
+    expect(cm(r.heldBall995)).toBeLessThanOrEqual(0);
+    expect([cm(r.holderArms.d) <= 10, at(r.holderArms)]).toEqual([true, at(r.holderArms)]);
+    expect(cm(r.holderArms995)).toBeLessThanOrEqual(5);
+  }, 30000);
+
+  it.each(SEEDS)("seed %i: nobody's arms go into their own head or body past the warm-up's limits", (seed) => {
+    const r = get(seed);
+    // an arm raised high still brushes the underside of the head, which overhangs the shoulders
+    expect([cm(r.arms.d) <= 12, at(r.arms)]).toEqual([true, at(r.arms)]);
+    expect(cm(r.arms995)).toBeLessThanOrEqual(4);
+  }, 30000);
+
+  it.each(SEEDS)('seed %i: hands posed on the held ball stay on it, and a dribble still reaches the floor', (seed) => {
+    const r = get(seed);
+    expect(cm(r.handGap95)).toBeLessThanOrEqual(2);
+    expect([cm(r.handGap.d) <= 7, at(r.handGap)]).toEqual([true, at(r.handGap)]);
+    expect(r.dribbleLow).toBeLessThan(0.02);
+  }, 30000);
+
+  it.each(SEEDS)(`seed %i: the drawn ball is on the simulation's once nobody has held it for ${DRAWN_BALL_BLEND} s, and gets there smoothly`, (seed) => {
+    const r = get(seed);
+    expect(r.lateOff).toBe(0);
+    expect([r.releaseStep < 0.1, r.releaseAt]).toEqual([true, r.releaseAt]);
+  }, 30000);
+
+  it('a dunk drops the drawn ball through the middle of the rim', () => {
+    const rim = SEEDS.flatMap((s) => get(s).rim);
+    expect(rim.length).toBeGreaterThan(0);
+    for (const d of rim) expect(d).toBeLessThan(0.05);
+  }, 30000);
+
+  it("the drawn ball: exactly the simulation's when nobody holds it, pushed with its holder, and back on the simulation's path after a release", () => {
+    const db = new DrawnBall();
+    const push = new Float64Array([0.1, -0.05, 0.2]);
+    const dt = 1 / 60;
+    db.update(1, 2, 3, -1, null, dt);
+    expect([db.x, db.y, db.z]).toEqual([1, 2, 3]);
+    // a catch: pushed at once, with no tail from the loose ball
+    db.update(1, 2, 3, 2, push, dt);
+    expect([db.x, db.y, db.z]).toEqual([1 + 0.1, 2 - 0.05, 3 + 0.2]);
+    // a release: the push dies away over DRAWN_BALL_BLEND, never jumping, then the ball is exactly the simulation's
+    let last = Math.hypot(0.1, 0.05, 0.2);
+    let t = 0;
+    for (let k = 0; k < 30; k++) {
+      db.update(1 + k * 0.2, 2, 3, -1, null, dt);
+      t += dt;
+      const off = Math.hypot(db.x - (1 + k * 0.2), db.y - 2, db.z - 3);
+      expect(off).toBeLessThanOrEqual(last + 1e-12);
+      if (t >= DRAWN_BALL_BLEND) expect([db.x, db.y, db.z]).toEqual([1 + k * 0.2, 2, 3]);
+      last = off;
+    }
+    // a pass from one holder straight to another eases from one push to the other
+    db.update(0, 0, 0, 1, push, dt);
+    db.update(0, 0, 0, 4, new Float64Array(3), dt);
+    expect(Math.hypot(db.x, db.y, db.z)).toBeGreaterThan(0.1);
+    for (let k = 0; k < 10; k++) db.update(0, 0, 0, 4, new Float64Array(3), dt);
+    expect([db.x, db.y, db.z]).toEqual([0, 0, 0]);
+  });
+});
+
 describe('penetration audit', () => {
+  const check = process.env.CLIP_CHECK;
+  if (check) {
+    it('writes the match checks', () => {
+      const out: string[] = [];
+      const [seeds, secs] = (process.env.CLIP_CHECK_ARGS || '7,12:90').split(':');
+      for (const seed of seeds.split(',').map(Number)) {
+        const t0 = Date.now();
+        const r = matchCheck(testMatch(seed), LOCK, Number(secs), Number(process.env.CLIP_CHECK_EVERY || 1));
+        const cm = (o: MatchWorst) => `${(o.d * CM).toFixed(1)}cm ${o.what} @${o.time.toFixed(2)}s ${o.state}`;
+        out.push(`seed ${seed} (${Date.now() - t0} ms, ${r.frames} frames, posing ${r.poseMs.toFixed(0)} ms)`);
+        out.push(`  held ball past limit: ${cm(r.heldBall)}`, `  holder forearms/hands past limit: ${cm(r.holderArms)}`, `  arms past limit: ${cm(r.arms)}`);
+        out.push(`  1 in 200 past: held ball ${(r.heldBall995 * CM).toFixed(1)}cm, holder forearms/hands ${(r.holderArms995 * CM).toFixed(1)}cm, arms ${(r.arms995 * CM).toFixed(1)}cm`);
+        out.push(`  elbows/wrists, change of step between frames: 1 in 100 ${(r.jerk99 * CM).toFixed(2)}cm, 1 in 1000 ${(r.jerk999 * CM).toFixed(2)}cm, worst ${cm(r.jerk)}`);
+        out.push(`  hand gap p95 ${(r.handGap95 * CM).toFixed(1)}cm, worst ${cm(r.handGap)}`);
+        out.push(`  release: worst step ${(r.releaseStep * 100).toFixed(1)}cm at ${r.releaseAt}, still off after ${DRAWN_BALL_BLEND}s ${(r.lateOff * 100).toFixed(2)}cm; dribble low off ${(r.dribbleLow * 100).toFixed(2)}cm`);
+        out.push(`  dunks: drawn ball from the rim's middle ${r.rim.map((x) => (x * 100).toFixed(1) + 'cm').join(', ')}`);
+      }
+      fs.writeFileSync(check, out.join('\n') + '\n');
+    }, 900000);
+  }
+  const scan = process.env.CLIP_SCAN;
+  if (scan) {
+    it('writes the worst moments of a match', () => {
+      const src = process.env.CLIP_SCAN_CFG as string;
+      const r = src.startsWith('test:') ? { cfg: testMatch(Number(src.slice(5))), builds: LOCK } : (JSON.parse(fs.readFileSync(src, 'utf8')) as { cfg: MatchConfig; builds: Build[] });
+      fs.writeFileSync(scan, scanMatch(r.cfg, r.builds, Number(process.env.CLIP_SCAN_S || 600)) + '\n');
+    }, 900000);
+  }
   if (matchReport) {
     it('writes the match table', () => {
       const out: string[] = [];

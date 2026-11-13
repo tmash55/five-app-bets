@@ -261,6 +261,29 @@ const G_FORE = 0.055;
 const G_SOFT = 0.025;
 /** the corner between the sides of the chest and its top and bottom is rounded off over this */
 const G_ROUND = 0.015;
+/** a dunk's reach for the rim: how far the body leans back (two hands, or reaching for a lob: further), the head tips back and the body hangs back from the ball */
+const DUNK_BACK = 0.2;
+const DUNK_BACK_TWO = 0.4;
+const DUNK_HEAD = 0.35;
+const DUNK_SINK = 0.2;
+/** one hand: how far the body slides and rolls away from the ball, so the slamming arm goes up past the head */
+const DUNK_SLIDE = 0.2;
+const DUNK_ROLL = 0.25;
+/** hanging on the rim: how far the body hangs back from it, how much of the swing back under it is kept, and how far round the rim two hands grip (radians) */
+const HANG_BACK = 0.25;
+const HANG_SWING = 0.3;
+const HANG_GRIP = 1;
+/** the shooting hand under the ball at the set point: how far the wrist is cocked back */
+const SHOT_COCK = -0.35;
+/** a jump without the ball: the hands out and up in a V (figure space) */
+const JUMP_V = [0.62, 1.4];
+/** the defender's hand up by the ball: across from the middle and height, when close */
+const DEFEND_X = 0.5;
+const DEFEND_Y = 1;
+/** match: how fast the held ball's move out of the body eases in as a hold starts (per second) */
+const HOLD_IN = 60;
+/** match: seconds over which the drawn ball's leftover move eases away after a release or a change of holder */
+export const DRAWN_BALL_BLEND = 0.1;
 /** scratch: a normal, a push, and the ball's push */
 const gN = new Float64Array(3);
 const gP = new Float64Array(3);
@@ -539,6 +562,11 @@ export class FigureAnimator {
 
   private sprint = false;
 
+  /** Match: hands posed on the held ball (1 left, 2 right) go wherever the drawn ball is moved. */
+  private onHands(mask: number): void {
+    this.onBall |= mask;
+  }
+
   /** Both hands on the ball. */
   private holdTwo(): void {
     const b = this.ballF;
@@ -575,7 +603,8 @@ export class FigureAnimator {
     const s = b[0] >= 0 ? 1 : -1;
     const t = this.time * 5 + this.variant;
     // active hands: one mirrors the ball, one sits in the passing lane
-    this.hand(s, s * lerp(0.5, 0.36, close), lerp(0.74, 1.1, close) + 0.03 * Math.sin(t), lerp(0.2, 0.3, close));
+    // up by the ball, but out past the side of the big head
+    this.hand(s, s * lerp(0.5, DEFEND_X, close), lerp(0.74, DEFEND_Y, close) + 0.03 * Math.sin(t), lerp(0.2, 0.3, close));
     this.hand(-s, -s * 0.5, 0.66 + 0.03 * Math.cos(t), 0.2);
     this.pole(1, 1, -0.6, -0.3);
     this.pole(-1, -1, -0.6, -0.3);
@@ -622,10 +651,13 @@ export class FigureAnimator {
           this.locomotion(0.5, 0.01, 0.01);
           if (p.catchT < 0.22 || m.phase !== 'live') {
             this.holdTwo();
+            this.onHands(3);
             c[LOOK] = 0.3;
             key += 1;
           } else {
             this.dribble(p);
+            // the palm is on the ball only while the ball is up by it
+            if (b[1] + BALL_R * 0.88 >= 0.5) this.onHands(p.hand >= 0 ? 2 : 1);
             key += p.hand >= 0 ? 2 : 3;
           }
         } else if (defending) {
@@ -642,8 +674,9 @@ export class FigureAnimator {
             const d = Math.hypot(b[0], b[1] - 0.86, b[2]);
             if (d < 3.2) {
               const k = clamp01(1 - (d - 0.5) / 2.7);
-              const ang = Math.atan2(b[0], b[2]);
-              const reach = 0.3 + 0.16 * k;
+              // a ball coming from behind is met at the side: hands reaching round behind would cross through the body
+              const ang = clamp(Math.atan2(b[0], b[2]), -0.9, 0.9);
+              const reach = 0.38 + 0.12 * k;
               const cx = Math.sin(ang) * reach;
               const cz = Math.cos(ang) * reach;
               const y = lerp(0.84, clamp(b[1], 0.6, 1.5), k * 0.8);
@@ -682,13 +715,16 @@ export class FigureAnimator {
             this.lookZ = r.z;
           }
           const push = p.released ? smooth((this.t - PASS.windup) / 0.06) : 0;
-          c[TYAW] += ang * 0.55;
-          c[RYAW] += ang * 0.15;
+          // the simulation keeps the ball out in front until it goes: turning to the target before then would bring the chest into it
+          const turn = p.released || !p.hasBall ? 1 : 0.3;
+          c[TYAW] += ang * 0.55 * turn;
+          c[RYAW] += ang * 0.15 * turn;
           c[TPITCH] += 0.1 + 0.12 * push;
           c[RY] -= 0.03;
           c[LOOK] = 1;
           if (!p.released && p.hasBall) {
             this.holdTwo();
+            this.onHands(3);
           } else {
             const a = ang * 0.85;
             const ca = Math.cos(a);
@@ -721,10 +757,12 @@ export class FigureAnimator {
         if (!p.released && p.hasBall) {
           this.hand(s, b[0] + s * 0.035, b[1] - 0.14, b[2] - 0.085);
           this.pole(s, s * 0.35, -1, 0.3);
-          this.wrist(s, -0.8);
+          // cocked back, but not so far that the fingers go into the face behind the ball
+          this.wrist(s, SHOT_COCK);
           this.hand(-s, b[0] - s * 0.155, b[1] - 0.02, b[2]);
           this.pole(-s, -s, -0.45, 0);
           this.wrist(-s, -0.2);
+          this.onHands(3);
         } else {
           key += 1;
           const rt = this.sinceRelease;
@@ -754,6 +792,7 @@ export class FigureAnimator {
           this.hand(s, b[0] + s * 0.02, b[1] - 0.145, b[2] - 0.05);
           this.pole(s, s * 0.5, -1, -0.1);
           this.wrist(s, -0.6);
+          this.onHands(s > 0 ? 1 : 2);
         } else {
           key += 1;
           this.hand(s, s * 0.18, 1.52, 0.36);
@@ -776,8 +815,20 @@ export class FigureAnimator {
         const tuck = Math.sin(Math.PI * clamp01(u / 0.85));
         const slam = smooth((u - 0.8) / 0.2);
         const two = p.style === 'twoHand' || p.style === 'spin';
-        c[RPITCH] += -0.28 * Math.sin(Math.PI * clamp01((u - 0.1) / 0.75)) + 0.42 * slam;
-        c[TPITCH] += 0.25 * slam - 0.1 * tuck;
+        // as the ball goes up to the rim the head stays back and under it, out of the way of the arms (they are short, the head is big)
+        // rising for a lob, the arms reach for it once it is close
+        const lob = p.hasBall ? 0 : clamp01(1 - (Math.hypot(b[0], b[1] - 1.3, b[2]) - 0.4) / 2);
+        const reach = !p.hasBall ? lob : p.style === 'windmill' ? smooth((u - 0.5) / 0.25) : smooth((u - 0.02) / 0.16);
+        const back = two || !p.hasBall ? DUNK_BACK_TWO : DUNK_BACK;
+        c[RPITCH] += -0.28 * Math.sin(Math.PI * clamp01((u - 0.1) / 0.75)) + 0.42 * slam - back * reach;
+        c[TPITCH] += 0.25 * slam - 0.1 * tuck - back * reach;
+        c[HPITCH] -= DUNK_HEAD * reach;
+        c[RZ] -= DUNK_SINK * reach;
+        if (!two && p.hasBall) {
+          // one hand: the body slides and leans off to the other side, so the slamming arm goes up past the head
+          c[RX] -= s * DUNK_SLIDE * reach;
+          c[TROLL] += s * DUNK_ROLL * reach;
+        }
         c[SQ] = 1 + 0.05 * tuck;
         if (two) {
           for (let side = 1; side >= -1; side -= 2) {
@@ -801,17 +852,17 @@ export class FigureAnimator {
             this.pole(-1, -1, -0.3, -0.5);
             this.wrist(1, lerp(-0.3, 0.6, slam));
             this.wrist(-1, lerp(-0.3, 0.6, slam));
+            this.onHands(3);
           } else {
             this.hand(s, b[0] + s * 0.03, b[1] + 0.02, b[2] - 0.15);
             this.pole(s, s * 0.8, -0.5, -0.4);
             this.wrist(s, lerp(-0.5, 0.8, slam));
+            this.onHands(s > 0 ? 1 : 2);
             this.hand(-s, -s * 0.46, 0.92 - 0.2 * slam, 0.02);
             this.pole(-s, -s, -0.2, -0.6);
           }
         } else {
-          // rising for a lob: reach for it once it is close
-          const d = Math.hypot(b[0], b[1] - 1.3, b[2]);
-          const k = clamp01(1 - (d - 0.4) / 2);
+          const k = lob;
           const tx = lerp(0, b[0], k);
           const ty = lerp(1.55, b[1], k);
           const tz = lerp(0.3, b[2], k);
@@ -841,11 +892,20 @@ export class FigureAnimator {
         const s = p.hand >= 0 ? -1 : 1;
         const sw = Math.cos((this.t / Math.max(0.1, p.dur)) * Math.PI * 1.15);
         if (two) {
-          this.hand(1, v3[0] + 0.13, v3[1], v3[2]);
-          this.hand(-1, v3[0] - 0.13, v3[1], v3[2]);
+          // wide apart on the rim, round its near edge, so the arms go up either side of the head
+          const a = HANG_GRIP;
+          for (let side = 1; side >= -1; side -= 2) {
+            const ca = Math.cos(a);
+            const sa = Math.sin(a) * side;
+            this.toFigure(hoopX + (ux * ca - uz * sa) * COURT.rimR, COURT.rimY + 0.03, (uz * ca + ux * sa) * COURT.rimR, v3b);
+            this.hand(side, v3b[0], v3b[1], v3b[2]);
+          }
           this.wrist(1, 0.7);
           this.wrist(-1, 0.7);
         } else {
+          // still off to the side the slam left the body on, so the arm on the rim goes up past the head
+          c[RX] -= s * DUNK_SLIDE;
+          c[TROLL] += s * DUNK_ROLL;
           this.hand(s, v3[0] + s * 0.04, v3[1], v3[2]);
           this.wrist(s, 0.7);
           this.hand(-s, -s * 0.5, 0.62, 0.02 - 0.12 * sw);
@@ -853,8 +913,9 @@ export class FigureAnimator {
         }
         this.pole(1, 0.8, -0.2, -0.6);
         this.pole(-1, -0.8, -0.2, -0.6);
-        c[RPITCH] += -0.42 * sw;
-        c[RZ] += 0.1 * sw;
+        // swinging back under the rim would bring the head into the arms: only a little of that
+        c[RPITCH] += -0.42 * (sw > 0 ? sw : HANG_SWING * sw);
+        c[RZ] += 0.1 * sw - HANG_BACK;
         for (let side = 1; side >= -1; side -= 2) {
           this.foot(side, side * 0.12, ANKLE + 0.12, 0.1 + 0.22 * sw, 0.5, side * 0.1);
         }
@@ -899,6 +960,7 @@ export class FigureAnimator {
         if (p.hasBall) {
           key += 1;
           this.holdTwo();
+          this.onHands(3);
           c[LOOK] = 0.4;
         } else {
           let s = 0;
@@ -916,8 +978,8 @@ export class FigureAnimator {
               this.hand(side, sx + dx * r, 0.85 + dy * r, dz * r);
               this.wrist(side, 0.5);
             } else {
-              // arms up in a V, clear of the big head
-              this.hand(side, side * 0.42, 1.52, 0.12);
+              // arms up in a wide V: the head is wider than the shoulders, so an arm straight up would go into it
+              this.hand(side, side * JUMP_V[0], JUMP_V[1], 0.12);
               this.wrist(side, -0.15);
             }
             this.pole(side, side * 0.7, -0.2, -0.7);
@@ -971,6 +1033,20 @@ export class FigureAnimator {
       }
     }
     return key;
+  }
+
+  /**
+   * The simulation swings a windmill's ball through the middle of the body and cocks a tomahawk's into the top of the head:
+   * draw them out on the dunking hand's side instead, coming back in for the slam so the ball still goes through the rim.
+   */
+  private carryDunk(p: PlayerSim): void {
+    const u = clamp01(this.t / Math.max(0.01, p.dur));
+    let w = 0;
+    if (p.style === 'windmill') w = 0.62 * smooth((u - 0.03) / 0.12) * (1 - smooth((u - 0.7) / 0.16));
+    else if (p.style === 'tomahawk') w = 0.36 * smooth((u - 0.06) / 0.16) * (1 - smooth((u - 0.74) / 0.12));
+    if (w <= 0) return;
+    const s = p.hand >= 0 ? -1 : 1;
+    this.ballF[0] += s * w;
   }
 
   /** Little performances between plays. */
@@ -1121,10 +1197,39 @@ export class FigureAnimator {
     this.pz = f.z;
     this.yaw = Math.PI / 2 - f.facing;
     this.toFigure(f.bx, f.by, f.bz, this.ballF);
+    // the ball this player holds may be drawn off the simulation's ball, out of the head and the body: eased in as the hold starts
+    const bf = this.ballF;
+    const bs = this.ballSim;
+    bs[0] = bf[0];
+    bs[1] = bf[1];
+    bs[2] = bf[2];
+    this.match = true;
+    this.hasBall = p.hasBall;
+    // a ball caught on the move (a pass, a rebound) is out of the body at once; one picked up slowly eases out
+    const caught = Math.abs(f.bx - this.lastBX) + Math.abs(f.by - this.lastBY) + Math.abs(f.bz - this.lastBZ) > 0.06;
+    this.holdW = !p.hasBall ? 0 : this.holdW === 0 && caught ? 1 : damp(this.holdW, 1, HOLD_IN, dt);
+    this.lastBX = f.bx;
+    this.lastBY = f.by;
+    this.lastBZ = f.bz;
+    this.onBall = 0;
+    if (p.hasBall && (p.state === 'dunk' || p.state === 'oop')) this.carryDunk(p);
 
     const key = this.buildPose(f);
-    this.guard = false;
+    this.contact = this.onBall;
+    this.guard = true;
     this.finish(bones, key, dt, f.time, p.vx * this.cs + p.vz * this.sn, p.vx * this.sn - p.vz * this.cs, p.vy, -f.y / this.sy);
+    const push = this.ballPush;
+    if (p.hasBall) {
+      const dx = bf[0] - bs[0];
+      const dz = bf[2] - bs[2];
+      push[0] = this.sx * (dx * this.sn + dz * this.cs);
+      push[1] = this.sy * (bf[1] - bs[1]);
+      push[2] = this.sx * (dz * this.sn - dx * this.cs);
+    } else {
+      push[0] = 0;
+      push[1] = 0;
+      push[2] = 0;
+    }
   }
 
   /**
@@ -1219,7 +1324,7 @@ export class FigureAnimator {
   hasBall = false;
   /** still waiting to drop onto the stage */
   hidden = false;
-  /** which hands the act says are on the ball: 1 left, 2 right, 4 the lead hand's fingertip */
+  /** which hands the act says are on the ball: 1 left, 2 right, 4 the lead hand's fingertip (in the match: the hands posed on the held ball) */
   contact = 0;
   /** which feet the act says are flat on the floor: 1 left, 2 right */
   planted = 0;
@@ -1231,8 +1336,25 @@ export class FigureAnimator {
   lift = 0;
 
   private grip = 0;
-  /** push hands, elbows and the ball out of the body (the warm-up stage only) */
+  /** match: hands posed on the held ball, which move with it but do not drag it (1 left, 2 right) */
+  private onBall = 0;
+  /** match: how much of the held ball's move out of the body is applied (eased in over the first frames of a hold) */
+  private holdW = 1;
+  /** match: where the simulation had the ball last frame (world) */
+  private lastBX = 0;
+  private lastBY = 0;
+  private lastBZ = 0;
+  /** match: where the simulation has the ball this frame (figure space) */
+  private readonly ballSim = new Float64Array(3);
+  /**
+   * Match: how far the ball this player holds is drawn from where the simulation has it (world), so it stays out of the
+   * head and the body with the hands on it; zero when this player does not hold the ball.
+   */
+  readonly ballPush = new Float64Array(3);
+  /** push hands, elbows and the ball out of the body */
   private guard = false;
+  /** posed by the match (not the warm-up stage) */
+  private match = false;
   private sf: ShowFrame | null = null;
   private showIndex = -1;
   private lands = 0;
@@ -1416,8 +1538,11 @@ export class FigureAnimator {
       this.lands = 0;
       this.ballFresh = true;
     }
+    this.match = false;
     this.hasBall = f.hasBall;
     this.grip = 0;
+    this.onBall = 0;
+    this.holdW = 1;
     this.contact = 0;
     this.planted = 3;
     this.lift = 0;
@@ -2473,21 +2598,35 @@ export class FigureAnimator {
     const ball = this.hasBall && !this.onFinger && !this.hidden;
     if (ball) {
       const rb = BALL_R / Math.sqrt(this.sx * this.sy);
-      if (this.bodyPush(bf[0], bf[1], bf[2], rb, hs, hsx) > 0) gQ.set(gP);
+      // out of one shape can be into the next (from under the chin down into the chest): in the match, where the simulation can hold
+      // the ball deep in the body, go round again
+      const passes = this.match ? 3 : 1;
+      for (let i = 0; i < passes; i++) {
+        if (this.bodyPush(bf[0] + gQ[0], bf[1] + gQ[1], bf[2] + gQ[2], rb, hs, hsx) <= 0) break;
+        gQ[0] += gP[0];
+        gQ[1] += gP[1];
+        gQ[2] += gP[2];
+      }
+      const w = this.holdW;
+      gQ[0] *= w;
+      gQ[1] *= w;
+      gQ[2] *= w;
     }
+    const rides = ball ? this.grip | this.onBall : 0;
     for (let side = 0; side < 2; side++) {
       const o = side === 0 ? HL : HR;
-      const held = ball && (this.grip & (1 << side)) !== 0;
-      const qx = held ? gQ[0] : 0;
-      const qy = held ? gQ[1] : 0;
-      const qz = held ? gQ[2] : 0;
+      const on = (rides & (1 << side)) !== 0;
+      const qx = on ? gQ[0] : 0;
+      const qy = on ? gQ[1] : 0;
+      const qz = on ? gQ[2] : 0;
       if (this.bodyPush(c[o] + qx, c[o + 1] + qy, c[o + 2] + qz, G_HAND, hs, hsx) <= 0) continue;
-      if (held) {
+      if (ball && (this.grip & (1 << side)) !== 0) {
         // a gripping hand cannot leave the ball: the ball and both hands go
         gQ[0] += gP[0];
         gQ[1] += gP[1];
         gQ[2] += gP[2];
       } else {
+        // a free hand on its own; a hand only posed on the ball goes too, without dragging the ball after it
         c[o] += gP[0];
         c[o + 1] += gP[1];
         c[o + 2] += gP[2];
@@ -2496,7 +2635,7 @@ export class FigureAnimator {
     if (!ball || gQ[0] * gQ[0] + gQ[1] * gQ[1] + gQ[2] * gQ[2] === 0) return;
     for (let k = 0; k < 3; k++) bf[k] += gQ[k];
     for (let side = 0; side < 2; side++) {
-      if ((this.grip & (1 << side)) === 0) continue;
+      if ((rides & (1 << side)) === 0) continue;
       const o = side === 0 ? HL : HR;
       for (let k = 0; k < 3; k++) c[o + k] += gQ[k];
     }
@@ -2586,7 +2725,7 @@ export class FigureAnimator {
       solveLimb(sx, sy, sz, tx, ty, tz, l1, l2, px, py, pz, 1, ARM_MAX_STRETCH, limb);
       if (this.guard) {
         // the elbow, the middle of the upper arm and of the forearm stay out of the body: move the elbow out (and a free hand with the forearm), solve again
-        const free = (this.grip & (side > 0 ? 1 : 2)) === 0;
+        const free = ((this.grip | this.onBall) & (side > 0 ? 1 : 2)) === 0;
         for (let it = 0; it < 2; it++) {
           let ex = 0;
           let ey = 0;
@@ -2717,5 +2856,40 @@ export class FigureAnimator {
       this.ankles[ao + 1] = limb.ey;
       this.ankles[ao + 2] = limb.ez;
     }
+  }
+}
+
+/**
+ * Where the match draws the ball. The simulation owns the ball; while a player holds it, it is drawn moved by that player's
+ * `ballPush` (out of the head and the body, with the hands on it). When the hold ends or passes straight to another player,
+ * whatever move was left eases away over `DRAWN_BALL_BLEND` seconds (from standing still, so the release shows no jump), and
+ * after that a ball nobody holds is drawn exactly where the simulation has it.
+ */
+export class DrawnBall {
+  x = 0;
+  y = 0;
+  z = 0;
+  private holder = -1;
+  private age = DRAWN_BALL_BLEND;
+  private readonly tail = new Float64Array(3);
+  private readonly last = new Float64Array(3);
+
+  /** `holder`: who holds the ball (-1 nobody) and `push` that player's `ballPush`; `dt` the frame's animation time. */
+  update(bx: number, by: number, bz: number, holder: number, push: Float64Array | null, dt: number): void {
+    const t = this.tail;
+    const l = this.last;
+    const ps = holder >= 0 ? push : null;
+    if (holder !== this.holder) {
+      // carry on from where it was drawn; a catch takes the catcher's move as it is (the catcher eases a slow pick-up in itself)
+      for (let k = 0; k < 3; k++) t[k] = l[k] - (ps && this.holder >= 0 ? ps[k] : 0);
+      this.holder = holder;
+      this.age = 0;
+    }
+    this.age += Math.max(0, dt);
+    const k = this.age >= DRAWN_BALL_BLEND ? 0 : 1 - smooth(this.age / DRAWN_BALL_BLEND);
+    for (let i = 0; i < 3; i++) l[i] = (ps ? ps[i] : 0) + t[i] * k;
+    this.x = bx + l[0];
+    this.y = by + l[1];
+    this.z = bz + l[2];
   }
 }
