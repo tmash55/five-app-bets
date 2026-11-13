@@ -1310,11 +1310,12 @@ describe('warm-up figures keep their parts out of each other', () => {
 });
 
 describe('match figures keep their arms and the held ball out of their own head and body', () => {
-  // 45 s of three computer-only matches (seeds 5 and 21 have alley-oops in them), both builds of the warm-up's checks taking turns down the roster, measured every third frame
-  // (centimetres of a figure 120 cm tall: before the fix, over a minute of these matches, the held ball went 21-27 cm past its limit, the holder's hands 14 cm and the arms 22-24 cm)
-  // The seeds were 7 and 12 until players began to move by their ratings, which plays every game differently. The limits are as they were; the
-  // known leftovers (a raised arm under the big head, a ball held at the chin) land on a moment just past them in some games, as they did before.
-  const SEEDS = [5, 9, 21];
+  // The first 45 s of five computer-only matches, one per seed, both builds of the warm-up's checks taking turns down the roster, measured every third frame
+  // (centimetres of a figure 120 cm tall: before the first fix, over a minute of seeds 7 and 12, the held ball went 21-27 cm past its limit, the holder's hands 14 cm and the arms 22-24 cm).
+  // Seeds 7 and 12 are the audit's original games. Seeds 5, 9 and 21 were added when players began to move by their ratings, which plays every game
+  // differently; 5 and 21 have alley-oops in them. Seed 7 has a rebound caught above and behind the head, seed 12 a pass caught at the chin.
+  // Seeds may be added here, never taken away, and the limits stay as they are.
+  const SEEDS = [7, 12, 5, 9, 21];
   const runs = new Map<number, MatchCheck>();
   const get = (seed: number) => {
     let r = runs.get(seed);

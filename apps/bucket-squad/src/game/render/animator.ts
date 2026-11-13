@@ -10,7 +10,7 @@
 
 import { KIT_BONE_INDEX, KIT_BONES, KIT_METRICS } from '../kit/kit';
 import { BALL_R, COURT, PASS, SHOT, STEAL } from '../sim/constants';
-import { hoopXOf } from '../sim/core';
+import { heldBallPos, hoopXOf } from '../sim/core';
 import { clamp, clamp01, lerp, smooth } from '../sim/math';
 import type { MatchState, PlayerSim } from '../sim/types';
 import {
@@ -288,6 +288,8 @@ export const DRAWN_BALL_BLEND = 0.1;
 const gN = new Float64Array(3);
 const gP = new Float64Array(3);
 const gQ = new Float64Array(3);
+/** scratch: where the simulation holds the ball (world) */
+const holdTmp = { x: 0, y: 0, z: 0 };
 
 /**
  * Signed distance from a point (in the body's own space) to a stack of rounded-square slices (|x/a|^n + |z/b|^n = 1), with
@@ -975,7 +977,10 @@ export class FigureAnimator {
               const dz = b[2];
               const dl = Math.hypot(dx, dy, dz) || 1;
               const r = Math.min(dl, 0.84) / dl;
-              this.hand(side, sx + dx * r, 0.85 + dy * r, dz * r);
+              // up by the big head the hand stays out past its side, as in the V, even for a ball right over it
+              const hy = 0.85 + dy * r;
+              const wide = JUMP_V[0] * smooth((hy - SHOULDER[1]) / (JUMP_V[1] - SHOULDER[1]));
+              this.hand(side, side * Math.max(side * (sx + dx * r), wide), hy, dz * r);
               this.wrist(side, 0.5);
             } else {
               // arms up in a wide V: the head is wider than the shoulders, so an arm straight up would go into it
@@ -1047,6 +1052,26 @@ export class FigureAnimator {
     if (w <= 0) return;
     const s = p.hand >= 0 ? -1 : 1;
     this.ballF[0] += s * w;
+  }
+
+  /**
+   * Match: if the simulation's ball is not yet where `p` holds it (only ever the tick the ball is caught), move the drawn
+   * ball (figure space) to the spot the simulation will hold it at, worked out in the player's own frame; true if it moved.
+   */
+  private toHold(m: MatchState, p: PlayerSim): boolean {
+    const ball = m.ball;
+    if (ball.state !== 'held' || ball.holder !== p.idx) return false;
+    heldBallPos(m, p, holdTmp);
+    if (Math.abs(holdTmp.x - ball.x) + Math.abs(holdTmp.y - ball.y) + Math.abs(holdTmp.z - ball.z) < 1e-4) return false;
+    const dx = holdTmp.x - p.x;
+    const dz = holdTmp.z - p.z;
+    const cs = Math.cos(p.facing);
+    const sn = Math.sin(p.facing);
+    const bf = this.ballF;
+    bf[0] = (dx * sn - dz * cs) / this.sx;
+    bf[1] = (holdTmp.y - p.y) / this.sy;
+    bf[2] = (dx * cs + dz * sn) / this.sx;
+    return true;
   }
 
   /** Little performances between plays. */
@@ -1205,8 +1230,12 @@ export class FigureAnimator {
     bs[2] = bf[2];
     this.match = true;
     this.hasBall = p.hasBall;
+    // On the tick a ball is caught the simulation leaves it where it was caught (a pass at the chin, a rebound above and
+    // behind the head, a steal off someone else's dribble) and puts it in the hands on the next one. Two hands reaching
+    // for it there go through the head: draw it where it is held already.
+    const inHands = p.hasBall && this.toHold(f.m, p);
     // a ball caught on the move (a pass, a rebound) is out of the body at once; one picked up slowly eases out
-    const caught = Math.abs(f.bx - this.lastBX) + Math.abs(f.by - this.lastBY) + Math.abs(f.bz - this.lastBZ) > 0.06;
+    const caught = inHands || Math.abs(f.bx - this.lastBX) + Math.abs(f.by - this.lastBY) + Math.abs(f.bz - this.lastBZ) > 0.06;
     this.holdW = !p.hasBall ? 0 : this.holdW === 0 && caught ? 1 : damp(this.holdW, 1, HOLD_IN, dt);
     this.lastBX = f.bx;
     this.lastBY = f.by;
@@ -2751,9 +2780,10 @@ export class FigureAnimator {
               ey = gP[1] * g;
               ez = gP[2] * g;
             }
-            // a free hand goes along: all of the forearm's push, and half the elbow's, since a nearly straight arm can only move its elbow by moving its hand
-            if (free && (q === 2 || q === 0)) {
-              const hk = q === 2 ? 1 : 0.5;
+            // a free hand goes along: all of the forearm's push, half the elbow's, and as much as the elbow needs for the upper arm's, since a
+            // nearly straight arm (a reach up past the big head) can only move its elbow by moving its hand
+            if (free) {
+              const hk = q === 2 ? 1 : q === 0 ? 0.5 : g;
               hx += gP[0] * hk;
               hy += gP[1] * hk;
               hz += gP[2] * hk;
