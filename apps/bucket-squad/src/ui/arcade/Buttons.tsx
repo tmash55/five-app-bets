@@ -13,7 +13,7 @@ import { arcade, goldButton, halo, inner, neonText, night, ring, tube as tubes, 
 import { px, size as sizes, space } from '@/theme/tokens';
 import { Coin, LineIcon, type LineIconName } from './LineIcon';
 import { MIN_FIT_LABEL } from './measure';
-import { CountBadge } from './Surface';
+import { CountBadge, Tag } from './Surface';
 import { Glow, Print } from './Type';
 
 /**
@@ -281,13 +281,15 @@ export interface NeonTileProps {
   sub?: string;
   /** a lit number on its corner */
   badge?: number;
+  /** a "NEW!" tag on its other corner: something there has changed since it was last opened */
+  fresh?: boolean;
   onPress?: () => void;
   accessibilityLabel?: string;
   style?: StyleProp<ViewStyle>;
 }
 
 /** A sign you can press: one of the places the home page leads to. */
-export function NeonTile({ tube: t, icon, title, sub, badge = 0, onPress, accessibilityLabel, style }: NeonTileProps) {
+export function NeonTile({ tube: t, icon, title, sub, badge = 0, fresh, onPress, accessibilityLabel, style }: NeonTileProps) {
   const tb = tubeOf(t);
   const [width, onLayout] = useWidth(title);
   const room = width > 0 ? width - TILE_PAD_X * 2 - arcade.outline * 2 : undefined;
@@ -311,6 +313,7 @@ export function NeonTile({ tube: t, icon, title, sub, badge = 0, onPress, access
         </Print>
       )}
       <CountBadge count={badge} tube={tb} style={styles.tileBadge} />
+      {fresh && <Tag label="NEW!" tube="pink" small style={styles.tileNew} />}
     </Pressable>
   );
 }
@@ -436,5 +439,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: -px(8),
     top: -px(10),
+  },
+  tileNew: {
+    position: 'absolute',
+    left: -px(8),
+    top: -px(9),
+    transform: [{ rotate: '-6deg' }],
   },
 });

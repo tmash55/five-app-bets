@@ -1,6 +1,6 @@
 /**
  * Uniforms: what the whole squad wears. The captain's team's colours to start with, special designs bought with
- * coins, and every team's own uniform, which unlocks once three of its players are in the collection. Beside the
+ * coins, limited editions sold only on their day in the Daily Shop, and every team's own uniform, which unlocks once three of its players are in the collection. Beside the
  * grid, the uniform the squad wears now, up close.
  */
 
@@ -11,8 +11,10 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { playSfx } from '@/audio/sound';
 import { LEAGUES, leagueOf, mustPlayer, teamById } from '@/data/roster';
 import { RARITY_LABEL, type TeamDef } from '@/data/types';
-import { SPECIAL_UNIFORMS, TEAM_UNIFORMS, teamWear, wearOf, type UniformDef, type Wear } from '@/data/uniforms';
+import { LIMITED_UNIFORMS, SPECIAL_UNIFORMS, TEAM_UNIFORMS, teamWear, wearOf, type UniformDef, type Wear } from '@/data/uniforms';
 import { tapFeedback } from '@/fx/feedback';
+import { dayKey } from '@/meta/rng';
+import { limitedSlot } from '@/meta/shop';
 import { squadUniform, uniformProgress, type UniformProgress } from '@/state/logic';
 import { useSave } from '@/state/save';
 import { arcade, fade, halo, inner, neonText, night, tube, type Tube } from '@/theme/arcade';
@@ -85,6 +87,12 @@ function CornerBadge({ kind }: { kind: 'on' | 'lock' }) {
   );
 }
 
+/** The id of the limited uniform in today's Daily Shop, if today is a uniform day. */
+function limitedToday(): string | null {
+  const item = limitedSlot(dayKey())?.item;
+  return item?.kind === 'uniform' ? item.id : null;
+}
+
 /** The line at the foot of a tile: worn, yours, how many players still to find, or the price. */
 function TileFoot({ entry, state, coins }: { entry: Entry; state: EntryState; coins: number }) {
   if (state.wearing) return <Tag label="WEARING" tube={ON} small />;
@@ -97,6 +105,18 @@ function TileFoot({ entry, state, coins }: { entry: Entry; state: EntryState; co
         </Print>
       </View>
     );
+  if (entry?.limited) {
+    // a limited edition is never bought here: today's shows it is in the shop, the others where to look for them
+    if (limitedToday() === entry.id) return <Tag label="IN SHOP TODAY" tube="gold" small />;
+    return (
+      <View style={styles.footRow}>
+        <LineIcon name="clock" size={px(13)} color={night.textFaint} weight={2.4} />
+        <Print face="bold" size="micro" color="textFaint" track="wide">
+          DAILY SHOP
+        </Print>
+      </View>
+    );
+  }
   if (entry?.kind === 'special' && entry.price !== undefined) {
     const can = coins >= entry.price;
     return (
@@ -121,11 +141,12 @@ function TileFoot({ entry, state, coins }: { entry: Entry; state: EntryState; co
 function Tile({ entry, state, coins, number, width, height, onPress }: { entry: Entry; state: EntryState; coins: number; number: number; width: number; height: number; onPress: () => void }) {
   const tb = tubeOfWear(state.wear);
   const lockedTeam = !state.progress.unlocked && entry?.kind === 'team';
+  const lockedLimited = !state.progress.unlocked && entry?.limited === true && limitedToday() !== entry.id;
   const lit = state.wearing ? ON : state.progress.unlocked ? tb : null;
   const room = width - TILE_PAD * 2 - arcade.outline * 2;
   const jerseyW = Math.min(room * 0.7, (height - TILE_TOP - TILE_NAME - TILE_FOOT - TILE_PAD * 2 - arcade.outline * 2) / JERSEY_RATIO);
   const team = entry === null ? null : state.team;
-  const label = `${state.name}. ${state.wearing ? 'Wearing it' : state.progress.unlocked ? 'Yours: tap to wear' : entry?.kind === 'special' ? `${entry.price} coins` : `${state.progress.have} of ${state.progress.need} players`}`;
+  const label = `${state.name}. ${state.wearing ? 'Wearing it' : state.progress.unlocked ? 'Yours: tap to wear' : entry?.limited ? 'Only in the Daily Shop' : entry?.kind === 'special' ? `${entry.price} coins` : `${state.progress.have} of ${state.progress.need} players`}`;
   return (
     <Pressable
       accessibilityRole="button"
@@ -158,7 +179,7 @@ function Tile({ entry, state, coins, number, width, height, onPress }: { entry: 
       <View style={styles.tileFoot}>
         <TileFoot entry={entry} state={state} coins={coins} />
       </View>
-      {(state.wearing || lockedTeam) && <CornerBadge kind={state.wearing ? 'on' : 'lock'} />}
+      {(state.wearing || lockedTeam || lockedLimited) && <CornerBadge kind={state.wearing ? 'on' : 'lock'} />}
     </Pressable>
   );
 }
@@ -215,6 +236,9 @@ function Detail({ entry, state, coins, number, onWear, onBuy, onClose }: { entry
   if (entry === null) {
     kind = `${state.team?.name ?? ''} · your captain’s team`;
     about = 'The whole squad wears your captain’s team uniform. Pick a new captain on the Squad page and it changes with them.';
+  } else if (entry.limited) {
+    kind = 'Limited edition · Daily Shop only';
+    about = `${entry.blurb ?? ''} ${unlocked ? 'It is yours to wear any time.' : limitedToday() === entry.id ? 'It is in the Daily Shop today!' : 'It is only sold in the Daily Shop, on its day. Look in again soon.'}`.trim();
   } else if (entry.kind === 'special') {
     kind = `Special · ${RARITY_LABEL[entry.rarity]}`;
     about = `${entry.blurb ?? ''} ${unlocked ? 'It is yours to wear any time.' : 'Buy it with coins and the whole squad wears it.'}`.trim();
@@ -265,6 +289,12 @@ function Detail({ entry, state, coins, number, onWear, onBuy, onClose }: { entry
               <GhostButton label="WEARING" icon="check" tube={ON} disabled accessibilityLabel="Your squad is wearing it" style={styles.detailButton} />
             ) : unlocked ? (
               <GoldButton label="WEAR IT" icon="check" size="small" quiet onPress={onWear} style={styles.detailButton} />
+            ) : entry?.limited ? (
+              limitedToday() === entry.id ? (
+                <GoldButton label="TO THE SHOP" icon="tag" size="small" onPress={() => router.push('/packs')} accessibilityLabel="It is in the Daily Shop today. Go to the shop" style={styles.detailButton} />
+              ) : (
+                <GhostButton label="DAILY SHOP" icon="clock" tube="gold" onPress={() => router.push('/packs')} accessibilityLabel="Only sold in the Daily Shop. Go to the shop" style={styles.detailButton} />
+              )
             ) : entry?.kind === 'special' && entry.price !== undefined ? (
               <View style={styles.buy}>
                 <GoldButton
@@ -284,7 +314,7 @@ function Detail({ entry, state, coins, number, onWear, onBuy, onClose }: { entry
                 )}
               </View>
             ) : (
-              <GhostButton label={`COLLECT ${left} MORE ${(entry?.name ?? '').toUpperCase()}`} icon="pack" tube="cyan" accessibilityLabel={`Collect ${left} more ${entry?.name ?? ''} ${left === 1 ? 'player' : 'players'}. Go to packs`} onPress={() => router.push('/packs')} style={styles.detailButton} />
+              <GhostButton label={`COLLECT ${left} MORE ${(entry?.name ?? '').toUpperCase()}`} icon="pack" tube="cyan" accessibilityLabel={`Collect ${left} more ${entry?.name ?? ''} ${left === 1 ? 'player' : 'players'}. Go to packs`} onPress={() => router.push({ pathname: '/packs', params: { tab: 'packs' } })} style={styles.detailButton} />
             )}
           </View>
         </View>
@@ -344,6 +374,7 @@ export default function Uniforms() {
   const specials: Entry[] = [null, ...SPECIAL_UNIFORMS];
   const teams: Entry[] = TEAM_UNIFORMS.filter((u) => u.league === league);
   const boughtCount = SPECIAL_UNIFORMS.filter((u) => uniforms.includes(u.id)).length;
+  const limitedCount = LIMITED_UNIFORMS.filter((u) => uniforms.includes(u.id)).length;
   const teamCount = TEAM_UNIFORMS.filter((u) => uniformProgress({ owned, uniforms }, u).unlocked).length;
 
   const grid = (entries: Entry[]) => (
@@ -378,6 +409,20 @@ export default function Uniforms() {
                 }
               />
               {grid(specials)}
+              <SignHead
+                title="LIMITED"
+                tube="gold"
+                style={styles.secondHead}
+                right={
+                  <View style={styles.headRight}>
+                    <LineIcon name="clock" size={px(14)} color={night.textFaint} weight={2.4} />
+                    <Print face="bold" size="tiny" color="textFaint" track="wider">
+                      {`ONLY IN THE DAILY SHOP · ${limitedCount} OF ${LIMITED_UNIFORMS.length}`}
+                    </Print>
+                  </View>
+                }
+              />
+              {grid([...LIMITED_UNIFORMS])}
               <SignHead
                 title="TEAM UNIFORMS"
                 tube="cyan"

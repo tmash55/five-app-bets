@@ -166,7 +166,7 @@ function Detail({ player }: { player: PlayerDef }) {
                 <Hint icon="pack" text="Find them in packs" tb={tubes.pink} />
                 {stop !== null && <Hint icon="flag" text={`Or win the ${stop} Showdown on the Tour`} tb={tubes.green} />}
               </Well>
-              <GoldButton label="GO TO PACKS" icon="pack" size="small" onPress={() => router.push('/packs')} />
+              <GoldButton label="GO TO PACKS" icon="pack" size="small" onPress={() => router.push({ pathname: '/packs', params: { tab: 'packs' } })} />
             </>
           )}
         </NeonPanel>

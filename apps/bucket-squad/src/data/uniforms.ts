@@ -3,6 +3,8 @@
  * few special designs are made up for the game and bought with coins. A uniform is a set of colours only:
  * the shapes (tank top, shorts, shoes) come from the kit renderer as they always have.
  *
+ * A few more are limited editions, sold only on the days the Daily Shop features them.
+ *
  * Team uniforms come from `TEAMS`, so a family build's extra league brings its teams' uniforms with it and
  * nothing about those teams is ever written here.
  */
@@ -31,6 +33,8 @@ export interface UniformDef {
   price?: number;
   /** one line about it */
   blurb?: string;
+  /** a limited edition: sold only on the days the Daily Shop features it, never on the Uniforms page */
+  limited?: boolean;
 }
 
 /** What a side wears: the colours, and the team it belongs to when it is a team's own uniform. */
@@ -137,10 +141,67 @@ export const SPECIAL_UNIFORMS: readonly UniformDef[] = [
   ),
 ];
 
+/** what a limited edition costs on the day the Daily Shop features it */
+export const LIMITED_UNIFORM_PRICE = 1500;
+
+function limited(id: string, name: string, color: string, kit: KitColors, blurb: string): UniformDef {
+  return { id, name, kind: 'special', league: SPECIAL_LEAGUE, rarity: 'epic', kit, color, color2: kit.trim, price: LIMITED_UNIFORM_PRICE, blurb, limited: true };
+}
+
+/**
+ * Limited editions: made-up designs sold only in the Daily Shop, one at a time, each coming back only after all the
+ * others have had their turn (see meta/shop). Once bought they are worn like any special. The colour wheel is crowded
+ * by now, so each one is also told apart from its nearest neighbours by its shorts (see the uniforms tests).
+ */
+export const LIMITED_UNIFORMS: readonly UniformDef[] = [
+  limited(
+    'space-cadet',
+    'Space Cadet',
+    '#4D6BFF',
+    { jersey: '#0000B3', trim: '#FFD24A', number: '#FFFFFF', shorts: '#FFD24A', shortsTrim: '#0000B3', shoe: '#FFFFFF', shoeAccent: '#FFD24A', sole: '#F4F1EA', sock: '#FFFFFF', band: '#FFD24A' },
+    'Deep space blue and rocket gold. Ready for lift-off.',
+  ),
+  limited(
+    'peach-fizz',
+    'Peach Fizz',
+    '#FFCC80',
+    { jersey: '#FFCC80', trim: '#1FB5C9', number: '#0B5560', shorts: '#1FB5C9', shortsTrim: '#FFCC80', shoe: '#FFFFFF', shoeAccent: '#1FB5C9', sole: '#F4F1EA', sock: '#FFFFFF', band: '#1FB5C9' },
+    'Peach soda with a fizzy blue splash.',
+  ),
+  limited(
+    'slime-time',
+    'Slime Time',
+    '#00FF00',
+    { jersey: '#00FF00', trim: '#6A1FB8', number: '#3A0A70', shorts: '#6A1FB8', shortsTrim: '#00FF00', shoe: '#6A1FB8', shoeAccent: '#00FF00', sole: '#00FF00', sock: '#FFFFFF', band: '#6A1FB8' },
+    'Gooey green and grape purple. Totally slimy.',
+  ),
+  limited(
+    'mint-chip',
+    'Mint Chip',
+    '#80FF99',
+    { jersey: '#80FF99', trim: '#4A2C1A', number: '#4A2C1A', shorts: '#4A2C1A', shortsTrim: '#80FF99', shoe: '#FFFFFF', shoeAccent: '#4A2C1A', sole: '#F4F1EA', sock: '#FFFFFF', band: '#80FF99' },
+    'Cool mint with chocolate chips. Scoop it up.',
+  ),
+  limited(
+    'dino-bones',
+    'Dino Bones',
+    '#ADAD94',
+    { jersey: '#ADAD94', trim: '#F4EBD0', number: '#3B2A1E', shorts: '#F4EBD0', shortsTrim: '#3B2A1E', shoe: '#3B2A1E', shoeAccent: '#F4EBD0', sole: '#F4EBD0', sock: '#F4EBD0', band: '#3B2A1E' },
+    'Fossil grey and bone white. Stomp and roar.',
+  ),
+  limited(
+    'sour-apple',
+    'Sour Apple',
+    '#BFFF4D',
+    { jersey: '#BFFF4D', trim: '#E0115F', number: '#1F4D00', shorts: '#E0115F', shortsTrim: '#BFFF4D', shoe: '#FFFFFF', shoeAccent: '#E0115F', sole: '#F4F1EA', sock: '#FFFFFF', band: '#E0115F' },
+    'Super sour green with a red apple bite.',
+  ),
+];
+
 /** Every team's own uniform, in roster order (a family build's extra league included). */
 export const TEAM_UNIFORMS: readonly UniformDef[] = TEAMS.map(teamUniform);
 
-export const ALL_UNIFORMS: readonly UniformDef[] = [...SPECIAL_UNIFORMS, ...TEAM_UNIFORMS];
+export const ALL_UNIFORMS: readonly UniformDef[] = [...SPECIAL_UNIFORMS, ...LIMITED_UNIFORMS, ...TEAM_UNIFORMS];
 
 const BY_ID = new Map(ALL_UNIFORMS.map((u) => [u.id, u]));
 

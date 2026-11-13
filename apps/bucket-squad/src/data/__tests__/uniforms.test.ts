@@ -1,10 +1,19 @@
 import { hexToRgb } from '@/game/kit/look';
 
 import { KIT_CLASH, TEAMS, colorGap, kitAgainst, teamPlayers } from '../roster';
-import { ALL_UNIFORMS, SPECIAL_LEAGUE, SPECIAL_UNIFORMS, TEAM_UNIFORMS, UNIFORM_PRICE, UNIFORM_TEAM_NEED, teamUniformId, teamWear, uniformById, uniformNeed, wearOf } from '../uniforms';
+import { ALL_UNIFORMS, LIMITED_UNIFORMS, LIMITED_UNIFORM_PRICE, SPECIAL_LEAGUE, SPECIAL_UNIFORMS, TEAM_UNIFORMS, UNIFORM_PRICE, type UniformDef, UNIFORM_TEAM_NEED, teamUniformId, teamWear, uniformById, uniformNeed, wearOf } from '../uniforms';
 
 /** how far apart two special jerseys are at least, so no two look like the same uniform */
 const SPECIAL_GAP = 0.4;
+/**
+ * The colour wheel is full by the time the limited editions come in: a limited one may sit a little nearer another
+ * design's jersey than SPECIAL_GAP, but never nearer than this, and then its shorts must be far from that one's
+ */
+const LIMITED_GAP = 0.33;
+const SHORTS_GAP = 0.5;
+
+/** every design that is not a team's own: the specials and the limited editions */
+const DESIGNS: readonly UniformDef[] = [...SPECIAL_UNIFORMS, ...LIMITED_UNIFORMS];
 
 /** WCAG contrast between two colours: 1 for the same colour, 21 for black on white */
 function contrast(a: string, b: string): number {
@@ -54,13 +63,27 @@ describe('the uniforms', () => {
     }
   });
 
-  it('never names a special like a team', () => {
+  it('has six to eight limited editions, sold only through the Daily Shop', () => {
+    expect(LIMITED_UNIFORMS.length).toBeGreaterThanOrEqual(6);
+    expect(LIMITED_UNIFORMS.length).toBeLessThanOrEqual(8);
+    for (const u of LIMITED_UNIFORMS) {
+      expect(u).toMatchObject({ kind: 'special', league: SPECIAL_LEAGUE, limited: true, price: LIMITED_UNIFORM_PRICE });
+      expect(u.team).toBeUndefined();
+      expect(u.blurb?.length).toBeGreaterThan(0);
+      expect(uniformById(u.id)).toBe(u);
+      for (const c of [...Object.values(u.kit), u.color, u.color2]) expect(c).toMatch(/^#[0-9A-F]{6}$/);
+    }
+    // the specials on the Uniforms page's buy list are never limited
+    for (const u of SPECIAL_UNIFORMS) expect(u.limited).toBeUndefined();
+  });
+
+  it('never names a special or a limited edition like a team', () => {
     const teamWords = TEAMS.flatMap((t) => [t.name, t.place, t.short]).map((w) => w.toLowerCase());
-    for (const u of SPECIAL_UNIFORMS) {
+    for (const u of DESIGNS) {
       expect(teamWords).not.toContain(u.name.toLowerCase());
       for (const word of u.name.toLowerCase().split(' ')) expect(TEAMS.map((t) => t.name.toLowerCase())).not.toContain(word);
     }
-    const names = SPECIAL_UNIFORMS.map((u) => u.name.toLowerCase());
+    const names = DESIGNS.map((u) => u.name.toLowerCase());
     expect(new Set(names).size).toBe(names.length);
   });
 
@@ -71,12 +94,26 @@ describe('the uniforms', () => {
     }
   });
 
-  it('puts a number on every jersey that stands out from it', () => {
-    for (const u of ALL_UNIFORMS.filter((x) => x.kind === 'special')) expect(contrast(u.kit.jersey, u.kit.number)).toBeGreaterThanOrEqual(3);
+  it('makes every limited edition look new: far from every team jersey, and from every other design by its jersey or else its shorts too', () => {
+    for (const u of LIMITED_UNIFORMS) {
+      for (const team of TEAMS.filter((t) => t.league === 'neighborhood')) expect(colorGap(u.kit.jersey, team.kit.jersey)).toBeGreaterThanOrEqual(KIT_CLASH);
+      for (const other of DESIGNS) {
+        if (other === u) continue;
+        const jersey = colorGap(u.kit.jersey, other.kit.jersey);
+        expect(jersey).toBeGreaterThanOrEqual(LIMITED_GAP);
+        if (jersey < SPECIAL_GAP) expect(colorGap(u.kit.shorts, other.kit.shorts)).toBeGreaterThanOrEqual(SHORTS_GAP);
+      }
+    }
   });
 
-  it('keeps every team easy to tell apart from a squad in any special', () => {
-    for (const u of SPECIAL_UNIFORMS) {
+  it('puts a number on every jersey that stands out from it', () => {
+    const designs = ALL_UNIFORMS.filter((x) => x.kind === 'special');
+    expect(designs).toHaveLength(DESIGNS.length);
+    for (const u of designs) expect(contrast(u.kit.jersey, u.kit.number)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('keeps every team easy to tell apart from a squad in any special or limited edition', () => {
+    for (const u of DESIGNS) {
       for (const team of TEAMS) expect(colorGap(u.kit.jersey, kitAgainst(wearOf(u), team).jersey)).toBeGreaterThanOrEqual(KIT_CLASH);
     }
   });
