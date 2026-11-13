@@ -617,8 +617,20 @@ export class FigureAnimator {
         pitch = s > 0.72 ? ((s - 0.72) / 0.28) * 0.55 : -0.14 * Math.max(0, 1 - s / 0.18);
       } else {
         const s = (u - duty) / (1 - duty);
-        a = stride * (-1 + 2 * smooth(s));
-        h = lift * Math.sin(Math.PI * s) + 0.03 * w * Math.sin(Math.PI * Math.min(1, s * 1.7));
+        if (this.match) {
+          // the swing leaves and meets the floor at the speed the planted foot was going back at, and lifts and sets down
+          // softly, so a foot never jerks into or out of a step
+          const m = (-2 * stride * (1 - duty)) / duty;
+          const s2 = s * s;
+          const s3 = s2 * s;
+          a = (2 * s3 - 3 * s2 + 1) * -stride + (s3 - 2 * s2 + s) * m + (-2 * s3 + 3 * s2) * stride + (s3 - s2) * m;
+          const sl = Math.sin(Math.PI * s);
+          const sb = Math.sin(Math.PI * Math.min(1, s * 1.7));
+          h = lift * 1.15 * sl * sl + 0.03 * w * sb * sb;
+        } else {
+          a = stride * (-1 + 2 * smooth(s));
+          h = lift * Math.sin(Math.PI * s) + 0.03 * w * Math.sin(Math.PI * Math.min(1, s * 1.7));
+        }
         pitch = lerp(0.6, -0.16, smooth(s));
       }
       this.foot(side, side * wide + dx * a * 0.7, ANKLE + h, dz * a, pitch * w * fwd, side * 0.14 * (1 - 0.6 * w));
@@ -637,8 +649,9 @@ export class FigureAnimator {
     const k = w * armSwing;
     for (let side = 1; side >= -1; side -= 2) {
       const front = side > 0 ? -cph : cph;
-      const fp = Math.max(0, front);
-      const bk = Math.max(0, -front);
+      // (squared in the match, so the swing has no corner where it turns round)
+      const fp = this.match ? Math.max(0, front) ** 2 : Math.max(0, front);
+      const bk = this.match ? Math.max(0, -front) ** 2 : Math.max(0, -front);
       this.hand(
         side,
         side * (0.315 - 0.04 * fp * k),
