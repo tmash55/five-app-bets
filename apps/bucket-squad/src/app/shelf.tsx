@@ -1,120 +1,369 @@
-/** The Shelf: every player there is, team by team, with empty spots for the ones still to find. */
+/**
+ * The collection: every player there is in one grid, a column to a team, lit when found and a dark outline
+ * when not. Beside it the player picked in the grid, up close, with what they are good at and where to put them.
+ */
 
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { LEAGUES, PLAYERS, byValue, leagueOf, leagueTeams, teamPlayers } from '@/data/roster';
-import type { TeamDef } from '@/data/types';
-import { countOwned, levelOf, type Owned } from '@/meta/collection';
+import { LEAGUES, MAX_LEVEL, PLAYERS, boosted, byValue, leagueOf, leagueTeams, levelBonus, teamById, teamPlayers } from '@/data/roster';
+import type { PlayerDef, TeamDef } from '@/data/types';
+import { tapFeedback } from '@/fx/feedback';
+import { RATING_KEYS } from '@/game/sim/ratings';
+import { countOwned, levelOf, levelProgress, type Owned } from '@/meta/collection';
 import { useSave } from '@/state/save';
-import { size as sizes, space } from '@/theme/tokens';
-import { Tag, TeamBadge } from '@/ui/Bits';
-import { HeaderTabs } from '@/ui/Inputs';
-import { PlayerCard } from '@/ui/PlayerCard';
-import { rowsOf } from '@/ui/rows';
-import { Screen, useBodySize } from '@/ui/Screen';
-import { Sticker } from '@/ui/Sticker';
-import { Txt } from '@/ui/Txt';
+import { arcade, halo, night, rarityPaint, tube } from '@/theme/arcade';
+import { px } from '@/theme/tokens';
+import { ArcadeScreen, useArcadeBody } from '@/ui/arcade/ArcadeScreen';
+import { GhostButton, GoldButton } from '@/ui/arcade/Buttons';
+import { HeadCell } from '@/ui/arcade/Card';
+import { LineIcon } from '@/ui/arcade/LineIcon';
+import { MIN_FIT_LABEL, fitPerson } from '@/ui/arcade/measure';
+import { Portrait } from '@/ui/arcade/Portrait';
+import { Meter, Pips, StatRow } from '@/ui/arcade/SegBar';
+import { Chip, NeonPanel, Well, teamLine } from '@/ui/arcade/Surface';
+import { ratingLabel } from '@/ui/arcade/ratingLabel';
+import { Print } from '@/ui/arcade/Type';
+import { tourStop } from '@/ui/arcade/whereToFind';
 
 const ALL_IDS = PLAYERS.map((p) => p.id);
-const LEAGUE_TABS = LEAGUES.map((l) => ({ value: l.id, label: l.name }));
-/** a team's cards sit in two rows, at least this many to a row */
-const MIN_COLUMNS = 3;
-const ROWS = 2;
-const HEAD_H = sizes.badgeSmall + space.xs;
 
-function TeamPage({ team, owned, fresh, cardW, onOpen }: { team: TeamDef; owned: Owned; fresh: readonly string[]; cardW: number; onOpen: (id: string) => void }) {
-  const players = teamPlayers(team.id).sort(byValue);
+/** the gaps in the grid, between columns and between rows */
+const GAP = px(5);
+/** a team's name and count over its column, and the lit line under them */
+const HEAD_H = px(22);
+/** the space kept above and below the grid and the panel */
+const EDGE_Y = px(6);
+/** between the grid and the panel */
+const SPLIT = px(15);
+/** a cell no narrower than this: below it the grid scrolls sideways instead */
+const CELL_LEAST = px(44);
+/** a cell is at most this much wider than tall, and at most this much taller than wide */
+const CELL_WIDEST = 1.6;
+const CELL_TALLEST = 1;
+/** the panel's inside edge */
+const PANEL_PAD = px(10);
+/** a rating's row: as tall as its lamps' label, so six of them leave the picture room */
+const ROW_SMALL = px(13);
+const ROW = px(16);
+/** a tab is a slim strip inside its chip: its tap area reaches the bar's full height */
+const TAB_SLOP = { top: px(11), bottom: px(11), left: px(2), right: px(2) };
+
+/** A team's players in the order the grid shows them: the best first. */
+function column(team: TeamDef): PlayerDef[] {
+  return teamPlayers(team.id).sort(byValue);
+}
+
+/** The player to show when the page opens on a league: one just found, then a squad player, then anyone found, then the first. */
+function firstPick(league: string, owned: Owned, fresh: readonly string[], squad: readonly string[]): string {
+  const ids = leagueTeams(league).flatMap((t) => column(t).map((p) => p.id));
+  return ids.find((id) => fresh.includes(id) && (owned[id] ?? 0) > 0) ?? ids.find((id) => squad.includes(id)) ?? ids.find((id) => (owned[id] ?? 0) > 0) ?? ids[0];
+}
+
+/** The leagues as lit tabs, when there is more than one. */
+function LeagueTabs({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  return (
+    <View accessibilityRole="tablist" style={styles.tabs}>
+      {LEAGUES.map((l) => {
+        const on = l.id === value;
+        return (
+          <Pressable
+            key={l.id}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: on }}
+            accessibilityLabel={l.name}
+            hitSlop={TAB_SLOP}
+            onPress={() => {
+              tapFeedback();
+              onChange(l.id);
+            }}
+            style={({ pressed }) => [styles.tab, on && { borderColor: tube.cyan.glass, boxShadow: [halo(tube.cyan.glass, 8, 0.6)] }, pressed && styles.pressed]}>
+            <Print face="bold" size="tiny" color={on ? tube.cyan.tint : 'textDim'} track="wide" upper lines={1}>
+              {l.name}
+            </Print>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** How many players are found out of all of them, in the top bar. */
+function Found({ have, of, meter }: { have: number; of: number; meter: boolean }) {
+  return (
+    <View accessible accessibilityLabel={`${have} of ${of} players found`}>
+      <Chip style={styles.found}>
+        <Print face="bold" size="body" color={tube.green.glass} glow={tube.green.glass} track="wider" lines={1}>
+          {`${have} OF ${of}`}
+        </Print>
+        {meter && <Meter value={have / Math.max(1, of)} />}
+      </Chip>
+    </View>
+  );
+}
+
+function TeamColumn({ team, owned, fresh, picked, cellW, cellH, onPick }: { team: TeamDef; owned: Owned; fresh: readonly string[]; picked: string; cellW: number; cellH: number; onPick: (id: string) => void }) {
+  const players = column(team);
   const have = countOwned(
     owned,
     players.map((p) => p.id),
   );
-  // a big team gets a wider page, never a third row
-  const columns = Math.max(MIN_COLUMNS, Math.ceil(players.length / ROWS));
+  const line = teamLine(team);
+  const full = have === players.length;
   return (
-    <Sticker fill="paper" round="lg" raise="mid" face={styles.page}>
-      <View style={styles.pageHead}>
-        <TeamBadge team={team} diameter={sizes.badgeSmall} />
-        <Txt font="display" size="body" lines={1} style={styles.pageName}>
-          {team.name}
-        </Txt>
-        <Tag label={`${have} / ${players.length}`} fill={have === players.length ? 'mint' : 'paperDim'} style={styles.centerSelf} />
+    <View style={[styles.column, { width: cellW }]}>
+      <View accessible accessibilityLabel={`${team.name}: ${have} of ${players.length} found`} style={styles.head}>
+        <View style={styles.headWords}>
+          <Print face="bold" size="tiny" track="normal" lines={1}>
+            {team.short}
+          </Print>
+          <Print face="bold" size={px(11)} color={full ? tube.green.glass : 'textDim'} lines={1}>
+            {`${have}/${players.length}`}
+          </Print>
+        </View>
+        {/* the team's colour as a lit line, throwing a little light down onto its players */}
+        <View style={[styles.headLine, { backgroundColor: line, boxShadow: [halo(line, 6, 0.7)] }]} />
       </View>
-      <View style={styles.grid}>
-        {rowsOf(players, columns).map((row) => (
-          <View key={row[0].id} style={styles.gridRow}>
-            {row.map((p) => {
-              const copies = owned[p.id] ?? 0;
-              return <PlayerCard key={p.id} player={p} level={levelOf(copies)} locked={copies === 0} fresh={fresh.includes(p.id)} width={cardW} onPress={() => onOpen(p.id)} />;
-            })}
-          </View>
-        ))}
-      </View>
-    </Sticker>
+      {players.map((p) => {
+        const copies = owned[p.id] ?? 0;
+        return <HeadCell key={p.id} player={p} level={levelOf(copies)} selected={p.id === picked} fresh={fresh.includes(p.id)} width={cellW} height={cellH} onPress={() => onPick(p.id)} />;
+      })}
+    </View>
   );
 }
 
-export default function Shelf() {
-  const router = useRouter();
-  const owned = useSave((s) => s.owned);
-  const fresh = useSave((s) => s.fresh);
-  const body = useBodySize();
-  const homeTeam = useSave((s) => s.homeTeam);
-  const [league, setLeague] = useState(() => leagueOf(homeTeam));
-  const teams = leagueTeams(league);
+/** The level as lamps, and the copies still to find for the next one. */
+function LevelLine({ copies, small, room }: { copies: number; small: boolean; room: number }) {
+  const prog = levelProgress(copies);
+  const left = prog.need - prog.have;
+  const words = prog.maxed ? 'TOP LEVEL' : `${left} MORE ${left === 1 ? 'COPY' : 'COPIES'}`;
+  const label = small ? px(11) : px(12.5);
+  return (
+    <View
+      accessible
+      accessibilityLabel={prog.maxed ? `Level ${prog.level}, the top level` : `Level ${prog.level}. ${left} more ${left === 1 ? 'copy' : 'copies'} to level ${prog.level + 1}`}
+      style={[styles.level, { height: small ? ROW_SMALL : ROW }]}>
+      <Print face="bold" size={label} color="textDim" track="normal" lines={1}>
+        {`LEVEL ${prog.level}`}
+      </Print>
+      <Pips have={prog.level} of={MAX_LEVEL} tube="gold" size={small ? px(8) : px(10)} style={styles.grow} />
+      <Print face="bold" size={label} color={prog.maxed ? tube.gold.glass : 'textDim'} track="normal" right room={room} least={MIN_FIT_LABEL}>
+        {words}
+      </Print>
+    </View>
+  );
+}
 
-  // two rows of cards have to fit under the page's heading
-  const rowH = (body.height - HEAD_H - space.sm * 4 - space.md) / ROWS;
-  const cardW = Math.max(sizes.cardSmall - space.xl, Math.min(sizes.card + space.lg, Math.floor(rowH / sizes.cardRatio)));
+function Detail({ player, width, height }: { player: PlayerDef; width: number; height: number }) {
+  const router = useRouter();
+  const copies = useSave((s) => s.owned[player.id] ?? 0);
+  const inSquad = useSave((s) => s.squad.includes(player.id));
+  const level = levelOf(copies);
+  const found = level > 0;
+  const team = teamById(player.team);
+  const rp = rarityPaint[player.rarity];
+  const small = width < px(280);
+  const inside = width - PANEL_PAD * 2 - arcade.outline * 2;
+  const nameSize = Math.min(px(26), Math.max(px(17), Math.round(width * 0.086)));
+  const name = fitPerson(player.name.toUpperCase(), 'display', nameSize, inside, 0, player.short?.toUpperCase());
+  const ratings = boosted(player.ratings, levelBonus(Math.max(1, level)));
+  const best = RATING_KEYS.reduce((a, k) => (ratings[k] > ratings[a] ? k : a), RATING_KEYS[0]);
+  const stop = found ? null : tourStop(player.id);
+  const open = () => router.push({ pathname: '/player/[id]', params: { id: player.id } });
 
   return (
-    <Screen
-      title="SHELF"
-      tone="mint"
-      right={
-        <>
-          {LEAGUES.length > 1 && <HeaderTabs options={LEAGUE_TABS} value={league} onChange={setLeague} />}
-          <Tag label={`${countOwned(owned, ALL_IDS)} / ${ALL_IDS.length} players`} fill="paper" style={styles.centerSelf} />
-        </>
-      }>
-      {/* a new league starts from its first team */}
-      <ScrollView key={league} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {teams.map((t) => (
-          <TeamPage key={t.id} team={t} owned={owned} fresh={fresh} cardW={cardW} onOpen={(id) => router.push({ pathname: '/player/[id]', params: { id } })} />
-        ))}
-      </ScrollView>
-    </Screen>
+    <NeonPanel tube={rp.tube} round={arcade.rBig} style={[styles.panel, { width, height }]}>
+      <Portrait player={player} level={level} onPress={open} style={styles.portrait} />
+      <View style={styles.words}>
+        <Print face="display" size={name.size} track="tight" lines={1} style={{ lineHeight: Math.round(name.size * 1.04) }}>
+          {name.text}
+        </Print>
+        <Print face="bold" size={small ? 'tiny' : 'small'} color={tube.cyan.soft} track="wide" upper room={inside}>
+          {`${team.name} · ${player.role}`}
+        </Print>
+      </View>
+      {found ? (
+        <View style={[styles.stats, !small && styles.statsWide]}>
+          {RATING_KEYS.map((k) => (
+            <StatRow key={k} label={ratingLabel(k, small)} value={ratings[k]} tube={k === best ? 'pink' : 'cyan'} small={small} style={{ height: small ? ROW_SMALL : ROW }} />
+          ))}
+          <LevelLine copies={copies} small={small} room={inside * 0.48} />
+        </View>
+      ) : (
+        <Well style={styles.missing}>
+          <View style={styles.missingHead}>
+            <LineIcon name="lock" size={px(16)} color={night.textFaint} weight={2.4} />
+            <Print face="display" size={small ? 'small' : 'body'} color="textDim" track="close" lines={1}>
+              NOT FOUND YET
+            </Print>
+          </View>
+          <Print face="body" size={small ? 'tiny' : 'small'} color="textMuted" lines={3}>
+            {stop !== null ? `Find them in packs, or win the ${stop} Showdown on the Tour.` : 'Find them in packs. Their ratings show up once you do.'}
+          </Print>
+        </Well>
+      )}
+      {!found ? (
+        <GoldButton label="GO TO PACKS" icon="pack" size="small" onPress={() => router.push('/packs')} />
+      ) : inSquad ? (
+        <GhostButton label="IN YOUR SQUAD" icon="check" tube="green" onPress={() => router.push('/squad')} />
+      ) : (
+        <GoldButton label="PUT IN SQUAD" size="small" accessibilityLabel={`Put ${player.name} in your squad`} onPress={() => router.push({ pathname: '/squad', params: { add: player.id } })} />
+      )}
+    </NeonPanel>
+  );
+}
+
+export default function Collection() {
+  const owned = useSave((s) => s.owned);
+  const fresh = useSave((s) => s.fresh);
+  const squad = useSave((s) => s.squad);
+  const markSeen = useSave((s) => s.markSeen);
+  const homeTeam = useSave((s) => s.homeTeam);
+  const body = useArcadeBody();
+  const [league, setLeague] = useState(() => leagueOf(homeTeam));
+  // picked once when the page opens (and again for a new league), so the panel does not jump when a new player is looked at elsewhere
+  const [picked, setPicked] = useState(() => firstPick(leagueOf(homeTeam), owned, fresh, squad));
+  const teams = leagueTeams(league);
+  const columns = teams.map(column);
+  const rows = Math.max(1, ...columns.map((c) => c.length));
+  const shown = columns.some((c) => c.some((p) => p.id === picked)) ? picked : firstPick(league, owned, fresh, squad);
+  const player = PLAYERS.find((p) => p.id === shown) ?? PLAYERS[0];
+
+  // the panel takes about a third of the page, the grid the rest; on a narrow phone the panel gives a little first
+  const panelW = Math.round(Math.min(px(340), Math.max(px(196), body.width * 0.29)));
+  const roomW = body.width - panelW - SPLIT;
+  const roomH = body.height - EDGE_Y * 2;
+  const fromW = (roomW - GAP * (teams.length - 1)) / teams.length;
+  const fromH = (roomH - HEAD_H - GAP * rows) / rows;
+  const cellW = Math.floor(Math.max(CELL_LEAST, Math.min(fromW, fromH * CELL_WIDEST)));
+  const cellH = Math.floor(Math.min(fromH, cellW * CELL_TALLEST));
+  const gridH = HEAD_H + (cellH + GAP) * rows;
+  const gridW = cellW * teams.length + GAP * (teams.length - 1);
+  // the panel stands as tall as the grid, with a floor so its button always has room
+  const panelH = Math.min(roomH, Math.max(gridH, px(300)));
+
+  const pick = (id: string) => {
+    setPicked(id);
+    markSeen(id);
+  };
+  const changeLeague = (id: string) => {
+    setLeague(id);
+    setPicked(firstPick(id, owned, fresh, squad));
+  };
+
+  const have = countOwned(owned, ALL_IDS);
+  return (
+    <ArcadeScreen
+      title="COLLECTION"
+      tube="cyan"
+      after={<Found have={have} of={ALL_IDS.length} meter={body.width > px(560)} />}
+      right={LEAGUES.length > 1 ? <LeagueTabs value={league} onChange={changeLeague} /> : undefined}>
+      <View style={styles.page}>
+        <ScrollView key={league} horizontal showsHorizontalScrollIndicator={false} style={styles.grow} contentContainerStyle={[styles.scroll, { minWidth: roomW }]}>
+          <View style={[styles.grid, { width: gridW, height: gridH }]}>
+            {teams.map((t) => (
+              <TeamColumn key={t.id} team={t} owned={owned} fresh={fresh} picked={shown} cellW={cellW} cellH={cellH} onPick={pick} />
+            ))}
+          </View>
+        </ScrollView>
+        <Detail player={player} width={panelW} height={panelH} />
+      </View>
+    </ArcadeScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: {
-    gap: space.md,
-    paddingRight: space.lg,
-    alignItems: 'center',
-  },
   page: {
-    padding: space.sm,
-    gap: space.xs,
-  },
-  pageHead: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.sm,
-    height: HEAD_H,
+    gap: SPLIT,
   },
-  pageName: {
+  grow: {
     flex: 1,
   },
+  scroll: {
+    flexGrow: 1,
+    alignItems: 'center',
+  },
   grid: {
-    gap: space.sm,
-  },
-  gridRow: {
     flexDirection: 'row',
-    gap: space.sm,
+    gap: GAP,
   },
-  centerSelf: {
-    alignSelf: 'center',
+  column: {
+    gap: GAP,
+  },
+  head: {
+    height: HEAD_H,
+    justifyContent: 'flex-end',
+  },
+  headWords: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: px(4),
+    paddingRight: px(3),
+  },
+  headLine: {
+    height: px(2.5),
+    borderRadius: px(1.25),
+  },
+  panel: {
+    paddingHorizontal: PANEL_PAD,
+    paddingTop: px(9),
+    paddingBottom: PANEL_PAD,
+    gap: px(7),
+  },
+  portrait: {
+    flex: 1,
+    minHeight: px(56),
+  },
+  words: {
+    gap: px(4),
+  },
+  stats: {
+    gap: px(4),
+  },
+  statsWide: {
+    gap: px(7),
+  },
+  level: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: px(8),
+    marginTop: px(2),
+  },
+  missing: {
+    gap: px(6),
+  },
+  missingHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: px(7),
+  },
+  found: {
+    gap: px(10),
+  },
+  tabs: {
+    flexDirection: 'row',
+    gap: px(4),
+    height: arcade.chip,
+    padding: px(3),
+    backgroundColor: night.pit,
+    borderWidth: arcade.hairline,
+    borderColor: night.line,
+    borderRadius: arcade.rChip,
+  },
+  tab: {
+    justifyContent: 'center',
+    paddingHorizontal: px(9),
+    borderRadius: px(5),
+    borderWidth: arcade.hairline,
+    borderColor: night.clear,
+  },
+  pressed: {
+    opacity: 0.8,
   },
 });
