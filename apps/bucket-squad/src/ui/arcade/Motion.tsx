@@ -4,7 +4,7 @@
  */
 
 import { useEffect } from 'react';
-import type { StyleProp, ViewStyle } from 'react-native';
+import type { LayoutChangeEvent, StyleProp, ViewStyle } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSpring, withTiming } from 'react-native-reanimated';
 
 import { px } from '@/theme/tokens';
@@ -23,10 +23,12 @@ export interface ArriveProps {
   from?: ArriveFrom;
   style?: StyleProp<ViewStyle>;
   pointerEvents?: 'box-none' | 'none' | 'auto' | 'box-only';
+  /** where it ends up, for something else to be placed around it */
+  onLayout?: (e: LayoutChangeEvent) => void;
 }
 
 /** Something that pops or slides into place when the page opens. */
-export function Arrive({ children, delay = 0, from = 'pop', style, pointerEvents }: ArriveProps) {
+export function Arrive({ children, delay = 0, from = 'pop', style, pointerEvents, onLayout }: ArriveProps) {
   const t = useSharedValue(0);
   useEffect(() => {
     t.set(withDelay(delay, withSpring(1, POP)));
@@ -40,7 +42,7 @@ export function Arrive({ children, delay = 0, from = 'pop', style, pointerEvents
     return { opacity, transform: [{ translateX: from === 'left' ? -d : d }] };
   });
   return (
-    <Animated.View pointerEvents={pointerEvents} style={[style, anim]}>
+    <Animated.View pointerEvents={pointerEvents} onLayout={onLayout} style={[style, anim]}>
       {children}
     </Animated.View>
   );

@@ -19,7 +19,9 @@ export function teamTube(team: TeamDef): Tube {
 }
 
 export const TEAM_PICK_WIDTH = px(100);
-const TEAM_PICK_HEIGHT = px(88);
+export const TEAM_PICK_HEIGHT = px(88);
+/** the shortest a tile can be and still hold its letters and its name */
+export const TEAM_PICK_MIN_HEIGHT = px(64);
 const PAD = px(8);
 
 export interface TeamPickProps {
@@ -30,11 +32,13 @@ export interface TeamPickProps {
   selected: boolean;
   onPress: () => void;
   width?: number;
+  /** shorter tiles, so a whole grid fits the room it has */
+  height?: number;
   style?: StyleProp<ViewStyle>;
 }
 
 /** A team you can pick: its two colours along the top, its letters lit in its colour, its name; lit all round when picked. */
-export function TeamPick({ team, label, icon = 'help', selected, onPress, width = TEAM_PICK_WIDTH, style }: TeamPickProps) {
+export function TeamPick({ team, label, icon = 'help', selected, onPress, width = TEAM_PICK_WIDTH, height = TEAM_PICK_HEIGHT, style }: TeamPickProps) {
   const name = team ? team.name : (label ?? '');
   const tb = team ? teamTube(team) : tubes.violet;
   const room = width - PAD * 2 - arcade.outline * 2;
@@ -49,7 +53,7 @@ export function TeamPick({ team, label, icon = 'help', selected, onPress, width 
       }}
       style={({ pressed }) => [
         styles.tile,
-        { width },
+        { width, height },
         selected ? { borderColor: tb.glass, backgroundColor: night.panel, boxShadow: [halo(tb.glass, 14, 0.85), inner(tb.glass, 18, 0.4)] } : undefined,
         pressed && styles.pressed,
         style,
@@ -81,7 +85,6 @@ const ACROSS_B = { x: 1, y: 0 } as const;
 
 const styles = StyleSheet.create({
   tile: {
-    height: TEAM_PICK_HEIGHT,
     paddingHorizontal: PAD,
     paddingBottom: px(7),
     alignItems: 'center',

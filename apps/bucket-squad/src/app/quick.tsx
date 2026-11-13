@@ -12,7 +12,7 @@ import { DIFFICULTY_NAMES, playableTeams } from '@/meta/setups';
 import { startQuick } from '@/state/play';
 import { useSave } from '@/state/save';
 import { useSession } from '@/state/session';
-import { arcade, halo, inner, night, tube as tubes } from '@/theme/arcade';
+import { arcade, fade, halo, inner, night, tube as tubes } from '@/theme/arcade';
 import { px, size as sizes, space } from '@/theme/tokens';
 import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
 import { GoldButton } from '@/ui/arcade/Buttons';
@@ -20,7 +20,7 @@ import { PickRow, SignHead, Tabs, type Choice } from '@/ui/arcade/Controls';
 import { LineIcon } from '@/ui/arcade/LineIcon';
 import { Arrive } from '@/ui/arcade/Motion';
 import { NeonPanel } from '@/ui/arcade/Surface';
-import { TeamPick, TEAM_PICK_WIDTH } from '@/ui/arcade/TeamPick';
+import { TeamPick, TEAM_PICK_HEIGHT, TEAM_PICK_MIN_HEIGHT, TEAM_PICK_WIDTH } from '@/ui/arcade/TeamPick';
 import { Print } from '@/ui/arcade/Type';
 
 const TUBE = tubes.cyan;
@@ -40,6 +40,44 @@ const COURT_SCENE = px(30);
 const TEAM_GAP = space.sm;
 /** room round the lit tiles inside their scrolling rows, so their glow is not cut off at the edge */
 const GLOW_ROOM = px(7);
+/** above the first row of teams a picked tile's glow reaches further than at its sides */
+const GRID_TOP = GLOW_ROOM * 1.6;
+/** narrower than this a team tile cannot hold its name */
+const TILE_MIN_W = px(84);
+/** the panel's frame and its padding above the heading */
+const TEAMS_FRAME = arcade.outline * 2 + px(10);
+const FADE_DOWN = [fade(night.panel, 0), fade(night.panel, 0.6), night.panel] as const;
+const FADE_UP = [night.panel, fade(night.panel, 0)] as const;
+
+interface TeamGrid {
+  cols: number;
+  tileW: number;
+  tileH: number;
+  /** set when there are more teams than fit: the height the grid shows, ending half way down a row */
+  window?: number;
+}
+
+/**
+ * Sizes the team tiles from the room the panel really has. Every tile fits when it can, first by making
+ * the rows a little shorter, then by one more column; when there are too many, whole rows fit and half of
+ * the next one shows under a fade, so the grid plainly scrolls.
+ */
+function teamGrid(n: number, w: number, h: number): TeamGrid {
+  const fit = Math.max(1, Math.floor((w + TEAM_GAP) / (TEAM_PICK_WIDTH + TEAM_GAP)));
+  for (let cols = fit; cols <= fit + 2; cols++) {
+    const tileW = Math.floor((w - TEAM_GAP * (cols - 1)) / cols);
+    if (cols > fit && tileW < TILE_MIN_W) break;
+    const rows = Math.ceil(n / cols);
+    const tileH = Math.floor((h - TEAM_GAP * (rows - 1)) / rows);
+    if (tileH >= TEAM_PICK_MIN_HEIGHT) return { cols, tileW, tileH: Math.min(TEAM_PICK_HEIGHT, tileH) };
+  }
+  const tileW = Math.floor((w - TEAM_GAP * (fit - 1)) / fit);
+  // the fewest whole rows that leave the tiles no taller than they are drawn, plus half a row
+  let whole = 1;
+  while ((h - whole * TEAM_GAP) / (whole + 0.5) > TEAM_PICK_HEIGHT) whole++;
+  const tileH = Math.max(TEAM_PICK_MIN_HEIGHT, Math.floor((h - whole * TEAM_GAP) / (whole + 0.5)));
+  return { cols: fit, tileW, tileH, window: GRID_TOP + whole * (tileH + TEAM_GAP) + Math.round(tileH / 2) };
+}
 
 /** A court you can pick, drawn as a little picture of its sky and floor, with its name under it. */
 function CourtPick({ id, selected, onPress }: { id: CourtId | null; selected: boolean; onPress: () => void }) {
@@ -99,10 +137,17 @@ export default function Quick() {
   const teams = playableTeams(format).filter((t) => t.league === league);
   const picked = opponent !== null && teams.some((t) => t.id === opponent) ? opponent : null;
   const [gridW, setGridW] = useState(0);
+  // the height of the column the panel stands in, and of the panel's heading
+  const [columnH, setColumnH] = useState(0);
+  const [headH, setHeadH] = useState(0);
 
-  // the team tiles share the panel's whole width at every screen size
-  const cols = gridW > 0 ? Math.max(1, Math.floor((gridW + TEAM_GAP) / (TEAM_PICK_WIDTH + TEAM_GAP))) : 0;
-  const tileW = cols > 0 ? Math.floor((gridW - TEAM_GAP * (cols - 1)) / cols) : TEAM_PICK_WIDTH;
+  const tiles = teams.length + 1;
+  const room = columnH - TEAMS_FRAME - headH - GRID_TOP - GLOW_ROOM;
+  const grid = gridW > 0 && columnH > 0 && headH > 0 ? teamGrid(tiles, gridW, room) : null;
+  // the fade covers the half row: its coloured stripe still shows, and it is solid before the team's
+  // letters begin (about a fifth of the way down a tile), so the edge never cuts through lettering
+  const fadeH = grid?.window !== undefined ? Math.round(grid.tileH * 0.5 + TEAM_GAP) : 0;
+  const fadeAt = fadeH > 0 && grid ? ([0, (TEAM_GAP + grid.tileH * 0.1) / fadeH, (TEAM_GAP + grid.tileH * 0.21) / fadeH] as const) : undefined;
 
   const play = () => {
     startQuick({ perTeam: format, difficulty, opponent: picked, court, league });
@@ -132,28 +177,45 @@ export default function Quick() {
           <GoldButton label="PLAY!" icon="play" onPress={play} />
         </Arrive>
 
-        <Arrive delay={110} from="right" style={styles.right}>
-          <NeonPanel tube="cyan" style={styles.teamsPanel}>
-            <SignHead title="WHO DO YOU WANT TO PLAY?" tube="cyan" room={gridW > 0 ? gridW : undefined} style={styles.teamsHead} />
-            <ScrollView
-              key={league}
-              style={styles.teamsScroll}
-              contentContainerStyle={styles.teams}
-              showsVerticalScrollIndicator={false}
-              onLayout={(e) => {
-                const w = Math.floor(e.nativeEvent.layout.width - GLOW_ROOM * 2);
-                if (w !== gridW) setGridW(w);
-              }}>
-              {cols > 0 && (
-                <>
-                  <TeamPick label="Surprise me" selected={picked === null} onPress={() => setOpponent(null)} width={tileW} />
-                  {teams.map((t) => (
-                    <TeamPick key={t.id} team={t} selected={t.id === picked} onPress={() => setOpponent(t.id)} width={tileW} />
-                  ))}
-                </>
-              )}
-            </ScrollView>
-          </NeonPanel>
+        <Arrive delay={110} from="right" style={styles.grow}>
+          <View
+            style={styles.right}
+            onLayout={(e) => {
+              const h = Math.floor(e.nativeEvent.layout.height);
+              if (h !== columnH) setColumnH(h);
+            }}>
+            <NeonPanel tube="cyan" style={styles.teamsPanel}>
+              <View
+                onLayout={(e) => {
+                  const h = Math.ceil(e.nativeEvent.layout.height);
+                  if (h !== headH) setHeadH(h);
+                }}>
+                <SignHead title="WHO DO YOU WANT TO PLAY?" tube="cyan" room={gridW > 0 ? gridW : undefined} style={styles.teamsHead} />
+              </View>
+              <ScrollView
+                key={league}
+                style={[styles.teamsScroll, grid?.window !== undefined && { height: grid.window, flexShrink: 0 }]}
+                contentContainerStyle={[styles.teams, { paddingBottom: grid?.window !== undefined ? fadeH : GLOW_ROOM }]}
+                showsVerticalScrollIndicator={false}
+                onLayout={(e) => {
+                  const w = Math.floor(e.nativeEvent.layout.width - GLOW_ROOM * 2);
+                  if (w !== gridW) setGridW(w);
+                }}>
+                {grid && (
+                  <>
+                    <TeamPick label="Surprise me" selected={picked === null} onPress={() => setOpponent(null)} width={grid.tileW} height={grid.tileH} />
+                    {teams.map((t) => (
+                      <TeamPick key={t.id} team={t} selected={t.id === picked} onPress={() => setOpponent(t.id)} width={grid.tileW} height={grid.tileH} />
+                    ))}
+                  </>
+                )}
+              </ScrollView>
+              {/* more teams below: the half row showing fades into the panel instead of stopping at a hard edge */}
+              {fadeH > 0 && <LinearGradient pointerEvents="none" colors={FADE_DOWN} locations={fadeAt} style={[styles.teamsFade, { height: fadeH }]} />}
+              {/* and the rows scrolled away go softly under the heading */}
+              {fadeH > 0 && <LinearGradient pointerEvents="none" colors={FADE_UP} style={[styles.teamsFadeTop, { top: px(10) + headH, height: GRID_TOP }]} />}
+            </NeonPanel>
+          </View>
         </Arrive>
       </View>
     </ArcadeScreen>
@@ -255,9 +317,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: TEAM_GAP,
-    padding: GLOW_ROOM,
-    // a picked tile's glow reaches further up than its sides
-    paddingTop: GLOW_ROOM * 1.6,
-    paddingBottom: space.md,
+    paddingHorizontal: GLOW_ROOM,
+    paddingTop: GRID_TOP,
+  },
+  teamsFade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  teamsFadeTop: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
   },
 });

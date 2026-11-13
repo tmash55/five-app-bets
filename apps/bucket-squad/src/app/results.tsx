@@ -2,7 +2,7 @@
 
 import { Redirect, useRouter } from 'expo-router';
 import { useEffect, useRef, useState, type ComponentRef } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
 import { playSfx, setMusic } from '@/audio/sound';
 import { mustPlayer, playerOverall, teamById } from '@/data/roster';
@@ -72,6 +72,8 @@ function MomentOverlay({ moment, onClose }: { moment: Moment; onClose: () => voi
     const title = moment.gain.isNew ? 'NEW PLAYER!' : moment.gain.levelAfter > moment.gain.levelBefore ? 'LEVEL UP!' : 'EXTRA COPY!';
     return (
       <Popup tube="gold" width={sizes.panelMax - px(60)} style={styles.moment}>
+        {/* first, so it is behind everything in the pop-up, and from its edges outward, so it frames it */}
+        <Sparks burst={1} around count={36} reach={170} />
         <View>
           <Rays size={MOMENT_CARD * 2.6} color={tubes.gold.glass} alpha={0.26} count={18} fill={0.3} fadeAt={[0.25, 0.9]} style={styles.momentRays} />
           <Arrive>
@@ -90,7 +92,6 @@ function MomentOverlay({ moment, onClose }: { moment: Moment; onClose: () => voi
           </Print>
           <GoldButton label="AWESOME!" size="small" onPress={onClose} />
         </View>
-        <Sparks burst={1} count={40} reach={260} style={styles.momentSparks} />
       </Popup>
     );
   }
@@ -98,6 +99,7 @@ function MomentOverlay({ moment, onClose }: { moment: Moment; onClose: () => voi
   const index = tierIndexOf(tier.name);
   return (
     <Popup tube={tierTube(index)} width={sizes.panelMax - px(140)} style={styles.tierPanel}>
+      <Sparks burst={1} around count={36} reach={170} />
       <View>
         <Rays size={px(220)} color={tierTube(index).glass} alpha={0.3} count={18} fill={0.32} fadeAt={[0.2, 0.9]} style={styles.tierRays} />
         <Arrive>
@@ -115,7 +117,6 @@ function MomentOverlay({ moment, onClose }: { moment: Moment; onClose: () => voi
         {tier.reward.pack !== undefined && <PackPrize packId={tier.reward.pack} width={px(30)} />}
       </View>
       <GoldButton label="LET'S GO!" onPress={onClose} style={styles.wide} />
-      <Sparks burst={1} count={40} reach={260} style={styles.momentSparks} />
     </Popup>
   );
 }
@@ -161,6 +162,12 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
   const [shown, setShown] = useState(0);
   const [burst, setBurst] = useState(0);
   const [starsLit, setStarsLit] = useState(0);
+  /** where the scoreboard is, for the win burst to go off around it */
+  const [board, setBoard] = useState({ left: 0, top: 0, width: 0, height: 0 });
+  const measureBoard = (e: LayoutChangeEvent) => {
+    const { x, y, width, height } = e.nativeEvent.layout;
+    if (Math.round(width) !== board.width || Math.round(y) !== board.top) setBoard({ left: Math.round(x), top: Math.round(y), width: Math.round(width), height: Math.round(height) });
+  };
   const [momentsOn, setMomentsOn] = useState(false);
   const list = useRef<ComponentRef<typeof ScrollView>>(null);
   /** how tall the list and one of its lines are */
@@ -225,8 +232,17 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
     <View style={styles.root}>
       <ArcadeScreen title={headline(summary)} tube={summary.won ? 'gold' : 'cyan'} back={false} music={false} coins={Math.max(0, bank - owed)} style={styles.body}>
         <View style={styles.row}>
+          {/* the win burst goes off behind everything on the page, from the scoreboard's edges outward, so it frames
+              the score and never crosses it; it stays below the top bar and above the buttons */}
+          <View pointerEvents="none" style={styles.burstRoom}>
+            {board.width > 0 && (
+              <View style={[styles.burstBox, board]}>
+                <Sparks burst={burst} around count={40} reach={150} />
+              </View>
+            )}
+          </View>
           <View style={styles.left}>
-            <Arrive>
+            <Arrive onLayout={measureBoard}>
               <Well style={styles.board}>
                 <ScoreSide name={summary.names[0]} score={summary.score[0]} lit={summary.won} />
                 <Print face="display" size="title" color="textFaint" style={styles.dash}>
@@ -288,7 +304,6 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
                 {tp.next && <SegBar value={tp.span > 0 ? (tp.have / tp.span) * 100 : 100} tube={tierTube(tp.index + 1)} small style={styles.ladderBar} />}
               </Arrive>
             )}
-            <Sparks burst={burst} count={44} reach={280} style={styles.sparks} />
           </View>
 
           <Arrive delay={80} from="right" style={styles.right}>
@@ -447,9 +462,16 @@ const styles = StyleSheet.create({
   ladderBar: {
     width: '60%',
   },
-  sparks: {
-    top: '22%',
-    left: '50%',
+  burstRoom: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    overflow: 'hidden',
+  },
+  burstBox: {
+    position: 'absolute',
   },
   right: {
     flex: 1,
@@ -532,10 +554,6 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: space.sm,
     alignItems: 'flex-start',
-  },
-  momentSparks: {
-    top: '45%',
-    left: '50%',
   },
   tierPanel: {
     alignItems: 'center',
