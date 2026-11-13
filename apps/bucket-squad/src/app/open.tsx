@@ -17,9 +17,9 @@ import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { duckMusic, playSfx } from '@/audio/sound';
+import { duckMusic, playSfx, warmSounds, type SfxName } from '@/audio/sound';
 import { buzz } from '@/fx/feedback';
-import { revealFor, type Cue, type Pulse, type Reveal } from '@/fx/reveal';
+import { REVEAL_SOUNDS, revealFor, type Cue, type Pulse, type Reveal } from '@/fx/reveal';
 import { CardInfo, lampPlan } from '@/fx/reveal/CardInfo';
 import { openLayout } from '@/fx/reveal/layout';
 import { flashAt } from '@/fx/reveal/motion';
@@ -54,6 +54,8 @@ const HAUL_END = 2600;
 const RATTLE_TICKS = [210, 390, 530, 640, 730, 805, 865, 915] as const;
 /** how far the music steps back while a card is revealed: the better the card, the quieter the room */
 const DUCK = { common: 1, rare: 0.7, epic: 0.35, legend: 0.12 } as const;
+/** the sounds the page itself plays round the reveals: the tear, the deal, the words coming in, the haul */
+const PAGE_SOUNDS: readonly SfxName[] = ['packRattle', 'packOpen', 'packGlow', 'sparkle', 'cardDeal', 'neonOn', 'lampTick', 'coins', 'levelUp', 'star'];
 const NO_PULSES: { shakes: readonly Pulse[]; flashes: readonly Pulse[] } = { shakes: [], flashes: [] };
 
 function safePack(id: string): PackDef | null {
@@ -97,7 +99,7 @@ export default function OpenPack() {
   const [counting, setCounting] = useState(false);
   const [leaving, setLeaving] = useState<number | null>(null);
   const [paid, setPaid] = useState(true);
-  /** the cards whose reveals are on the stage: the one playing, the next one waiting hidden, and one going back to the row */
+  /** the cards whose reveals are on the stage: the one playing, the next two waiting hidden, and one going back to the row */
   const [mounted, setMounted] = useState<readonly number[]>([]);
   const leavingNow = useRef<number | null>(null);
 
@@ -127,6 +129,9 @@ export default function OpenPack() {
 
   // the music comes back up whenever the page goes
   useEffect(() => () => duckMusic(1), []);
+  // every sound of the opening gets its players while the sealed pack waits: made on the spot, the first drum roll
+  // or slam held a phone's screen still while it was made
+  useEffect(() => warmSounds([...PAGE_SOUNDS, ...REVEAL_SOUNDS]), []);
 
   /** the clock of the card playing now */
   const c0 = s0.clock;
@@ -202,14 +207,16 @@ export default function OpenPack() {
   };
 
   /**
-   * Put card `i`'s reveal on the stage ahead of its turn, hidden: built in the background (a tap still answers at
-   * once, and the work simply waits), and only switched on when NEXT PLAYER is tapped. Asking twice is harmless.
-   * Anything older than the card on show goes in the same pass, unless it is still dropping back into the row.
+   * Put card `i`'s reveal, and the one after it, on the stage ahead of their turn, hidden: built in the background
+   * (a tap still answers at once, and the work simply waits), and only switched on when NEXT PLAYER is tapped.
+   * Two ahead, so a big reveal (a Legend) has a whole card's time to be built, not the moment before the words
+   * come in, when the lamps ticking on keep putting the work off. Asking twice is harmless. Anything older than
+   * the card on show goes in the same pass, unless it is still dropping back into the row.
    */
   const prepare = (i: number, n: number) => {
     if (i >= n) return;
     const keep = leavingNow.current;
-    const want = [keep, i - 1, i].filter((k): k is number => k !== null && k >= 0);
+    const want = [keep, i - 1, i, i + 1].filter((k): k is number => k !== null && k >= 0 && k < n);
     startTransition(() => setMounted([...new Set(want)].sort((a, b) => a - b)));
   };
 
@@ -243,8 +250,8 @@ export default function OpenPack() {
       });
     }
     after(ARRIVE + r.length, () => run.current === my && showInfo(p, i, my));
-    // the next card is put on the stage once this one has turned over and is settling: a quiet moment, before the
-    // words come in, so it is ready long before NEXT PLAYER can be tapped (and again once everything is in, if a
+    // the next cards are put on the stage once this one has turned over and is settling: a quiet moment, before the
+    // words come in, so they are ready long before NEXT PLAYER can be tapped (and again once everything is in, if a
     // quick tap went past it)
     after(ARRIVE + Math.min(r.flipAt + 250, r.length), () => run.current === my && prepare(i + 1, list.length));
   };

@@ -41,7 +41,7 @@ export function useStageValues(): StageValues {
 
 /**
  * How many sets of stage values the page keeps. At most four cards are on the stage at once (one dropping back
- * into the row, one playing, the next one waiting, and one just finished that has not been cleared yet), and
+ * into the row, one playing, and the next two waiting their turn), and
  * card `i` always uses set `i % STAGE_SETS`, so no two of them ever share one.
  */
 export const STAGE_SETS = 4;

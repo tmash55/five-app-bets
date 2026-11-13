@@ -30,4 +30,9 @@ export function revealFor(rarity: Rarity, reduced: boolean): Reveal {
   return { ...fadeReveal, rarity, cues: [{ at: fadeReveal.flipAt, ...FADE_CUE[rarity], stinger: true }] };
 }
 
+/** Every sound a reveal can play, the gentle fade's included: the page makes their players before the pack is torn. */
+export const REVEAL_SOUNDS: readonly SfxName[] = [
+  ...new Set([...Object.values(REVEALS).flatMap((r) => r.cues.flatMap((c) => (c.sfx ? [c.sfx] : []))), ...Object.values(FADE_CUE).map((c) => c.sfx)]),
+];
+
 export type { CardProps, Cue, Pulse, Reveal, StageProps } from './types';
