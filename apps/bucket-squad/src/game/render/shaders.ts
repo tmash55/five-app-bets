@@ -413,9 +413,11 @@ void main() {
     vec4 s = uShadows[i];
     if (s.w <= 0.0) continue;
     vec2 d = p - s.xy;
-    // a wide, flat blob: the camera looks along the court
+    // a wide, flat blob: the camera looks along the court. Its edge softens as what casts it rises (a fainter shadow is a
+    // higher one)
     d.y *= 1.35;
-    float k = 1.0 - smoothstep(s.z * 0.62, s.z, length(d));
+    float inner = clamp(s.w * 0.7 - 0.08, 0.1, 0.5);
+    float k = 1.0 - smoothstep(s.z * inner, s.z * 1.06, length(d));
     sh = max(sh, k * s.w);
   }
   // shadows of players and the ball, on top of the ones baked under the scenery
