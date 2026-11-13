@@ -2,7 +2,7 @@
 
 import { Redirect, useRouter } from 'expo-router';
 import { useEffect, useRef, useState, type ComponentRef } from 'react';
-import { ScrollView, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { ScrollView, StyleSheet, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Line } from 'react-native-svg';
 
 import { playSfx, setMusic } from '@/audio/sound';
@@ -31,11 +31,11 @@ import { Face } from '@/ui/arcade/Face';
 import { LineIcon, type LineIconName } from '@/ui/arcade/LineIcon';
 import { TierMedal, tierIndexOf, tierTube } from '@/ui/arcade/Medal';
 import { FoilPack } from '@/ui/arcade/Foil';
-import { Arrive, Breathe } from '@/ui/arcade/Motion';
+import { Arrive, Breathe, Bump } from '@/ui/arcade/Motion';
 import { Popup } from '@/ui/arcade/Popup';
 import { CoinAmount, PackPrize } from '@/ui/arcade/Rewards';
 import { Rays } from '@/ui/arcade/Room';
-import { SegBar } from '@/ui/arcade/SegBar';
+import { SegBar, lampsFor } from '@/ui/arcade/SegBar';
 import { Sparks } from '@/ui/arcade/Sparks';
 import { Chip, NeonPanel, Plate, Tag, TeamMark, Well } from '@/ui/arcade/Surface';
 import { Glow, Print } from '@/ui/arcade/Type';
@@ -53,6 +53,34 @@ const SCORE = px(56);
 const DECK_AT = 260;
 const STAR = px(30);
 const MOMENT_CARD = sizes.card + space.md;
+/** once the coins are in, the ladder points count up and the bar fills, lamp by lamp, over this long */
+const LADDER_MS = 650;
+/** then each prize pops in, this long after the last */
+const PRIZE_MS = 180;
+
+/** How many of the ladder bar's ten lamps a number of points lights, within its tier. */
+function ladderLamps(points: number): { index: number; lamps: number } {
+  const tp = tierProgress(points);
+  return { index: tp.index, lamps: tp.next ? lampsFor(tp.span > 0 ? (tp.have / tp.span) * 100 : 100) : 10 };
+}
+
+/** The packs a game won, in the order they show. */
+function packsWon(outcome: MatchOutcome): string[] {
+  const out: string[] = [];
+  if (outcome.tour?.pack) out.push(outcome.tour.pack);
+  if (outcome.tour?.starPack) out.push(outcome.tour.starPack);
+  if (outcome.ladder?.promoted?.reward.pack) out.push(outcome.ladder.promoted.reward.pack);
+  return out;
+}
+
+/** What happens after the coins are in: the ladder bar's lamps from and to (a new tier starts from empty), and how many prizes pop in. */
+function afterCoins(outcome: MatchOutcome): { ladder: { from: number; to: number } | null; prizes: number } {
+  const prizes = packsWon(outcome).length + outcome.missionsDone.length + (outcome.tour?.unlock ? 1 : 0);
+  if (!outcome.ladder) return { ladder: null, prizes };
+  const was = ladderLamps(outcome.ladder.before);
+  const now = ladderLamps(outcome.ladder.after);
+  return { ladder: { from: was.index === now.index ? was.lamps : was.index < now.index ? 0 : 10, to: now.lamps }, prizes };
+}
 
 function statLine(p: PlayerLine): string {
   const parts = [`${p.points} PTS`];
@@ -188,6 +216,12 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
     if (Math.round(width) !== board.width || Math.round(y) !== board.top) setBoard({ left: Math.round(x), top: Math.round(y), width: Math.round(width), height: Math.round(height) });
   };
   const [momentsOn, setMomentsOn] = useState(false);
+  /** the ladder's points have started counting, and the lamps its bar has lit so far */
+  const [ladderOn, setLadderOn] = useState(false);
+  const [then] = useState(() => afterCoins(outcome));
+  const [ladderLit, setLadderLit] = useState(then.ladder?.from ?? 0);
+  /** the prizes under the coins that have popped in */
+  const [prizesIn, setPrizesIn] = useState(0);
   /** every line is in and counted: the yellow button starts to breathe */
   const [settled, setSettled] = useState(false);
   const list = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -220,13 +254,36 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
     );
     const done = LINES_START + lines.length * LINE_MS;
     after(done + 150, () => playSfx('coins'));
-    after(done + 300, () => setSettled(true));
-    after(done + 500, () => setMomentsOn(true));
-    after(Math.max(2600, done + 600), () => setMusic('menu'));
-  }, [after, lines, summary.won, earnedStars]);
+    // then the ladder points count up and its bar fills a lamp at a time, each with a tick
+    let next = done + 300;
+    if (then.ladder) {
+      const { from: start, to: target } = then.ladder;
+      const steps = Math.abs(target - start);
+      after(next, () => setLadderOn(true));
+      for (let k = 1; k <= steps; k++) {
+        after(next + (k * LADDER_MS) / (steps + 1), () => {
+          setLadderLit(start + Math.sign(target - start) * k);
+          playSfx('lampTick', 0.5 + (0.5 * k) / steps);
+        });
+      }
+      next += LADDER_MS + 100;
+    }
+    // then the prizes pop in one after another
+    for (let i = 0; i < then.prizes; i++) {
+      after(next + i * PRIZE_MS, () => {
+        setPrizesIn(i + 1);
+        playSfx('star', 0.8);
+      });
+    }
+    next += then.prizes * PRIZE_MS;
+    after(next, () => setSettled(true));
+    after(next + 200, () => setMomentsOn(true));
+    after(Math.max(2600, next + 300), () => setMusic('menu'));
+  }, [after, lines, summary.won, earnedStars, then]);
 
   const landed = lines.slice(0, shown).reduce((a, l) => a + l.coins, 0);
   const total = useCountUp(landed, LINE_MS);
+  const shownPoints = useCountUp(ladderOn && outcome.ladder ? outcome.ladder.after - outcome.ladder.before : 0, LADDER_MS);
   // the bank in the corner fills up as each line lands, instead of showing the answer before the sum
   const owed = lines.reduce((a, l) => a + l.coins, 0) - landed;
   const mvp = summary.players.find((p) => p.id === summary.mvp) ?? summary.players[0];
@@ -241,10 +298,7 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
   const go = goNext(setup, summary.won, tour, nextStop);
   const tp = outcome.ladder ? tierProgress(outcome.ladder.after) : null;
   const ladderGain = outcome.ladder ? outcome.ladder.after - outcome.ladder.before : 0;
-  const wonPacks: string[] = [];
-  if (outcome.tour?.pack) wonPacks.push(outcome.tour.pack);
-  if (outcome.tour?.starPack) wonPacks.push(outcome.tour.starPack);
-  if (outcome.ladder?.promoted?.reward.pack) wonPacks.push(outcome.ladder.promoted.reward.pack);
+  const wonPacks = packsWon(outcome);
   const unlock = outcome.tour?.unlock;
   const hasPrizes = wonPacks.length > 0 || outcome.missionsDone.length > 0 || unlock !== undefined;
 
@@ -322,9 +376,11 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
                   <Glow face="sign" size="large" tube={tierTube(tp.index)} track="wide">
                     {tp.tier.name.toUpperCase()}
                   </Glow>
-                  <Tag label={`${ladderGain >= 0 ? '+' : ''}${ladderGain} POINTS`} tube={ladderGain > 0 ? 'green' : 'steel'} small />
+                  <Bump beat={ladderOn ? 1 : 0} amount={0.18}>
+                    <Tag label={`${ladderGain >= 0 ? '+' : ''}${shownPoints} POINTS`} tube={ladderGain > 0 ? 'green' : 'steel'} small />
+                  </Bump>
                 </View>
-                {tp.next && <SegBar value={tp.span > 0 ? (tp.have / tp.span) * 100 : 100} tube={tierTube(tp.index + 1)} small style={styles.ladderBar} />}
+                {tp.next && <SegBar lit={ladderLit} tube={tierTube(tp.index + 1)} small style={styles.ladderBar} />}
               </Arrive>
             )}
           </View>
@@ -339,54 +395,75 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
                 onLayout={(e) => {
                   room.current.list = e.nativeEvent.layout.height;
                 }}>
-                {lines.map((l, i) => (
-                  <View
-                    key={i}
-                    style={[styles.line, i >= shown && styles.hidden]}
-                    onLayout={
-                      i === 0
-                        ? (e) => {
-                            room.current.line = e.nativeEvent.layout.height;
-                          }
-                        : undefined
-                    }>
-                    <Print face="medium" size="small" color="textSoft" lines={1} style={styles.shrink}>
-                      {l.label}
-                    </Print>
-                    <Leader />
-                    <CoinAmount coins={l.coins} size="small" plus plain />
-                  </View>
-                ))}
+                {lines.map((l, i) => {
+                  const line = (
+                    <>
+                      <Print face="medium" size="small" color="textSoft" lines={1} style={styles.shrink}>
+                        {l.label}
+                      </Print>
+                      <Leader />
+                      <CoinAmount coins={l.coins} size="small" plus plain />
+                    </>
+                  );
+                  return (
+                    <View
+                      key={i}
+                      onLayout={
+                        i === 0
+                          ? (e) => {
+                              room.current.line = e.nativeEvent.layout.height;
+                            }
+                          : undefined
+                      }>
+                      {/* each line slides in as it lands; until then it keeps its place in the list, unseen */}
+                      {i < shown ? (
+                        <Arrive from="left" style={styles.line}>
+                          {line}
+                        </Arrive>
+                      ) : (
+                        <View style={[styles.line, styles.hidden]}>{line}</View>
+                      )}
+                    </View>
+                  );
+                })}
               </ScrollView>
               <View style={styles.total}>
                 <Print face="display" size="body" color={tubes.gold.tint} track="wide">
                   TOTAL
                 </Print>
-                <CoinAmount coins={total} size="large" plus />
+                <Bump beat={shown} amount={0.14}>
+                  <CoinAmount coins={total} size="large" plus />
+                </Bump>
               </View>
               {hasPrizes && (
                 <View style={styles.prizes}>
                   {unlock && (
-                    <Chip small>
-                      <Face id={unlock.playerId} size={px(24)} />
-                      <Print face="bold" size="small" color="text" lines={1}>
-                        {mustPlayer(unlock.playerId).name}
-                      </Print>
-                      <Print face="display" size="small" color={tubes.gold.tint}>
-                        {String(playerOverall(mustPlayer(unlock.playerId), Math.max(1, levelOf(owned[unlock.playerId] ?? 1))))}
-                      </Print>
-                    </Chip>
+                    <PrizeIn shown={prizesIn > 0}>
+                      <Chip small>
+                        <Face id={unlock.playerId} size={px(24)} />
+                        <Print face="bold" size="small" color="text" lines={1}>
+                          {mustPlayer(unlock.playerId).name}
+                        </Print>
+                        <Print face="display" size="small" color={tubes.gold.tint}>
+                          {String(playerOverall(mustPlayer(unlock.playerId), Math.max(1, levelOf(owned[unlock.playerId] ?? 1))))}
+                        </Print>
+                      </Chip>
+                    </PrizeIn>
                   )}
                   {wonPacks.map((id, i) => (
-                    <Chip key={`${id}${i}`} small>
-                      <PackPrize packId={id} width={px(16)} />
-                    </Chip>
+                    <PrizeIn key={`${id}${i}`} shown={prizesIn > i + (unlock ? 1 : 0)}>
+                      <Chip small>
+                        <PackPrize packId={id} width={px(16)} />
+                      </Chip>
+                    </PrizeIn>
                   ))}
                   {outcome.missionsDone.map((m, i) => (
-                    <Chip key={i} small style={styles.mission}>
-                      <LineIcon name="check" size={px(14)} tube="green" weight={3} />
-                      <Print face="bold" size="tiny" color={tubes.green.tint} lines={1} style={styles.shrink}>{`Mission done: ${m.text}`}</Print>
-                    </Chip>
+                    <PrizeIn key={i} shown={prizesIn > i + wonPacks.length + (unlock ? 1 : 0)} style={styles.missionIn}>
+                      <Chip small style={styles.mission}>
+                        <LineIcon name="check" size={px(14)} tube="green" weight={3} />
+                        <Print face="bold" size="tiny" color={tubes.green.tint} lines={1} style={styles.shrink}>{`Mission done: ${m.text}`}</Print>
+                      </Chip>
+                    </PrizeIn>
                   ))}
                 </View>
               )}
@@ -425,6 +502,11 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
       {momentsOn && moments.length > 0 && <MomentOverlay key={moments.length} moment={moments[0]} onClose={() => setMoments((m) => m.slice(1))} />}
     </View>
   );
+}
+
+/** A prize that pops in when its turn comes, keeping its place until then so nothing around it moves. */
+function PrizeIn({ shown, children, style }: { shown: boolean; children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+  return shown ? <Arrive style={style}>{children}</Arrive> : <View style={[style, styles.hidden]}>{children}</View>;
 }
 
 const LEADER_H = Math.max(2, Math.round(arcade.hairline));
@@ -585,6 +667,9 @@ const styles = StyleSheet.create({
     borderTopWidth: arcade.hairline,
     borderColor: night.line,
     paddingTop: px(6),
+  },
+  missionIn: {
+    maxWidth: '100%',
   },
   mission: {
     maxWidth: '100%',

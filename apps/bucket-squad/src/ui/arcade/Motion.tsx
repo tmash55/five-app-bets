@@ -3,9 +3,10 @@
  * waiting for a tap breathes. Transforms and opacity only, on the UI thread.
  */
 
-import { useEffect } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef } from 'react';
 import type { LayoutChangeEvent, StyleProp, ViewStyle } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 
 import { px } from '@/theme/tokens';
 
@@ -74,4 +75,67 @@ export function Breathe({ children, on = true, depth = 0.35, swell = 0, ms = 110
       {children}
     </Animated.View>
   );
+}
+
+/** a page's content rising into place as the page comes to the front, and how long it takes */
+const PAGE_RISE = px(10);
+const PAGE_IN = 280;
+/** with less motion asked for it only fades, and quicker */
+const PAGE_FADE = 180;
+
+/**
+ * The style for a page's content as the page comes to the front, the first time and every time the child comes
+ * back to it: up a little and out of the dark, under a frame that stays put. A phone that asks for less motion
+ * gets only the fade.
+ */
+export function usePageIn() {
+  const calm = useReducedMotion();
+  const t = useSharedValue(0);
+  useFocusEffect(
+    useCallback(() => {
+      t.set(0);
+      t.set(withTiming(1, { duration: calm ? PAGE_FADE : PAGE_IN, easing: Easing.out(Easing.cubic), reduceMotion: ReduceMotion.Never }));
+    }, [t, calm]),
+  );
+  return useAnimatedStyle(() => (calm ? { opacity: t.value } : { opacity: t.value, transform: [{ translateY: PAGE_RISE * (1 - t.value) }] }));
+}
+
+export interface BumpProps {
+  children?: React.ReactNode;
+  /** changes whenever it should bump: a new amount, a new line landed (not on the first draw) */
+  beat: number | string;
+  /** how much it swells */
+  amount?: number;
+  style?: StyleProp<ViewStyle>;
+  pointerEvents?: 'box-none' | 'none' | 'auto' | 'box-only';
+}
+
+/** A quick swell and settle each time `beat` changes: "this just went up". A phone that asks for less motion keeps it still. */
+export function Bump({ children, beat, amount = 0.12, style, pointerEvents }: BumpProps) {
+  const t = useSharedValue(0);
+  const first = useRef(beat);
+  useEffect(() => {
+    if (first.current === beat) return;
+    first.current = beat;
+    t.set(withSequence(withTiming(1, { duration: 90, easing: Easing.out(Easing.quad) }), withSpring(0, POP)));
+  }, [t, beat]);
+  const anim = useAnimatedStyle(() => ({ transform: [{ scale: 1 + amount * t.value }] }));
+  return (
+    <Animated.View pointerEvents={pointerEvents} style={[style, anim]}>
+      {children}
+    </Animated.View>
+  );
+}
+
+/** a bouncier spring than the pop: something that has just been found jumps a little past its size and back */
+const FOUND = { damping: 9, stiffness: 210, mass: 0.7 } as const;
+
+/** Something new that has just been found: it springs up from small when the page opens, a beat after the page itself. */
+export function Found({ children, delay = 260, style }: { children?: React.ReactNode; delay?: number; style?: StyleProp<ViewStyle> }) {
+  const t = useSharedValue(0);
+  useEffect(() => {
+    t.set(withDelay(delay, withSpring(1, FOUND)));
+  }, [t, delay]);
+  const anim = useAnimatedStyle(() => ({ opacity: Math.min(1, t.value * 2), transform: [{ scale: 0.55 + 0.45 * t.value }] }));
+  return <Animated.View style={[style, anim]}>{children}</Animated.View>;
 }

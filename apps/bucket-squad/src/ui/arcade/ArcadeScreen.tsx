@@ -6,6 +6,7 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { setMusic } from '@/audio/sound';
@@ -15,6 +16,7 @@ import { px, space } from '@/theme/tokens';
 import { useCountUp } from '../Bits';
 import { RoundButton } from './Buttons';
 import { Coin } from './LineIcon';
+import { Bump, usePageIn } from './Motion';
 import { Wall } from './Room';
 import { Chip } from './Surface';
 import { Glow, Print } from './Type';
@@ -24,12 +26,14 @@ const EDGE = px(18);
 /** the strip and the line under it */
 const BAR = arcade.bar + arcade.barLine;
 
-/** The coins the player has, in the top bar. Counts up or down to a new amount. */
+/** The coins the player has, in the top bar. Counts up or down to a new amount, and the coin jumps as it does. */
 export function CoinChip({ coins, style }: { coins: number; style?: StyleProp<ViewStyle> }) {
   const shown = useCountUp(coins);
   return (
     <Chip style={[styles.coins, style]}>
-      <Coin size={px(20)} />
+      <Bump beat={coins} amount={0.28}>
+        <Coin size={px(20)} />
+      </Bump>
       <Print face="bold" size="large" color={tubes.gold.glass} track="wider" glow={tubes.gold.glass} lines={1}>
         {shown.toLocaleString('en-US')}
       </Print>
@@ -104,6 +108,7 @@ export function ArcadeScreen({ children, title, tube: t = 'pink', back = true, o
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const coinCount = useSave((s) => s.coins);
+  const pageIn = usePageIn();
 
   useFocusEffect(
     useCallback(() => {
@@ -139,7 +144,8 @@ export function ArcadeScreen({ children, title, tube: t = 'pink', back = true, o
         </View>
       </View>
       {/* a page may ask for more room at the bottom, never for less than the phone's home bar takes */}
-      <View style={[styles.body, { paddingLeft: padLeft, paddingRight: padRight }, style, { paddingBottom: Math.max(insets.bottom, bottomAsked(style) ?? space.sm) }]}>{children}</View>
+      {/* the content comes in under the frame each time the page comes to the front; the wall and the bar stay put */}
+      <Animated.View style={[styles.body, { paddingLeft: padLeft, paddingRight: padRight }, style, { paddingBottom: Math.max(insets.bottom, bottomAsked(style) ?? space.sm) }, pageIn]}>{children}</Animated.View>
     </View>
   );
 }

@@ -18,6 +18,7 @@ import { RIM_STOPS, arcade, blend, fade, halo, night, rarityPaint, ring, track, 
 import { duration, px, size as sizes } from '@/theme/tokens';
 import { LineIcon } from './LineIcon';
 import { fitPerson } from './measure';
+import { Breathe, Found } from './Motion';
 import { Lattice, Rays, useSvgId } from './Room';
 import { Tag, teamLine } from './Surface';
 import { Print } from './Type';
@@ -291,10 +292,12 @@ export const HeadCell = memo(function HeadCell({ player, level = 0, selected, fr
           </Print>
         </View>
       )}
-      {fresh && owned && <View style={[styles.cellDot, { backgroundColor: tubes.pink.glass, boxShadow: [halo(tubes.pink.glass, 6, 1)] }]} />}
+      {fresh && owned && <Breathe depth={0.55} swell={0.35} ms={800} style={[styles.cellDot, { backgroundColor: tubes.pink.glass, boxShadow: [halo(tubes.pink.glass, 6, 1)] }]} />}
     </View>
   );
-  if (!onPress) return body;
+  // a player just found and not looked at yet springs into its place as the grid opens
+  const cell = fresh && owned ? <Found>{body}</Found> : body;
+  if (!onPress) return cell;
   return (
     <Pressable
       accessibilityRole="button"
@@ -305,7 +308,7 @@ export const HeadCell = memo(function HeadCell({ player, level = 0, selected, fr
         onPress();
       }}
       style={({ pressed }) => [pressed && styles.pressed, style]}>
-      {body}
+      {cell}
     </Pressable>
   );
 });
