@@ -1,5 +1,5 @@
 import { PLAYERS, mustPlayer } from '@/data/roster';
-import { LIMITED_UNIFORMS, LIMITED_UNIFORM_PRICE } from '@/data/uniforms';
+import { HOLIDAY_UNIFORMS, LIMITED_UNIFORMS, LIMITED_UNIFORM_PRICE } from '@/data/uniforms';
 
 import { LEVEL_COPIES, MAX_COPIES, type Owned } from '../collection';
 import { SHOP_PACKS } from '../packs';
@@ -8,15 +8,18 @@ import {
   DEAL_PRICE,
   DEAL_SLOTS,
   FEATURED_PRICE,
+  HOLIDAY_START,
   LIMITED_SLOT,
   canAfford,
   clock,
   coins,
   copyLevelsUp,
   cycleOrder,
+  cyclePick,
   dayNumber,
   featuredPool,
   limitedSlot,
+  monthOf,
   msToMidnight,
   pay,
   rollDeals,
@@ -25,6 +28,7 @@ import {
   shopSlots,
   shortBy,
   shortClock,
+  uniformTurn,
 } from '../shop';
 
 /** a run of day keys from a start date */
@@ -94,11 +98,24 @@ describe('the LIMITED slot', () => {
 
   it('shows every limited uniform once in each cycle, and never one twice in a row across cycles', () => {
     const n = LIMITED_UNIFORMS.length;
+    // a limited edition's turn on a uniform day (holiday days are not its turns)
+    const turnOf = (d: string): number | null => {
+      if (dayNumber(d) % 2 !== 0) return null;
+      const at = uniformTurn(d);
+      return 'turn' in at ? at.turn : null;
+    };
     // start on a uniform day at the start of a cycle
     let start = DAY;
-    while (!(dayNumber(start) % 2 === 0 && Math.floor(dayNumber(start) / 2) % n === 0)) start = days(start, 2)[1];
-    const uniformDays = days(start, n * 2 * 6).filter((d) => dayNumber(d) % 2 === 0);
+    while (turnOf(start) === null || (turnOf(start) as number) % n !== 0) start = days(start, 2)[1];
+    // six cycles' worth of the limited editions' days, through December's and January's holiday days
+    const uniformDays = days(start, n * 2 * 6 * 2)
+      .filter((d) => turnOf(d) !== null)
+      .slice(0, n * 6);
+    expect(uniformDays).toHaveLength(n * 6);
+    expect(uniformDays.some((d) => monthOf(d) === 12)).toBe(true);
     const ids = uniformDays.map((d) => limitedSlot(d)?.item.id);
+    // the turns run on one by one, skipping nothing
+    uniformDays.forEach((d, i) => expect(turnOf(d)).toBe((turnOf(start) as number) + i));
     for (let c = 0; c < 6; c++) {
       const cycle = ids.slice(c * n, (c + 1) * n);
       expect(new Set(cycle).size).toBe(n);
@@ -142,6 +159,68 @@ describe('the LIMITED slot', () => {
       .filter((d) => dayNumber(d) % 2 === 1)
       .map((d) => limitedSlot(d)?.item.id);
     expect([...ids].sort()).toEqual(pool.map((p) => p.id).sort());
+  });
+});
+
+describe('the holiday uniforms', () => {
+  /** every day from the start of the holidays over the next three years */
+  const run = days(HOLIDAY_START, 3 * 366);
+
+  it('never sells a holiday uniform outside its own month, nor before the holidays start', () => {
+    const holidayIds = new Set(HOLIDAY_UNIFORMS.map((u) => u.id));
+    for (const d of run) {
+      const slot = limitedSlot(d);
+      const u = HOLIDAY_UNIFORMS.find((h) => h.id === slot?.item.id);
+      if (u) expect(monthOf(d)).toBe(u.month);
+    }
+    // the year before: never
+    for (const d of days('2025-10-01', 396)) expect(holidayIds.has(limitedSlot(d)?.item.id ?? '')).toBe(false);
+  });
+
+  it('sells each one often in its month: every other uniform day, from the first one', () => {
+    for (const u of HOLIDAY_UNIFORMS) {
+      for (const year of [2027, 2028, 2029]) {
+        const month = days(`${year}-${String(u.month).padStart(2, '0')}-01`, 31).filter((d) => monthOf(d) === u.month);
+        const uniformDays = month.filter((d) => dayNumber(d) % 2 === 0);
+        const kinds = uniformDays.map((d) => (limitedSlot(d)?.item.id === u.id ? 'holiday' : 'limited'));
+        expect(kinds[0]).toBe('holiday');
+        kinds.forEach((k, i) => expect(k).toBe(i % 2 === 0 ? 'holiday' : 'limited'));
+        // at least seven days of the month
+        expect(kinds.filter((k) => k === 'holiday').length).toBeGreaterThanOrEqual(7);
+        // the player days in between stay featured players
+        for (const d of month.filter((x) => dayNumber(x) % 2 === 1)) expect(limitedSlot(d)?.item.kind).toBe('player');
+      }
+    }
+    // this December is the first: Christmas comes up on its first uniform day
+    const december = days('2026-12-01', 2).find((d) => dayNumber(d) % 2 === 0) as string;
+    expect(limitedSlot(december)?.item.id).toBe('holly-jolly');
+  });
+
+  it('sells a holiday uniform at the limited price, and the limited editions keep their days between', () => {
+    for (const d of run) {
+      const slot = limitedSlot(d);
+      if (slot?.item.kind !== 'uniform') continue;
+      expect(slot.price).toEqual(coins(LIMITED_UNIFORM_PRICE));
+      const at = uniformTurn(d);
+      expect(slot.item.id).toBe('holiday' in at ? at.holiday.id : cyclePick(LIMITED_UNIFORMS, at.turn, 'limited-uniform').id);
+    }
+  });
+
+  it('leaves every day before the first holiday month as it always was', () => {
+    for (const d of days('2026-01-01', 365)) {
+      if (d >= '2026-12-01') break;
+      const n = dayNumber(d);
+      if (n % 2 !== 0) continue;
+      expect(limitedSlot(d)?.item.id).toBe(cyclePick(LIMITED_UNIFORMS, Math.floor(n / 2), 'limited-uniform').id);
+    }
+  });
+
+  it('can be left out: with no holiday uniforms the rotation is the plain one', () => {
+    for (const d of days('2027-10-01', 31)) {
+      const n = dayNumber(d);
+      if (n % 2 !== 0) continue;
+      expect(limitedSlot(d, LIMITED_UNIFORMS, undefined, [])?.item.id).toBe(cyclePick(LIMITED_UNIFORMS, Math.floor(n / 2), 'limited-uniform').id);
+    }
   });
 });
 

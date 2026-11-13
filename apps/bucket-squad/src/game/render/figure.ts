@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 
 import { BONE_COUNT, KIT_SLOTS, getPart } from '../kit/kit';
-import { hexToRgb, paletteFor, partsFor, type Look } from '../kit/look';
+import { DEFAULT_KIT, hexToRgb, paletteFor, partsFor, printId, type Look } from '../kit/look';
 import { FIGURE_FRAG, FIGURE_VERT } from './shaders';
 
 export interface FigureBuild {
@@ -33,6 +33,13 @@ function decalLayer(part: string, slot: string): number {
   if (part.startsWith('facial.')) return 1;
   if (slot === 'blush' || slot === 'freckle' || slot === 'bandaid') return 1;
   if (part === 'acc.lashes') return 1;
+  return 0;
+}
+
+/** Where a print goes, by colour slot: 1 the jersey, 2 the shorts, 0 nowhere (trim, numbers, skin and the rest). */
+function printArea(slot: string): number {
+  if (slot === 'jersey') return 1;
+  if (slot === 'shorts') return 2;
   return 0;
 }
 
@@ -76,7 +83,8 @@ export function buildFigureGeometry(look: Look): FigureMeshData {
       col[c] = rgb[0];
       col[c + 1] = rgb[1];
       col[c + 2] = rgb[2];
-      col[c + 3] = decalLayer(n, KIT_SLOTS[s]);
+      // the decal layer, and four times where a print goes: the shader takes them apart again
+      col[c + 3] = decalLayer(n, KIT_SLOTS[s]) + 4 * printArea(KIT_SLOTS[s]);
       bone[v0 + i] = part.bone;
     }
     for (let i = 0; i < part.indices.length; i++) idx[i0 + i] = part.indices[i] + v0;
@@ -121,6 +129,21 @@ export function newLightUniforms(): LightUniforms {
   };
 }
 
+const rgbV3 = (hex: string) => new THREE.Vector3(...hexToRgb(hex));
+
+/** A look's print as the shader reads it, set once when the figure is made: id 0 (plain) leaves every fragment as it was. */
+export function printUniforms(look: Look): Record<string, THREE.IUniform> {
+  const print = look.kit?.print;
+  const [a, b, c] = print?.colors ?? [DEFAULT_KIT.jersey, DEFAULT_KIT.jersey];
+  return {
+    uPrint: { value: printId(print) },
+    uPrintShorts: { value: print && print.shorts !== false ? 1 : 0 },
+    uPrintA: { value: rgbV3(a) },
+    uPrintB: { value: rgbV3(b) },
+    uPrintC: { value: rgbV3(c ?? a) },
+  };
+}
+
 /** One drawable figure: geometry + its own bone palette. */
 export class FigureView {
   readonly mesh: THREE.Mesh;
@@ -147,6 +170,7 @@ export class FigureView {
         uGlow: { value: new THREE.Vector3(0, 0, 0) },
         uBaseY: { value: 0 },
         uDecalBias: { value: 0.00016 },
+        ...printUniforms(look),
       },
     });
     this.mesh = new THREE.Mesh(this.data.geometry, this.material);

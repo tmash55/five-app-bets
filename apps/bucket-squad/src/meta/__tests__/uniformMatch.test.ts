@@ -32,6 +32,17 @@ const kitOf = (id: string) => {
   return u.kit;
 };
 
+describe('printed uniforms in a match', () => {
+  it('puts the print on every player of your side, and never on the other side', () => {
+    for (const id of ['tie-dye-swirl', 'starry-galaxy', 'holly-jolly']) {
+      for (const opponent of ['stompers', 'legends', 'coyotes']) {
+        const built = buildMatch(versus(opponent, id));
+        built.lineup.forEach((l, i) => expect(built.visuals.looks[i].kit?.print).toBe(l.team === 0 ? kitOf(id).print : undefined));
+      }
+    }
+  });
+});
+
 describe('picking the uniform for a match', () => {
   it('puts the saved uniform on your side in every kind of game', () => {
     expect(quickSetup(prefs('lava-flow'), { perTeam: 2, difficulty: 0, opponent: null, court: null }, seededRng(1)).home.uniform).toBe('lava-flow');

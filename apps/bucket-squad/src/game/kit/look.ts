@@ -7,6 +7,34 @@
 
 import { KIT_STYLES, hasPart } from './kit';
 
+/**
+ * Printed patterns a uniform can carry over its jersey (and shorts) colour. Drawn procedurally: on the court by the
+ * figure shader (render/shaders), in menus by the flat jersey (ui/arcade/Jersey). Card art leaves them out.
+ */
+export type PrintStyle = 'tieDye' | 'galaxy' | 'lightning' | 'candy' | 'web' | 'snow';
+
+/** Every print, in the order the shader numbers them (1 for the first; 0 is plain). */
+export const PRINT_STYLES: readonly PrintStyle[] = ['tieDye', 'galaxy', 'lightning', 'candy', 'web', 'snow'];
+
+export interface KitPrint {
+  style: PrintStyle;
+  /** the print's colours over the jersey (and shorts) colour: the main one, and one or two more */
+  colors: readonly [string, string] | readonly [string, string, string];
+  /** printed on the shorts too (the default), or the jersey only */
+  shorts?: boolean;
+}
+
+/**
+ * How much of the print shows through behind the number: the print fades to the jersey colour there, so a number
+ * that stands out from its jersey stands out from the print as well (see the uniforms tests).
+ */
+export const PRINT_UNDER_NUMBER = 0.18;
+
+/** The shader's number for a print: 0 for none. */
+export function printId(print: KitPrint | undefined): number {
+  return print ? PRINT_STYLES.indexOf(print.style) + 1 : 0;
+}
+
 export interface KitColors {
   jersey: string;
   trim: string;
@@ -18,6 +46,8 @@ export interface KitColors {
   sole: string;
   sock: string;
   band: string;
+  /** a printed pattern over the jersey and shorts; left out, they are plain. The card-art scripts ignore it. */
+  print?: KitPrint;
 }
 
 export interface Look {
