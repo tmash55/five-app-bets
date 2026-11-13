@@ -38,6 +38,7 @@ const config: ExpoConfig = {
     package: identity.androidPackage,
     adaptiveIcon: {
       backgroundColor: brand.iconBackground,
+      backgroundImage: './assets/images/android-icon-background.png',
       foregroundImage: './assets/images/android-icon-foreground.png',
     },
     predictiveBackGestureEnabled: false,
@@ -54,7 +55,8 @@ const config: ExpoConfig = {
       {
         backgroundColor: brand.splash,
         image: './assets/images/splash-icon.png',
-        imageWidth: 160,
+        // the lit sign and the game's name; the first second of the app draws the same picture this size (src/ui/arcade/Boot.tsx)
+        imageWidth: brand.splashWidth,
       },
     ],
     [

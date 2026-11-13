@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
     "test": "jest",
-    "assets:kit": "python tools/blender/build_kit.py"
+    "assets:kit": "python tools/blender/build_kit.py",
+    "assets:brand": "python tools/brand/make_brand.py"
   },
   "dependencies": {
     "@expo-google-fonts/bungee": "^0.4.1",
