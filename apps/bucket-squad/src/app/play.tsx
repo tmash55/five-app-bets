@@ -1,38 +1,71 @@
 /** Pick a way to play: the Tour, the Ladder, or a quick game. */
 
 import { useRouter, type Href } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { leagueOf } from '@/data/roster';
+import { tapFeedback } from '@/fx/feedback';
 import { tierProgress } from '@/meta/ladder';
 import { DIFFICULTY_NAMES } from '@/meta/setups';
 import { nextTourGame, preferredTour, tourStars, toursFor } from '@/meta/tour';
 import { useSave } from '@/state/save';
-import { color, size as sizes, space, stroke, type ColorName } from '@/theme/tokens';
-import { ProgressBar, Tag, TeamBadge } from '@/ui/Bits';
-import { Icon, type IconName } from '@/ui/Icon';
-import { Screen, Sunburst, useBodySize } from '@/ui/Screen';
-import { StickerButton } from '@/ui/Sticker';
-import { StickerText, Txt } from '@/ui/Txt';
+import { arcade, halo, inner, night, tube as tubes, type TubeName } from '@/theme/arcade';
+import { px, space } from '@/theme/tokens';
+import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
+import { useWidth } from '@/ui/arcade/Buttons';
+import { Star } from '@/ui/arcade/Controls';
+import { LineIcon, type LineIconName } from '@/ui/arcade/LineIcon';
+import { TierMedal, tierTube } from '@/ui/arcade/Medal';
+import { Arrive } from '@/ui/arcade/Motion';
+import { Bloom, Rays } from '@/ui/arcade/Room';
+import { Meter, Pips, SegBar } from '@/ui/arcade/SegBar';
+import { TeamMark, Well } from '@/ui/arcade/Surface';
+import { Glow, Print } from '@/ui/arcade/Type';
 
-function ModeCard({ title, text, icon, fill, onPress, children }: { title: string; text: string; icon: IconName; fill: ColorName; onPress: () => void; children: React.ReactNode }) {
-  const body = useBodySize();
-  // three cards share the row; the lettering keeps a gap from its card's edges
-  const room = (body.width - space.lg * 2) / 3 - (stroke.regular + space.md) * 2;
+/** the sign's padding and its tube, both sides */
+const SIGN_IN = (px(12) + arcade.outline) * 2;
+/** the foot's own padding and line, both sides */
+const FOOT_IN = (px(9) + arcade.hairline) * 2;
+/** the round badge with the mode's picture, and the light it throws on the sign */
+const BADGE = px(64);
+const BLOOM = px(170);
+const RAYS = px(260);
+/** two lines of the explanation, so the three signs line up whether theirs takes one line or two */
+const TWO_LINES = Math.round(px(13) * 1.25) * 2;
+
+function ModeSign({ title, text, icon, tube: t, delay, onPress, children }: { title: string; text: string; icon: LineIconName; tube: TubeName; delay: number; onPress: () => void; children: (room: number) => React.ReactNode }) {
+  const tb = tubes[t];
+  const [width, onLayout] = useWidth(title);
+  const room = width > 0 ? width - SIGN_IN : 0;
   return (
-    <StickerButton fill={fill} round="xl" raise="high" stretch onPress={onPress} accessibilityLabel={`${title}. ${text}`} style={styles.card} face={styles.cardFace}>
-      <Sunburst strength={0.16} />
-      <View style={styles.cardTop}>
-        <Icon name={icon} size={sizes.iconHuge + space.sm} color="white" />
-        <StickerText size="big" color="white" center room={room}>
-          {title}
-        </StickerText>
-        <Txt font="bodyBold" size="body" color="ink" center style={styles.cardText}>
-          {text}
-        </Txt>
-      </View>
-      <View style={styles.foot}>{children}</View>
-    </StickerButton>
+    <Arrive delay={delay} from="up" style={styles.grow}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${title}. ${text}`}
+        onLayout={onLayout}
+        onPress={() => {
+          tapFeedback();
+          onPress();
+        }}
+        style={({ pressed }) => [styles.sign, { borderColor: tb.glass, boxShadow: [halo(tb.glass, 14, pressed ? 0.4 : 0.65), inner(tb.glass, 22, 0.3)] }, pressed && styles.pressed]}>
+        <View style={styles.top}>
+          <View>
+            <Rays size={RAYS} color={tb.glass} alpha={0.22} count={16} fill={0.3} fadeAt={[0.2, 0.92]} style={styles.rays} />
+            <Bloom size={BLOOM} color={tb.glass} alpha={0.42} style={styles.bloom} />
+            <View style={[styles.badge, { borderColor: tb.glass, boxShadow: [halo(tb.glass, 14, 0.8), inner(tb.glass, 14, 0.4)] }]}>
+              <LineIcon name={icon} size={px(32)} tube={tb} />
+            </View>
+          </View>
+          <Glow face="display" size="title" tube={tb} track="close" room={room > 0 ? room : undefined} least={0.6}>
+            {title}
+          </Glow>
+          <Print face="medium" size="small" color="textMuted" center lines={2} style={styles.text}>
+            {text}
+          </Print>
+        </View>
+        <Well style={styles.foot}>{children(room > 0 ? room - FOOT_IN : 0)}</Well>
+      </Pressable>
+    </Arrive>
   );
 }
 
@@ -57,104 +90,147 @@ export default function Play() {
   const next = nextTourGame(tour, current);
   const nextStage = next ? current.stages[next.stage] : null;
   const tp = tierProgress(ladder.points);
+  const nextTube = tp.next ? tierTube(tp.index + 1) : tierTube(tp.index);
 
   return (
-    <Screen title="PLAY">
+    <ArcadeScreen title="PLAY" tube="gold" style={styles.body}>
       <View style={styles.row}>
-        <ModeCard title="TOUR" text="Beat every court and win its star player." icon="flag" fill="mint" onPress={go('/tour')}>
-          <View style={styles.footRow}>
-            <Icon name="star" size={sizes.icon} color="sun" />
-            <Txt font="display" size="large">{`${have} / ${all}`}</Txt>
-          </View>
-          {nextStage ? (
-            <View style={styles.footRow}>
-              <Txt size="small" color="inkSoft">
-                Next stop
-              </Txt>
-              <TeamBadge team={nextStage.team} diameter={sizes.badgeSmall} />
-              <Txt font="display" size="body" lines={1}>
-                {nextStage.team.name}
-              </Txt>
-            </View>
-          ) : (
-            <Tag label="Every court beaten!" fill="sun" />
+        <ModeSign title="TOUR" text="Beat every court and win its star player." icon="flag" tube="orange" delay={40} onPress={go('/tour')}>
+          {(room) => (
+            <>
+              <View style={styles.line}>
+                <Star lit size={px(18)} />
+                <Print face="display" size="body" color={tubes.gold.tint} glow={tubes.gold.glass}>{`${have} / ${all}`}</Print>
+                <Meter value={all > 0 ? have / all : 0} lamps={10} tube="gold" />
+              </View>
+              {nextStage ? (
+                <View style={styles.line}>
+                  <Print face="bold" size="tiny" color="textFaint" track="wide">
+                    NEXT
+                  </Print>
+                  <TeamMark team={nextStage.team} small />
+                  <Print face="bold" size="body" color="textSoft" room={Math.max(px(40), room - px(90))}>
+                    {nextStage.team.name}
+                  </Print>
+                </View>
+              ) : (
+                <Print face="display" size="small" color={tubes.gold.tint} glow={tubes.gold.glass}>
+                  EVERY COURT BEATEN!
+                </Print>
+              )}
+            </>
           )}
-        </ModeCard>
+        </ModeSign>
 
-        <ModeCard title="LADDER" text="Climb from Rookie all the way to Legend." icon="ladder" fill="grape" onPress={go('/ladder')}>
-          <View style={styles.footRow}>
-            <Icon name="trophy" size={sizes.icon} color={tp.tier.color} />
-            <Txt font="display" size="large">
-              {tp.tier.name}
-            </Txt>
-          </View>
-          {tp.next ? (
-            <View style={styles.footBar}>
-              <ProgressBar value={tp.span > 0 ? tp.have / tp.span : 1} fill={tp.next.color} />
-              <Txt size="small" color="inkSoft" center>{`${tp.span - tp.have} points to ${tp.next.name}`}</Txt>
-            </View>
-          ) : (
-            <Tag label="Top of the ladder!" fill="legend" />
+        <ModeSign title="LADDER" text="Climb from Rookie all the way to Legend." icon="ladder" tube="indigo" delay={110} onPress={go('/ladder')}>
+          {() => (
+            <>
+              <View style={styles.line}>
+                <TierMedal index={tp.index} size={px(30)} />
+                <Glow face="sign" size="large" tube={tierTube(tp.index)} track="wide">
+                  {tp.tier.name.toUpperCase()}
+                </Glow>
+              </View>
+              {tp.next ? (
+                <View style={styles.bar}>
+                  <SegBar value={tp.span > 0 ? (tp.have / tp.span) * 100 : 100} tube={nextTube} small />
+                  <Print face="medium" size="tiny" color="textDim" center lines={1}>{`${tp.span - tp.have} points to ${tp.next.name}`}</Print>
+                </View>
+              ) : (
+                <Print face="display" size="small" color={tubes.amber.tint} glow={tubes.amber.glass}>
+                  TOP OF THE LADDER!
+                </Print>
+              )}
+            </>
           )}
-        </ModeCard>
+        </ModeSign>
 
-        <ModeCard title="QUICK GAME" text="Pick a team, pick a court and play." icon="bolt" fill="coral" onPress={go('/quick')}>
-          <View style={styles.footRow}>
-            <Icon name="ball" size={sizes.icon} color="orange" />
-            <Txt font="display" size="large">{`${settings.format} on ${settings.format}`}</Txt>
-          </View>
-          <Txt size="small" color="inkSoft" center>{`${DIFFICULTY_NAMES[settings.difficulty]} level`}</Txt>
-        </ModeCard>
+        <ModeSign title="QUICK GAME" text="Pick a team, pick a court and play." icon="bolt" tube="cyan" delay={180} onPress={go('/quick')}>
+          {() => (
+            <>
+              <View style={styles.line}>
+                <LineIcon name="squad" size={px(18)} tube="cyan" />
+                <Print face="display" size="body" color={tubes.cyan.tint} glow={tubes.cyan.glass}>{`${settings.format} ON ${settings.format}`}</Print>
+              </View>
+              <View style={styles.line}>
+                <Pips have={settings.difficulty + 1} of={DIFFICULTY_NAMES.length} tube="cyan" size={px(10)} />
+                <Print face="medium" size="small" color="textDim">{`${DIFFICULTY_NAMES[settings.difficulty]} level`}</Print>
+              </View>
+            </>
+          )}
+        </ModeSign>
       </View>
-    </Screen>
+    </ArcadeScreen>
   );
 }
 
 const styles = StyleSheet.create({
+  body: {
+    paddingTop: space.md,
+    paddingBottom: space.xs,
+  },
   row: {
     flex: 1,
     flexDirection: 'row',
     gap: space.lg,
-    paddingBottom: space.xs,
   },
-  card: {
+  grow: {
     flex: 1,
   },
-  cardFace: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
-    justifyContent: 'space-between',
-    paddingHorizontal: 0,
-    gap: 0,
+  sign: {
+    flex: 1,
+    padding: px(12),
+    gap: space.sm,
+    backgroundColor: night.tile,
+    borderWidth: arcade.outline,
+    borderRadius: arcade.rPanel,
+    overflow: 'hidden',
   },
-  cardTop: {
+  pressed: {
+    transform: [{ scale: 0.98 }],
+  },
+  top: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: space.xs,
-    paddingVertical: space.sm,
+    gap: px(7),
   },
-  cardText: {
-    paddingHorizontal: space.md,
+  bloom: {
+    position: 'absolute',
+    left: (BADGE - BLOOM) / 2,
+    top: (BADGE - BLOOM) / 2,
+  },
+  rays: {
+    position: 'absolute',
+    left: (BADGE - RAYS) / 2,
+    top: (BADGE - RAYS) / 2,
+  },
+  text: {
+    minHeight: TWO_LINES,
+  },
+  badge: {
+    width: BADGE,
+    height: BADGE,
+    borderRadius: BADGE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: night.pit,
+    borderWidth: arcade.outline,
+    marginBottom: px(2),
   },
   foot: {
-    backgroundColor: color.paper,
-    borderTopWidth: stroke.regular,
-    borderColor: color.ink,
+    minHeight: px(92),
     alignItems: 'center',
     justifyContent: 'center',
-    gap: space.xs,
-    paddingVertical: space.sm,
-    paddingHorizontal: space.md,
-    minHeight: sizes.buttonLarge + space.md,
+    gap: px(8),
   },
-  footRow: {
+  line: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
   },
-  footBar: {
+  bar: {
     alignSelf: 'stretch',
-    gap: space.hair,
+    gap: px(5),
   },
 });

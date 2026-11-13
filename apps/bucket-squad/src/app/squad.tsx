@@ -9,21 +9,35 @@ import { PLAYERS, byValue, mustPlayer, playerOverall } from '@/data/roster';
 import { levelOf } from '@/meta/collection';
 import { chemistry } from '@/meta/match';
 import { useSave } from '@/state/save';
-import { color, px, radius, size as sizes, space, stroke } from '@/theme/tokens';
-import { Tag } from '@/ui/Bits';
-import { Icon, type IconName } from '@/ui/Icon';
-import { PlayerCard } from '@/ui/PlayerCard';
+import { arcade, halo, night, tube } from '@/theme/arcade';
+import { px, size as sizes, space } from '@/theme/tokens';
+import { ArcadeScreen, useArcadeBody } from '@/ui/arcade/ArcadeScreen';
+import { ArcadeCard } from '@/ui/arcade/Card';
+import { SignHead } from '@/ui/arcade/Controls';
+import { LineIcon, type LineIconName } from '@/ui/arcade/LineIcon';
+import { Arrive, Breathe } from '@/ui/arcade/Motion';
+import { Spotlight, StageRing } from '@/ui/arcade/Room';
+import { ChemChip, OvrMeter } from '@/ui/arcade/Strength';
+import { NeonPanel } from '@/ui/arcade/Surface';
+import { Print } from '@/ui/arcade/Type';
 import { columnsThatFit, rowsOf } from '@/ui/rows';
-import { Screen, useBodySize } from '@/ui/Screen';
-import { Txt } from '@/ui/Txt';
 
-/** what the spot labels, tags and hint need around the three squad cards */
-const AROUND_CARDS = px(104);
-/** the dashed ring round a spot, both sides of its card */
-const RING = (stroke.regular + space.hair) * 2;
-const BENCH_CARD = sizes.cardSmall - space.sm;
+/** the page's own tube, the one the home page's SQUAD sign is bent from */
+const TUBE = tube.violet;
+/** what the spot labels, the strength chips and the hint need round the three squad cards */
+const AROUND_CARDS = px(124);
+/** the lit socket round a spot: its gap and its line, both sides of the card */
+const SOCKET_PAD = px(4);
+const SOCKET = (SOCKET_PAD + arcade.outline) * 2;
+/** the bench's cards: no smaller than this (so the rarity still shows); they grow to fill the panel's width */
+const BENCH_MIN = px(92);
+/** the round badge that marks a squad player's card, on the middle of its top edge */
+const BADGE = px(24);
+const BENCH_GAP = space.sm;
+/** the bench panel's padding and line, both sides */
+const PANEL_IN = (px(12) + arcade.outline) * 2;
 
-const SPOTS: readonly { label: string; icon: IconName }[] = [
+const SPOTS: readonly { label: string; icon: LineIconName }[] = [
   { label: 'CAPTAIN', icon: 'crown' },
   { label: 'STARTER', icon: 'ball' },
   { label: '3 ON 3', icon: 'plus' },
@@ -34,7 +48,7 @@ export default function Squad() {
   const squad = useSave((s) => s.squad);
   const owned = useSave((s) => s.owned);
   const setSquad = useSave((s) => s.setSquad);
-  const body = useBodySize();
+  const body = useArcadeBody();
   /** a player waiting for a spot */
   const [pick, setPick] = useState<string | null>(() => (typeof params.add === 'string' && (owned[params.add] ?? 0) > 0 && !squad.includes(params.add) ? params.add : null));
   /** a spot waiting for a player */
@@ -68,65 +82,102 @@ export default function Squad() {
     else setPick(pick === id ? null : id);
   };
 
-  const leftW = body.width * 0.46;
-  const spotW = Math.max(sizes.cardSmall - space.md, Math.min(sizes.card, Math.floor((leftW - space.sm * 2 - RING * 3) / 3), Math.floor((body.height - AROUND_CARDS) / sizes.cardRatio)));
-  const benchColumns = columnsThatFit(body.width - leftW - space.lg - space.xs * 2, BENCH_CARD, space.sm);
+  const height = body.height - space.md;
+  const leftW = Math.floor(body.width * 0.46);
+  const spotW = Math.max(BENCH_MIN - space.md, Math.min(px(150), Math.floor((leftW - space.md * 2) / 3 - SOCKET), Math.floor((height - AROUND_CARDS) / sizes.cardRatio - SOCKET)));
+  const benchRoom = body.width - leftW - space.lg - PANEL_IN;
+  const benchColumns = columnsThatFit(benchRoom, BENCH_MIN, BENCH_GAP);
+  const benchW = Math.floor((benchRoom - BENCH_GAP * (benchColumns - 1)) / benchColumns);
   const hint = pick !== null ? `Tap a spot for ${mustPlayer(pick).name}.` : spot !== null ? 'Now tap the player you want there.' : 'Tap a spot, then tap a player. Your squad wears the captain’s uniform.';
+  const stageW = (spotW + SOCKET) * 3 + space.md * 2;
+  // the beam lands on the ring at the squad's feet: the column is centred, so find where the cards end in it
+  const cardsTall = SPOT_LABEL + (spotW + SOCKET) * sizes.cardRatio;
+  const beamTall = space.md + (height - (cardsTall + AROUND_CARDS - SPOT_LABEL)) / 2 + cardsTall - px(10);
 
   return (
-    <Screen title="SQUAD" tone="orange">
+    <ArcadeScreen title="SQUAD" tube="violet" style={styles.body}>
       <View style={styles.row}>
         <View style={[styles.left, { width: leftW }]}>
+          {/* the squad stands under a spotlight, on a lit ring like the one on the home page */}
+          <Spotlight width={stageW * 0.9} height={beamTall} style={styles.beam} />
           <View style={styles.spots}>
-            {squad.map((id, i) => (
-              <View key={id} style={styles.spot}>
-                <View style={styles.spotLabel}>
-                  <Icon name={SPOTS[i].icon} size={sizes.iconTiny} color={i === 0 ? 'sun' : 'white'} />
-                  <Txt font="display" size="small" color="white" shadow>
-                    {SPOTS[i].label}
-                  </Txt>
-                </View>
-                <View style={[styles.ring, (spot === i || pick !== null) && styles.ringOn]}>
-                  <PlayerCard player={mustPlayer(id)} level={level(id)} width={spotW} selected={spot === i} onPress={() => tapSpot(i)} />
-                </View>
-              </View>
-            ))}
-          </View>
-          <View style={styles.tags}>
-            <Tag label={`${ovr} OVR`} fill="ink" textColor="white" />
-            {chem > 0 ? <Tag label={`Teammates +${chem}`} fill="mint" icon="bolt" /> : <Tag label="Same team = bonus" fill="paper" icon="bolt" />}
-          </View>
-          <Txt font="display" size="body" color="white" shadow center style={styles.hint}>
-            {hint}
-          </Txt>
-        </View>
-        <ScrollView style={styles.bench} contentContainerStyle={styles.benchBody} showsVerticalScrollIndicator={false}>
-          <View style={styles.benchRows}>
-            {rowsOf(mine, benchColumns).map((row) => (
-              <View key={row[0].id} style={styles.benchRow}>
-                {row.map((p) => {
-                  const at = squad.indexOf(p.id);
-                  return (
-                    <View key={p.id}>
-                      <PlayerCard player={p} level={level(p.id)} width={BENCH_CARD} selected={pick === p.id} onPress={() => tapPlayer(p.id)} />
-                      {at >= 0 && (
-                        <View pointerEvents="none" style={styles.inSquad}>
-                          <Icon name={SPOTS[at].icon} size={sizes.iconTiny} color={at === 0 ? 'sun' : 'white'} />
-                        </View>
-                      )}
+            <StageRing width={stageW + space.xxl} height={px(48)} tube="violet" style={styles.ring} />
+            {squad.map((id, i) => {
+              const target = pick !== null || (spot !== null && spot !== i);
+              return (
+                <Arrive key={id} delay={60 + i * 70} style={styles.spot}>
+                  <View style={styles.spotLabel}>
+                    <LineIcon name={SPOTS[i].icon} size={px(15)} tube={i === 0 ? 'gold' : TUBE} />
+                    <Print face="display" size="small" color={i === 0 ? tube.gold.tint : TUBE.tint} track="normal" glow={i === 0 ? tube.gold.glass : TUBE.glass}>
+                      {SPOTS[i].label}
+                    </Print>
+                  </View>
+                  <View>
+                    <Breathe on={target} depth={0.55} style={[styles.socket, target && styles.socketLit]} />
+                    <View style={styles.socketIn}>
+                      <ArcadeCard player={mustPlayer(id)} level={level(id)} width={spotW} selected={spot === i} onPress={() => tapSpot(i)} />
                     </View>
-                  );
-                })}
-              </View>
-            ))}
+                  </View>
+                </Arrive>
+              );
+            })}
           </View>
-        </ScrollView>
+          <Arrive delay={300} from="up" style={[styles.chips, { maxWidth: leftW }]}>
+            <OvrMeter value={ovr} tube="violet" />
+            <ChemChip chemistry={chem} />
+          </Arrive>
+          <Print face="medium" size="body" color={pick !== null || spot !== null ? 'text' : 'textDim'} center lines={2} style={styles.hint}>
+            {hint}
+          </Print>
+        </View>
+
+        <Arrive delay={120} from="right" style={styles.right}>
+          <NeonPanel tube="violet" style={styles.panel}>
+            <SignHead
+              title="YOUR PLAYERS"
+              tube="violet"
+              right={
+                <Print face="bold" size="tiny" color="textFaint" track="wider">
+                  {`${mine.length} IN YOUR COLLECTION`}
+                </Print>
+              }
+            />
+            <ScrollView style={styles.bench} contentContainerStyle={styles.benchBody} showsVerticalScrollIndicator={false}>
+              <View style={styles.benchRows}>
+                {rowsOf(mine, benchColumns).map((row) => (
+                  <View key={row[0].id} style={styles.benchRow}>
+                    {row.map((p) => {
+                      const at = squad.indexOf(p.id);
+                      const picked = pick === p.id;
+                      return (
+                        <View key={p.id}>
+                          <ArcadeCard player={p} level={level(p.id)} width={benchW} selected={picked} flat={!picked} onPress={() => tapPlayer(p.id)} />
+                          {at >= 0 && (
+                            <View pointerEvents="none" style={[styles.inSquad, { left: (benchW - BADGE) / 2 }]}>
+                              <LineIcon name={SPOTS[at].icon} size={px(13)} tube={at === 0 ? 'gold' : TUBE} weight={2.4} />
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          </NeonPanel>
+        </Arrive>
       </View>
-    </Screen>
+    </ArcadeScreen>
   );
 }
 
+/** the height of a spot's label over its card */
+const SPOT_LABEL = px(22);
+
 const styles = StyleSheet.create({
+  body: {
+    paddingTop: space.md,
+  },
   row: {
     flex: 1,
     flexDirection: 'row',
@@ -135,66 +186,97 @@ const styles = StyleSheet.create({
   left: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: space.xs,
+    gap: space.sm,
+  },
+  beam: {
+    position: 'absolute',
+    top: -space.md,
+    alignSelf: 'center',
+  },
+  // the ring lies on the floor round the cards' feet
+  ring: {
+    position: 'absolute',
+    bottom: -px(22),
+    left: -space.lg,
   },
   spots: {
     flexDirection: 'row',
-    gap: space.sm,
+    gap: space.md,
   },
   spot: {
     alignItems: 'center',
-    gap: space.hair,
+    gap: px(3),
   },
   spotLabel: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.xs,
+    gap: px(5),
+    height: SPOT_LABEL - px(3),
   },
-  ring: {
-    borderRadius: radius.lg,
-    borderWidth: stroke.regular,
-    borderColor: color.clear,
+  // a lit outline round a spot that is waiting for a player; it breathes, the card in it does not
+  socket: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: arcade.rTile + SOCKET_PAD,
+    borderWidth: arcade.outline,
     borderStyle: 'dashed',
-    padding: space.hair,
+    borderColor: night.clear,
   },
-  ringOn: {
-    borderColor: color.white,
+  socketLit: {
+    borderColor: TUBE.glass,
+    boxShadow: [halo(TUBE.glass, 10, 0.7)],
   },
-  tags: {
+  socketIn: {
+    padding: SOCKET_PAD + arcade.outline,
+  },
+  chips: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
     gap: space.sm,
+    marginTop: space.xs,
   },
   hint: {
-    maxWidth: sizes.panelMax / 2 + space.huge,
+    maxWidth: px(330),
+    minHeight: px(38),
+  },
+  right: {
+    flex: 1,
+  },
+  panel: {
+    flex: 1,
+    paddingTop: px(10),
+    paddingHorizontal: px(12),
+    gap: space.sm,
+    overflow: 'hidden',
   },
   bench: {
     flex: 1,
   },
   benchBody: {
     alignItems: 'center',
+    paddingTop: BADGE / 2 + px(2),
     paddingBottom: space.md,
-    paddingTop: space.xs,
-    paddingHorizontal: space.xs,
   },
   // the rows share a left edge, and the whole block sits in the middle
   benchRows: {
-    gap: space.sm,
+    gap: BENCH_GAP,
   },
   benchRow: {
     flexDirection: 'row',
-    gap: space.sm,
+    gap: BENCH_GAP,
   },
-  // the spot's own icon on the corner the card leaves free, so the rating stays readable
+  // the spot's own picture half above the card's top edge, where it covers nothing a child reads
   inSquad: {
     position: 'absolute',
-    top: -space.xs,
-    right: -space.xs,
-    width: sizes.badgeTiny + space.xs,
-    height: sizes.badgeTiny + space.xs,
-    borderRadius: (sizes.badgeTiny + space.xs) / 2,
-    backgroundColor: color.ink,
-    borderWidth: stroke.thin,
-    borderColor: color.white,
+    top: -BADGE / 2,
+    width: BADGE,
+    height: BADGE,
+    borderRadius: BADGE / 2,
+    backgroundColor: night.pit,
+    borderWidth: arcade.hairline,
+    borderColor: TUBE.glass,
+    boxShadow: [halo(TUBE.glass, 8, 0.8)],
     alignItems: 'center',
     justifyContent: 'center',
   },

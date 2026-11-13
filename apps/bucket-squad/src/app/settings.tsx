@@ -7,30 +7,48 @@ import { StyleSheet, View } from 'react-native';
 
 import { HAS_EXTRA_ROSTER } from '@/data/roster';
 import { HowToOverlay } from '@/match/HowTo';
+import type { Stats } from '@/state/logic';
 import { useSave } from '@/state/save';
-import { px, size as sizes, space } from '@/theme/tokens';
-import { Tag } from '@/ui/Bits';
-import { Segmented, ToggleChip, type Choice } from '@/ui/Inputs';
-import { Overlay, Panel } from '@/ui/Overlay';
-import { Screen } from '@/ui/Screen';
-import { Sticker, StickerButton } from '@/ui/Sticker';
-import { StickerText, Txt } from '@/ui/Txt';
+import { tube as tubes } from '@/theme/arcade';
+import { px, space } from '@/theme/tokens';
+import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
+import { GhostButton, GoldButton } from '@/ui/arcade/Buttons';
+import { LampSwitch, PickRow, SignHead, type Choice } from '@/ui/arcade/Controls';
+import { LineIcon, type LineIconName } from '@/ui/arcade/LineIcon';
+import { Arrive } from '@/ui/arcade/Motion';
+import { Popup } from '@/ui/arcade/Popup';
+import { NeonPanel, Tag, Well } from '@/ui/arcade/Surface';
+import { Glow, Print } from '@/ui/arcade/Type';
 
+// one lamp for the shortest game, three for the longest
 const QUARTERS: readonly Choice<45 | 60 | 90>[] = [
-  { value: 45, label: '0:45' },
-  { value: 60, label: '1:00' },
-  { value: 90, label: '1:30' },
+  { value: 45, label: '0:45', lamps: 1 },
+  { value: 60, label: '1:00', lamps: 2 },
+  { value: 90, label: '1:30', lamps: 3 },
 ];
 
-function Stat({ label, value }: { label: string; value: number }) {
+/** the record, each with the same picture it has on the missions page */
+const RECORD: readonly { key: keyof Stats; label: string; icon: LineIconName }[] = [
+  { key: 'wins', label: 'WINS', icon: 'trophy' },
+  { key: 'games', label: 'GAMES', icon: 'ball' },
+  { key: 'points', label: 'POINTS', icon: 'star' },
+  { key: 'dunks', label: 'DUNKS', icon: 'up' },
+  { key: 'threes', label: 'THREES', icon: 'target' },
+  { key: 'steals', label: 'STEALS', icon: 'bolt' },
+  { key: 'blocks', label: 'BLOCKS', icon: 'close' },
+  { key: 'packs', label: 'PACKS', icon: 'pack' },
+];
+
+function Stat({ label, value, icon }: { label: string; value: number; icon: LineIconName }) {
   return (
-    <View style={styles.stat}>
-      <Txt font="display" size="large">
+    <View accessible accessibilityLabel={`${label.toLowerCase()}: ${value}`} style={styles.stat}>
+      <LineIcon name={icon} size={px(18)} tube="steel" />
+      <Print face="display" size="large" color="text" lines={1}>
         {value.toLocaleString('en-US')}
-      </Txt>
-      <Txt size="tiny" color="inkSoft" lines={1}>
+      </Print>
+      <Print face="bold" size="micro" color="textFaint" track="wide" lines={1}>
         {label}
-      </Txt>
+      </Print>
     </View>
   );
 }
@@ -52,67 +70,67 @@ export default function Settings() {
 
   return (
     <View style={styles.root}>
-      <Screen title="SETTINGS" tone="sky" coins={false} right={HAS_EXTRA_ROSTER ? <Tag label="Family build" fill="sun" icon="star" style={styles.centerSelf} /> : undefined}>
+      <ArcadeScreen title="SETTINGS" tube="white" coins={false} style={styles.body} right={HAS_EXTRA_ROSTER ? <Tag label="FAMILY BUILD" tube="gold" small /> : undefined}>
         <View style={styles.row}>
-          <Sticker fill="paper" round="lg" raise="mid" style={styles.column} face={styles.panel}>
-            <View style={styles.chips}>
-              <ToggleChip label="Sound" icon="sound" iconOff="mute" on={settings.sound} onChange={(v) => setSetting('sound', v)} style={styles.chip} />
-              <ToggleChip label="Music" icon="music" on={settings.music} onChange={(v) => setSetting('music', v)} style={styles.chip} />
-              <ToggleChip label="Buzz" icon="bolt" on={settings.haptics} onChange={(v) => setSetting('haptics', v)} style={styles.chip} />
-            </View>
-            <View style={styles.chips}>
-              <ToggleChip label="Easy shots" icon="target" fill="sun" on={settings.easyShots} onChange={(v) => setSetting('easyShots', v)} style={styles.chip} />
-              <ToggleChip label="Lefty pad" icon="swap" fill="sun" on={settings.lefty} onChange={(v) => setSetting('lefty', v)} style={styles.chip} />
-            </View>
-            <Txt size="tiny" color="inkSoft">
-              Easy shots gives you more time to let go of a shot. Lefty pad puts the buttons on the left.
-            </Txt>
-            <View style={styles.option}>
-              <Txt font="display" size="small" color="inkSoft">
-                QUARTER LENGTH
-              </Txt>
-              <Segmented options={QUARTERS} value={settings.quarterSeconds} onChange={(v) => setSetting('quarterSeconds', v)} />
-            </View>
-          </Sticker>
-
-          <View style={styles.column}>
-            <Sticker fill="paper" round="lg" raise="mid" face={styles.panel}>
-              <Txt font="display" size="small" color="inkSoft">
-                YOUR RECORD
-              </Txt>
-              <View style={styles.stats}>
-                <Stat label="Wins" value={stats.wins} />
-                <Stat label="Games" value={stats.games} />
-                <Stat label="Points" value={stats.points} />
-                <Stat label="Dunks" value={stats.dunks} />
-                <Stat label="Threes" value={stats.threes} />
-                <Stat label="Steals" value={stats.steals} />
-                <Stat label="Blocks" value={stats.blocks} />
-                <Stat label="Packs" value={stats.packs} />
+          <Arrive delay={40} from="left" style={styles.left}>
+            <NeonPanel tube="steel" style={styles.panel}>
+              <View style={styles.switches}>
+                <LampSwitch label="Sound" icon="sound" iconOff="mute" tube="cyan" on={settings.sound} onChange={(v) => setSetting('sound', v)} />
+                <LampSwitch label="Music" icon="music" tube="cyan" on={settings.music} onChange={(v) => setSetting('music', v)} />
+                <LampSwitch label="Buzz" icon="buzz" tube="cyan" on={settings.haptics} onChange={(v) => setSetting('haptics', v)} />
               </View>
-            </Sticker>
-            <StickerButton label="HOW TO PLAY" icon="help" iconColor="sun" fill="white" textSize="body" onPress={() => setHowTo(true)} />
-            <StickerButton label="START OVER" icon="close" iconColor="coral" fill="white" textSize="body" onPress={() => setConfirm(true)} />
-            <Txt size="tiny" color="white" center>{`Bucket Squad ${Constants.expoConfig?.version ?? ''}  ·  Your game is saved on this device.`}</Txt>
-          </View>
+              <View style={styles.switches}>
+                <LampSwitch label="Easy shots" icon="target" tube="gold" on={settings.easyShots} onChange={(v) => setSetting('easyShots', v)} />
+                <LampSwitch label="Lefty pad" icon="swap" tube="gold" on={settings.lefty} onChange={(v) => setSetting('lefty', v)} />
+              </View>
+              <Print face="medium" size="tiny" color="textDim">
+                Easy shots gives you more time to let go of a shot. Lefty pad puts the buttons on the left.
+              </Print>
+              <View style={styles.option}>
+                <View style={styles.optionLabel}>
+                  <Print face="bold" size="tiny" color="textFaint" track="wider">
+                    QUARTER
+                  </Print>
+                  <Print face="bold" size="tiny" color="textFaint" track="wider">
+                    LENGTH
+                  </Print>
+                </View>
+                <PickRow options={QUARTERS} value={settings.quarterSeconds} onChange={(v) => setSetting('quarterSeconds', v)} tube="steel" style={styles.grow} />
+              </View>
+            </NeonPanel>
+          </Arrive>
+
+          <Arrive delay={110} from="right" style={styles.right}>
+            <NeonPanel tube="steel" style={styles.panel}>
+              <SignHead title="YOUR RECORD" tube="steel" />
+              <Well style={styles.stats}>
+                {RECORD.map((r) => (
+                  <Stat key={r.key} label={r.label} value={stats[r.key]} icon={r.icon} />
+                ))}
+              </Well>
+            </NeonPanel>
+            <View style={styles.buttons}>
+              <GhostButton label="HOW TO PLAY" icon="help" tube="cyan" onPress={() => setHowTo(true)} style={styles.grow} />
+              <GhostButton label="START OVER" icon="close" tube="red" onPress={() => setConfirm(true)} style={styles.grow} />
+            </View>
+            <Print face="medium" size="tiny" color="textFaint" center>{`Bucket Squad ${Constants.expoConfig?.version ?? ''}  ·  Your game is saved on this device.`}</Print>
+          </Arrive>
         </View>
-      </Screen>
+      </ArcadeScreen>
       {howTo && <HowToOverlay onClose={() => setHowTo(false)} />}
       {confirm && (
-        <Overlay>
-          <Panel width={sizes.panelMax - px(120)} face={styles.confirm}>
-            <StickerText size="title" color="coral" center>
-              START OVER?
-            </StickerText>
-            <Txt center color="inkSoft">
-              This erases every player, coin, pack and win on this device. It cannot be undone.
-            </Txt>
-            <View style={styles.chips}>
-              <StickerButton label="KEEP MY GAME" fill="mint" textSize="body" onPress={() => setConfirm(false)} style={styles.chip} />
-              <StickerButton label="ERASE IT" fill="coral" textColor="white" textSize="body" onPress={startOver} style={styles.chip} />
-            </View>
-          </Panel>
-        </Overlay>
+        <Popup tube="red" width={px(400)} onDismiss={() => setConfirm(false)} style={styles.confirm}>
+          <Glow face="display" size="title" tube="red" track="close">
+            START OVER?
+          </Glow>
+          <Print face="medium" size="body" color="textSoft" center>
+            This erases every player, coin, pack and win on this device. It cannot be undone.
+          </Print>
+          <View style={styles.buttons}>
+            <GoldButton label="KEEP MY GAME" size="small" onPress={() => setConfirm(false)} style={styles.grow} />
+            <GhostButton label="ERASE IT" icon="close" tube={tubes.red} onPress={startOver} style={styles.grow} />
+          </View>
+        </Popup>
       )}
     </View>
   );
@@ -122,44 +140,60 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+  body: {
+    paddingTop: space.md,
+  },
   row: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.lg,
   },
-  column: {
+  grow: {
+    flex: 1,
+  },
+  left: {
+    flex: 1.1,
+  },
+  right: {
     flex: 1,
     gap: space.sm,
   },
   panel: {
-    padding: space.md,
+    padding: px(10),
     gap: space.sm,
   },
-  chips: {
+  switches: {
     flexDirection: 'row',
     gap: space.sm,
   },
-  chip: {
-    flex: 1,
-  },
   option: {
-    gap: space.hair,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+  },
+  optionLabel: {
+    flexShrink: 0,
   },
   // two rows of four, so the whole record shows at once
   stats: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    rowGap: space.xs,
+    rowGap: space.sm,
+    paddingVertical: space.sm,
   },
   stat: {
-    alignItems: 'center',
     width: '25%',
+    alignItems: 'center',
+    gap: px(1),
   },
-  confirm: {
+  buttons: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: space.sm,
   },
-  centerSelf: {
-    alignSelf: 'center',
+  confirm: {
+    alignItems: 'center',
+    gap: space.md,
   },
 });
