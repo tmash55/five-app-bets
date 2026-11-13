@@ -29,9 +29,10 @@ const AROUND_CARDS = px(124);
 /** the lit socket round a spot: its gap and its line, both sides of the card */
 const SOCKET_PAD = px(4);
 const SOCKET = (SOCKET_PAD + arcade.outline) * 2;
-/** the bench's cards: no smaller than this (so the rarity still shows), no bigger than that */
+/** the bench's cards: no smaller than this (so the rarity still shows); they grow to fill the panel's width */
 const BENCH_MIN = px(92);
-const BENCH_MAX = px(120);
+/** the round badge that marks a squad player's card, on the middle of its top edge */
+const BADGE = px(24);
 const BENCH_GAP = space.sm;
 /** the bench panel's padding and line, both sides */
 const PANEL_IN = (px(12) + arcade.outline) * 2;
@@ -86,7 +87,7 @@ export default function Squad() {
   const spotW = Math.max(BENCH_MIN - space.md, Math.min(px(150), Math.floor((leftW - space.md * 2) / 3 - SOCKET), Math.floor((height - AROUND_CARDS) / sizes.cardRatio - SOCKET)));
   const benchRoom = body.width - leftW - space.lg - PANEL_IN;
   const benchColumns = columnsThatFit(benchRoom, BENCH_MIN, BENCH_GAP);
-  const benchW = Math.min(BENCH_MAX, Math.floor((benchRoom - BENCH_GAP * (benchColumns - 1)) / benchColumns));
+  const benchW = Math.floor((benchRoom - BENCH_GAP * (benchColumns - 1)) / benchColumns);
   const hint = pick !== null ? `Tap a spot for ${mustPlayer(pick).name}.` : spot !== null ? 'Now tap the player you want there.' : 'Tap a spot, then tap a player. Your squad wears the captain’s uniform.';
   const stageW = (spotW + SOCKET) * 3 + space.md * 2;
   // the beam lands on the ring at the squad's feet: the column is centred, so find where the cards end in it
@@ -152,7 +153,7 @@ export default function Squad() {
                         <View key={p.id}>
                           <ArcadeCard player={p} level={level(p.id)} width={benchW} selected={picked} flat={!picked} onPress={() => tapPlayer(p.id)} />
                           {at >= 0 && (
-                            <View pointerEvents="none" style={styles.inSquad}>
+                            <View pointerEvents="none" style={[styles.inSquad, { left: (benchW - BADGE) / 2 }]}>
                               <LineIcon name={SPOTS[at].icon} size={px(13)} tube={at === 0 ? 'gold' : TUBE} weight={2.4} />
                             </View>
                           )}
@@ -254,7 +255,7 @@ const styles = StyleSheet.create({
   },
   benchBody: {
     alignItems: 'center',
-    paddingTop: px(6),
+    paddingTop: BADGE / 2 + px(2),
     paddingBottom: space.md,
   },
   // the rows share a left edge, and the whole block sits in the middle
@@ -265,14 +266,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: BENCH_GAP,
   },
-  // the spot's own picture on the corner the card leaves free, so the rating stays readable
+  // the spot's own picture half above the card's top edge, where it covers nothing a child reads
   inSquad: {
     position: 'absolute',
-    top: -px(6),
-    right: -px(6),
-    width: px(24),
-    height: px(24),
-    borderRadius: px(12),
+    top: -BADGE / 2,
+    width: BADGE,
+    height: BADGE,
+    borderRadius: BADGE / 2,
     backgroundColor: night.pit,
     borderWidth: arcade.hairline,
     borderColor: TUBE.glass,
