@@ -224,12 +224,12 @@ describe('sound engine', () => {
     const park = mockMade[0];
     expect(park.loop).toBe(true);
     expect(park.playing).toBe(true);
-    expect(park.volume).toBeCloseTo(0.45);
+    expect(park.volume).toBeCloseTo(0.26);
 
     sound.setMusic('game');
-    expect(park.volume).toBeCloseTo(0.22);
+    expect(park.volume).toBeCloseTo(0.14);
     sound.setMusic(null);
-    expect(park.volume).toBeCloseTo(0.45);
+    expect(park.volume).toBeCloseTo(0.26);
 
     sound.setSoundEnabled(false);
     expect(park.log).toContain('remove');
@@ -250,6 +250,28 @@ describe('sound engine', () => {
     sound.setAmbience('park');
     sound.setAmbience('park');
     expect(mockMade).toHaveLength(1);
+  });
+
+  test('every court stays well behind the game, and the surf sits lower than the rest', () => {
+    const alone = (court: string): number => {
+      sound.setAmbience(court);
+      const volume = alive()[0].volume;
+      sound.setAmbience(null);
+      return volume;
+    };
+    for (const court of ['park', 'street', 'beach', 'snow', 'rooftop', 'canyon']) {
+      expect(alone(court)).toBeGreaterThan(0.1);
+      expect(alone(court)).toBeLessThanOrEqual(0.3);
+    }
+    expect(alone('beach')).toBeLessThan(alone('park'));
+
+    // under the music a court is quieter still
+    sound.setAmbience('beach');
+    const surf = alive()[0];
+    const before = surf.volume;
+    sound.setMusic('game');
+    expect(surf.volume).toBeLessThan(before);
+    expect(surf.volume).toBeGreaterThan(0.05);
   });
 
   describe('on Android, where an app may hold about 40 audio outputs', () => {

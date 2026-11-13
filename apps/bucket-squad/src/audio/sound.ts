@@ -78,8 +78,10 @@ const DRIFT: Partial<Record<SfxName, number>> = {
 };
 
 const MUSIC_LEVEL: Record<MusicName, number> = { menu: 0.5, game: 0.36 };
-/** the court's own sound sits under the music, and comes forward when the music is off */
-const AMBIENCE_LEVEL = { underMusic: 0.22, alone: 0.45 };
+/** the court's own sound stays in the background: it sits under the music, and comes forward a little when the music is off */
+const AMBIENCE_LEVEL = { underMusic: 0.14, alone: 0.26 };
+/** loudness trim per court, on top of that: surf never pauses the way birds or a far street do, so it fills more of the ear at the same measured level */
+const AMBIENCE_TRIM: Partial<Record<AmbienceName, number>> = { beach: 0.8 };
 
 /**
  * Android lets one app hold about 40 audio outputs, and every player holds
@@ -369,14 +371,14 @@ function nudge(bed: Bed<unknown> | null): void {
   }
 }
 
-function ambienceLevel(): number {
-  return music ? AMBIENCE_LEVEL.underMusic : AMBIENCE_LEVEL.alone;
+function ambienceLevel(name: AmbienceName): number {
+  return (music ? AMBIENCE_LEVEL.underMusic : AMBIENCE_LEVEL.alone) * (AMBIENCE_TRIM[name] ?? 1);
 }
 
 /** Bring the court's sound in line with what is wanted, the sound switch, and whether music plays over it. */
 function syncAmbience(): void {
   const name = soundOn ? wantedAmbience : null;
-  const level = name === null ? 0 : ambienceLevel();
+  const level = name === null ? 0 : ambienceLevel(name);
   if (name !== notedAmbience.name || level !== notedAmbience.level) {
     notedAmbience = { name, level };
     note('amb', name, level);
