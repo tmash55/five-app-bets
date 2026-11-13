@@ -47,7 +47,7 @@ steps.push('tap:TIP-OFF', 'until:!!(globalThis.__bs && globalThis.__bs.renderer)
 steps.push('tap:Pause', 'wait:600', `shot:${out}/14-pause.png`, 'tap:How to play', 'wait:600', `shot:${out}/15-howto.png`, 'tap:BACK', 'wait:300', 'tap:Resume', 'wait:300');
 steps.push(`eval:(()=>{ const r=__bs; let n=0; while (r.m.phase !== 'final' && n < 200000) { r.tick(); n++; } return { score: r.m.score, n } })()`, "until:location.pathname==='/results'", 'wait:3600', `shot:${out}/16-results.png`);
 // opening a pack
-steps.push(`eval:(()=>{ __router.dismissTo('/'); return 1 })()`, 'wait:350', `eval:(()=>{ __router.push({ pathname: '/open', params: { pack: 'allstar' } }); return 1 })()`, 'wait:900', `shot:${out}/17-pack.png`, 'tap:Open the pack', 'wait:2600', `shot:${out}/18-reveal.png`);
+steps.push(`eval:(()=>{ __router.dismissTo('/'); return 1 })()`, 'wait:350', `eval:(()=>{ __router.push({ pathname: '/open', params: { pack: 'allstar' } }); return 1 })()`, 'wait:900', `shot:${out}/17-pack.png`, 'tap:Open the pack', 'wait:6000', `shot:${out}/18-reveal.png`);
 // first launch
 steps.push(`eval:(()=>{ __save.getState().resetAll(); __router.replace('/welcome'); return 1 })()`, 'wait:1200', `shot:${out}/19-welcome.png`, 'tap:Yetis', 'wait:700', `shot:${out}/20-welcome-team.png`);
 steps.push('log:12');
