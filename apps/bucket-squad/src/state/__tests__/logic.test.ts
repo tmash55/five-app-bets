@@ -86,7 +86,7 @@ describe('packs', () => {
     expect(claimFreePack(s as SaveData, NEXT_DAY)?.packs.playground).toBe(3);
   });
 
-  it('opens a pack you own and puts the players on the shelf', () => {
+  it('opens a pack you own and puts the players in the collection', () => {
     const s = career();
     const res = openOwnedPack(s, 'playground', seededRng(11), DAY);
     expect(res).not.toBeNull();

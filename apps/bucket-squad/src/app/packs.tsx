@@ -259,6 +259,15 @@ export default function Packs() {
                   <GoldButton size="small" label={packs[p.id] > 1 ? `OPEN  x${packs[p.id]}` : 'OPEN'} onPress={() => open(p.id)} accessibilityLabel={`Open the ${p.name}`} />
                 </ReadyWell>
               ))}
+              {/* with nothing else waiting, say where the next pack comes from instead of leaving the panel empty */}
+              {mine.length === 0 && (
+                <View style={styles.none}>
+                  <LineIcon name="pack" size={px(26)} color={night.lineLit} weight={2} />
+                  <Print face="body" size="small" color="textFaint" center>
+                    Packs you get wait here until you open them.
+                  </Print>
+                </View>
+              )}
             </ScrollView>
           </NeonPanel>
         </View>
@@ -278,6 +287,12 @@ const styles = StyleSheet.create({
   },
   grow: {
     flex: 1,
+  },
+  none: {
+    alignItems: 'center',
+    gap: px(8),
+    paddingTop: px(14),
+    paddingHorizontal: px(10),
   },
   panels: {
     flex: 1,
