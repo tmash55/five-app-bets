@@ -519,3 +519,103 @@ void main() {
   fragColor = vec4(c, a);
 }
 `;
+
+/**
+ * The warm-up stage's round base: lit like everything else, with a piece of
+ * court painted on top (drawn analytically so the lines stay crisp) and soft
+ * contact shadows under the figures and balls.
+ */
+export const BASE_VERT = /* glsl */ `
+precision highp float;
+uniform mat4 modelMatrix;
+uniform mat4 viewMatrix;
+uniform mat4 projectionMatrix;
+in vec3 position;
+in vec3 normal;
+in vec3 color;
+out vec3 vNormal;
+out vec3 vColor;
+out vec3 vWorld;
+out vec3 vLocal;
+void main() {
+  vec4 world = modelMatrix * vec4(position, 1.0);
+  vNormal = mat3(modelMatrix) * normal;
+  vColor = color;
+  vWorld = world.xyz;
+  vLocal = position;
+  gl_Position = projectionMatrix * viewMatrix * world;
+}
+`;
+
+export const BASE_FRAG = /* glsl */ `
+precision highp float;
+#define STAGE_SHADOWS 16
+uniform vec3 cameraPosition;
+uniform float uRadius;
+uniform vec3 uCourtCol;
+uniform vec3 uBandCol;
+uniform vec3 uCircleCol;
+uniform vec3 uLineCol;
+uniform vec4 uShadows[STAGE_SHADOWS];  // world x, z, radius, strength
+${LIGHTING}
+in vec3 vNormal;
+in vec3 vColor;
+in vec3 vWorld;
+in vec3 vLocal;
+out vec4 fragColor;
+float ring(float d, float w, float aa) {
+  return 1.0 - smoothstep(w - aa, w + aa, abs(d));
+}
+void main() {
+  vec3 n = normalize(vNormal);
+  vec3 base = vColor;
+  float top = step(0.9, n.y) * step(-0.002, vLocal.y);
+  if (top > 0.5) {
+    vec2 p = vLocal.xz;
+    float r = length(p);
+    float aa = fwidth(r) * 1.1 + 0.0008;
+    float R = uRadius;
+    vec3 c = uCourtCol;
+    // faint boards across the court
+    float board = fract(p.x * 4.2 / R * 2.0);
+    c *= 0.975 + 0.035 * smoothstep(0.0, 0.08, board) * (1.0 - smoothstep(0.92, 1.0, board));
+    float lw = R * 0.016;
+    // centre circle in the team colour
+    c = mix(c, uCircleCol, 1.0 - smoothstep(R * 0.34 - aa, R * 0.34 + aa, r));
+    // the apron band round the edge
+    c = mix(c, uBandCol, smoothstep(R * 0.8 - aa, R * 0.8 + aa, r));
+    float line = ring(r - R * 0.34, lw, aa);
+    line = max(line, ring(r - R * 0.8, lw, aa));
+    float aax = fwidth(p.y) * 1.1 + 0.0008;
+    line = max(line, (1.0 - smoothstep(lw - aax, lw + aax, abs(p.y))) * (1.0 - smoothstep(R * 0.8 - aa, R * 0.8 + aa, r)));
+    base = mix(c, uLineCol, line * 0.95);
+  }
+  vec3 v = normalize(cameraPosition - vWorld);
+  vec3 col = shadeMatte(base, n, v);
+  // soft contact shadows on the top
+  float sh = 0.0;
+  for (int i = 0; i < STAGE_SHADOWS; i++) {
+    vec4 s = uShadows[i];
+    if (s.w <= 0.0) continue;
+    float d = length(vWorld.xz - s.xy);
+    sh = max(sh, (1.0 - smoothstep(s.z * 0.25, s.z, d)) * s.w);
+  }
+  sh *= step(-0.01, vWorld.y);
+  col *= mix(vec3(1.0), vec3(0.5, 0.52, 0.66), sh);
+  fragColor = vec4(col, 1.0);
+}
+`;
+
+/** A soft shadow on the backdrop under the base: premultiplied, so it darkens whatever is behind the GL view. */
+export const DROP_FRAG = /* glsl */ `
+precision highp float;
+uniform float uStrength;
+in vec2 vUv;
+out vec4 fragColor;
+void main() {
+  float r = length(vUv - 0.5) * 2.0;
+  float a = (1.0 - smoothstep(0.35, 1.0, r)) * uStrength;
+  if (a < 0.002) discard;
+  fragColor = vec4(0.0, 0.02, 0.08, 1.0) * a;
+}
+`;

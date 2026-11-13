@@ -8,8 +8,7 @@
 
 import * as THREE from 'three';
 
-import { KIT_SLOTS, getPart } from '../kit/kit';
-import { hexToRgb, paletteFor, type Look } from '../kit/look';
+import { hexToRgb, type Look } from '../kit/look';
 import { BALL_R, COURT, DT, RULES } from '../sim/constants';
 import { attackSign, hoopXOf, shotApexTime, shotMeter } from '../sim/core';
 import { clamp, clamp01, lerp, smooth } from '../sim/math';
@@ -20,6 +19,7 @@ import { buildCourt, type CourtId, type CourtMeshes } from './court';
 import { FigureView, newLightUniforms, type LightUniforms } from './figure';
 import { rgb, type Rgb } from './geo';
 import { Particles, SHAPE_SOFT, SHAPE_SPARKLE } from './particles';
+import { buildBallGeometry, programCount, warmUp, wrapContext } from './props';
 import {
   ARROW_FRAG,
   FLOOR_FRAG,
@@ -154,27 +154,7 @@ export class MatchRenderer {
   constructor(gl: WebGL2RenderingContext, visuals: MatchVisuals) {
     const w = gl.drawingBufferWidth;
     const h = gl.drawingBufferHeight;
-    // three only needs something canvas-shaped around the context it is handed
-    const canvas = {
-      width: w,
-      height: h,
-      style: {},
-      clientWidth: w,
-      clientHeight: h,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      getContext: () => gl,
-    };
-    this.three = new THREE.WebGLRenderer({
-      canvas: canvas as unknown as HTMLCanvasElement,
-      antialias: true,
-      alpha: false,
-      depth: true,
-      stencil: false,
-      powerPreference: 'high-performance',
-    });
-    this.three.setPixelRatio(1);
-    this.three.setClearColor(0x000000, 1);
+    this.three = wrapContext(gl, false);
     this.three.sortObjects = true;
     this.scene.matrixAutoUpdate = false;
 
@@ -303,24 +283,7 @@ export class MatchRenderer {
     this.disposables.push(court.net);
 
     // --- ball
-    const ballPart = getPart('ball');
-    const ballGeo = new THREE.BufferGeometry();
-    if (ballPart) {
-      const pal = paletteFor({ skin: '#000000', hair: { style: 'bald', color: '#000000' } });
-      const col = new Float32Array(ballPart.vertexCount * 3);
-      const nrm = new Float32Array(ballPart.vertexCount * 3);
-      for (let i = 0; i < ballPart.vertexCount; i++) {
-        const c = hexToRgb(pal[KIT_SLOTS[ballPart.slots[i]]] ?? '#E8792B');
-        col.set(c, i * 3);
-        nrm[i * 3] = ballPart.normals[i * 3] / 127;
-        nrm[i * 3 + 1] = ballPart.normals[i * 3 + 1] / 127;
-        nrm[i * 3 + 2] = ballPart.normals[i * 3 + 2] / 127;
-      }
-      ballGeo.setAttribute('position', new THREE.BufferAttribute(ballPart.positions, 3));
-      ballGeo.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
-      ballGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-      ballGeo.setIndex(new THREE.BufferAttribute(ballPart.indices, 1));
-    }
+    const ballGeo = buildBallGeometry();
     this.ball = new THREE.Mesh(ballGeo, staticMat);
     this.ball.frustumCulled = false;
     this.scene.add(this.ball);
@@ -425,6 +388,15 @@ export class MatchRenderer {
       mood: 'play',
     };
     this.resize(w, h);
+    // every shader the match can ever use is built and queried now, never mid-game
+    this.warmPrograms = warmUp(this.three, this.scene, this.camera);
+  }
+
+  /** Shader programs built before the first frame, and how many exist now (tooling: the two should stay equal). */
+  readonly warmPrograms: number;
+
+  get programs(): number {
+    return programCount(this.three);
   }
 
   resize(width: number, height: number): void {

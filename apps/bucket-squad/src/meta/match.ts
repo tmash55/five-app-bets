@@ -6,7 +6,7 @@
 
 import { boosted, kitAgainst, levelBonus, lookInKit, mustPlayer, teamById } from '@/data/roster';
 import type { PlayerDef, TeamDef } from '@/data/types';
-import type { KitColors } from '@/game/kit/look';
+import type { KitColors, Look } from '@/game/kit/look';
 import type { CourtId } from '@/game/render/court';
 import type { MatchVisuals } from '@/game/render/renderer';
 import { toAttrs } from '@/game/sim/ratings';
@@ -68,6 +68,11 @@ function gap(a: string, b: string): number {
   return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
 }
 
+/** How a player looks on the person's side: the kit team's home strip, with their own touches when it is their own team. */
+export function homeLook(def: PlayerDef, kitTeam: TeamDef): Look {
+  return lookInKit(def, { ...kitTeam.kit, ...(def.team === kitTeam.id ? (def.look.kit ?? {}) : {}) });
+}
+
 export interface BuiltMatch {
   config: MatchConfig;
   visuals: MatchVisuals;
@@ -96,7 +101,7 @@ export function buildMatch(setup: MatchSetup): BuiltMatch {
     };
   }) as MatchConfig['teams'];
 
-  const looks = lineup.map((l) => lookInKit(l.def, l.team === 0 ? { ...kits[0], ...(l.def.team === homeTeam.id ? (l.def.look.kit ?? {}) : {}) } : kits[1]));
+  const looks = lineup.map((l) => (l.team === 0 ? homeLook(l.def, homeTeam) : lookInKit(l.def, kits[1])));
 
   // HUD and floor-ring colours: each side's jersey colour reads best, with the team colour as a fallback
   const colorOf = (team: TeamDef, kit: KitColors) => (gap(kit.jersey, '#FFFFFF') < 0.25 ? team.color : kit.jersey);

@@ -3,6 +3,8 @@
  * display frame and tells the screen what happened.
  */
 
+import { Platform } from 'react-native';
+
 import { MatchRenderer, type MatchVisuals } from './render/renderer';
 import { DT, RULES } from './sim/constants';
 import { createMatch, stepMatch } from './sim/sim';
@@ -32,6 +34,17 @@ export interface HudState {
 
 export interface GLContextLike extends WebGL2RenderingContext {
   endFrameEXP?: () => void;
+  flushEXP?: () => void;
+}
+
+/**
+ * Call at the start of a frame, before any GL work. On native expo-gl, GL runs
+ * on its own thread and JS can queue frames far ahead of it; this waits until
+ * the GL thread has caught up, so JS is never more than one frame ahead. It
+ * costs nothing when GL keeps up. The web has nothing to wait for.
+ */
+export function waitForGL(gl: GLContextLike): void {
+  if (Platform.OS !== 'web') gl.flushEXP?.();
 }
 
 export interface RunnerHooks {
@@ -111,6 +124,12 @@ export class MatchRunner {
     this.gl = null;
   }
 
+  /** Tooling: shader programs built at warm-up and now; `now` growing during play means a program was built mid-game. */
+  get glPrograms(): { warm: number; now: number } | null {
+    const r = this.renderer;
+    return r ? { warm: r.warmPrograms, now: r.programs } : null;
+  }
+
   /** Screen position (0..1) of a world point, for callouts placed by the HUD. */
   project(x: number, y: number, z: number, out: { x: number; y: number }): boolean {
     if (!this.renderer) return false;
@@ -139,6 +158,7 @@ export class MatchRunner {
     const r = this.renderer;
     const gl = this.gl;
     if (!r || !gl) return;
+    waitForGL(gl);
     let dt = this.last < 0 ? 0 : (now - this.last) / 1000;
     this.last = now;
     if (dt > 0.1) dt = 0.1;

@@ -1,13 +1,15 @@
 /** Home: your squad on one side, everything you can do on the other. */
 
 import { Image } from 'expo-image';
-import { Redirect, useRouter, type Href } from 'expo-router';
-import { useEffect } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Redirect, useFocusEffect, useIsFocused, useRouter, type Href } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
+import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import { PLAYERS, cardArt, mustPlayer, playerOverall } from '@/data/roster';
 import { tapFeedback } from '@/fx/feedback';
+import { StageView } from '@/game/StageView';
+import { squadStage } from '@/game/stage/cast';
 import { countOwned, levelOf } from '@/meta/collection';
 import { currentMissions, missionsToClaim } from '@/meta/missions';
 import { dayKey } from '@/meta/rng';
@@ -22,6 +24,16 @@ import { StickerText, Txt } from '@/ui/Txt';
 const ALL_IDS = PLAYERS.map((p) => p.id);
 /** one full breath of the squad on the home screen */
 const IDLE_MS = 2400;
+/** the live 3D squad needs GL; tests have none and keep the card art */
+const LIVE = process.env.NODE_ENV !== 'test';
+const FADE_MS = 280;
+
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 function Tile({ label, sub, icon, fill, count = 0, tag, onPress }: { label: string; sub: string; icon: IconName; fill: ColorName; count?: number; tag?: string; onPress: () => void }) {
   return (
@@ -57,7 +69,7 @@ function Figure({ id, lead, clock, beat }: { id: string; lead: boolean; clock: S
   );
 }
 
-/** The three players in your squad, standing together. */
+/** The three players in your squad, standing together: card art at once, then the live warm-up over it. */
 function SquadStage({ ids, onPress }: { ids: string[]; onPress: () => void }) {
   // captain in the middle and a step in front
   const order = ids.length >= 3 ? [ids[1], ids[0], ids[2]] : ids;
@@ -65,22 +77,79 @@ function SquadStage({ ids, onPress }: { ids: string[]; onPress: () => void }) {
   useEffect(() => {
     clock.set(withRepeat(withTiming(1, { duration: IDLE_MS, easing: Easing.linear }), -1));
   }, [clock]);
+
+  // the live stage only runs while this screen is on top: another screen covering it frees its GL context
+  const focused = useIsFocused();
+  const [failed, setFailed] = useState(false);
+  const [rect, setRect] = useState<Rect | null>(null);
+  const area = useRef<ComponentRef<typeof View>>(null);
+  const window = useWindowDimensions();
+  const live = useSharedValue(0);
+  const setup = useMemo(() => squadStage(ids), [ids]);
+  useFocusEffect(
+    useCallback(() => {
+      return () => live.set(0);
+    }, [live]),
+  );
+  const measure = useCallback(() => {
+    area.current?.measureInWindow((x, y, w, h) => {
+      if (w > 0 && h > 0) setRect((r) => (r && r.x === x && r.y === y && r.w === w && r.h === h ? r : { x, y, w, h }));
+    });
+  }, []);
+  const ready = useCallback(() => live.set(withTiming(1, { duration: FADE_MS })), [live]);
+  const fail = useCallback(
+    (e: unknown) => {
+      live.set(0);
+      setFailed(true);
+      if (__DEV__) console.warn('warm-up stage unavailable', e);
+    },
+    [live],
+  );
+  const cardStyle = useAnimatedStyle(() => ({ opacity: 1 - live.value }));
+  const liveStyle = useAnimatedStyle(() => ({ opacity: live.value }));
+
+  // the GL view reaches up under the header and out to the left edge so raised arms and a flying ball are never cut off
+  const glW = rect ? rect.x + rect.w + space.lg : 1;
+  const glH = window.height;
+  const focus = useMemo(() => (rect ? { x: rect.x / glW, y: rect.y / glH, w: rect.w / glW, h: rect.h / glH } : { x: 0, y: 0, w: 1, h: 1 }), [rect, glW, glH]);
+  const showLive = LIVE && focused && !failed && rect !== null;
+
   return (
-    <Pressable
-      style={styles.stage}
-      accessibilityRole="button"
-      accessibilityLabel="Your squad. Tap to change it."
-      onPress={() => {
-        tapFeedback();
-        onPress();
-      }}>
-      <View style={styles.floor} />
-      <View style={styles.figures}>
-        {order.map((id, i) => (
-          <Figure key={id} id={id} lead={id === ids[0]} clock={clock} beat={i * 0.37} />
-        ))}
-      </View>
-    </Pressable>
+    <View style={styles.stage} ref={area} onLayout={measure}>
+      <Animated.View style={[styles.fill, cardStyle]}>
+        <Pressable
+          style={styles.cards}
+          accessibilityRole="button"
+          accessibilityLabel="Your squad. Tap to change it."
+          onPress={() => {
+            tapFeedback();
+            onPress();
+          }}>
+          <View style={styles.floor} />
+          <View style={styles.figures}>
+            {order.map((id, i) => (
+              <Figure key={id} id={id} lead={id === ids[0]} clock={clock} beat={i * 0.37} />
+            ))}
+          </View>
+        </Pressable>
+      </Animated.View>
+      {showLive && rect && (
+        <Animated.View style={[styles.live, { left: -rect.x, top: -rect.y, width: glW, height: glH }, liveStyle]}>
+          <StageView
+            key={ids.join(',')}
+            setup={setup}
+            focus={focus}
+            onReady={ready}
+            onError={fail}
+            onPressEmpty={() => {
+              tapFeedback();
+              onPress();
+            }}
+            style={styles.fill}
+          />
+        </Animated.View>
+      )}
+    </View>
   );
 }
 
@@ -116,13 +185,22 @@ export default function Home() {
       <View style={styles.row}>
         <View style={styles.left}>
           <SquadStage ids={squad} onPress={go('/squad')} />
-          <Sticker fill="paper" round="pill" raise="low" style={styles.squadPill} face={styles.squadPillFace}>
-            <Icon name="crown" size={sizes.iconSmall} color="sun" />
-            <Txt font="display" size="body">
-              YOUR SQUAD
-            </Txt>
-            <Tag label={`${squadOvr} OVR`} fill="ink" textColor="white" style={styles.center} />
-          </Sticker>
+          <Pressable
+            style={styles.squadPill}
+            accessibilityRole="button"
+            accessibilityLabel={`Your squad, ${squadOvr} overall. Tap to change it.`}
+            onPress={() => {
+              tapFeedback();
+              go('/squad')();
+            }}>
+            <Sticker fill="paper" round="pill" raise="low" face={styles.squadPillFace}>
+              <Icon name="crown" size={sizes.iconSmall} color="sun" />
+              <Txt font="display" size="body">
+                YOUR SQUAD
+              </Txt>
+              <Tag label={`${squadOvr} OVR`} fill="ink" textColor="white" style={styles.center} />
+            </Sticker>
+          </Pressable>
         </View>
         <View style={styles.right}>
           <StickerButton fill="coral" round="xl" raise="high" onPress={go('/play')} accessibilityLabel="Play" face={styles.playFace}>
@@ -159,8 +237,14 @@ const styles = StyleSheet.create({
   stage: {
     flex: 1,
     alignSelf: 'stretch',
+  },
+  cards: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'flex-end',
+  },
+  live: {
+    position: 'absolute',
   },
   floor: {
     position: 'absolute',
