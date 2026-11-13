@@ -27,6 +27,11 @@ const VOICES: Partial<Record<SfxName, number>> = {
   star: 3,
   swipe: 2,
   tick: 2,
+  // the pack opening: cards deal into their row close together, and a rating's lamps tick one after another
+  cardDeal: 3,
+  lampTick: 3,
+  spotWhoosh: 2,
+  sparkle: 2,
 };
 
 /** loudness trim per sound, on top of the level baked into the file */
@@ -55,6 +60,10 @@ const TRIM: Partial<Record<SfxName, number>> = {
   ankle: 0.55,
   hypeEnd: 0.6,
   lose: 0.7,
+  // the pack opening: the slam's boom measures loud for how it sounds, and a lamp tick plays up to thirty times a card
+  slam: 0.65,
+  lampTick: 0.55,
+  drumRoll: 0.85,
 };
 
 /**
