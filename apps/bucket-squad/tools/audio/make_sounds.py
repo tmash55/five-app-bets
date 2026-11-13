@@ -485,6 +485,193 @@ def sfx_lock():
     return mix(0.16, (0, thump(180, 90, 0.08, 0.025) * 0.4), (0, clack(900) * 1.4), (0.07, thump(140, 70, 0.08, 0.025) * 0.32), (0.07, clack(700) * 1.26))
 
 
+# --- the pack opening's reveals ----------------------------------------------
+#
+# Each of these draws its noise from a generator of its own: the sounds above share one, in order, so a new
+# sound taking from it would change every sound and both music beds made after it.
+
+
+def own_noise(seed: int):
+    def wrap(fn):
+        def run():
+            global RNG
+            shared = RNG
+            RNG = np.random.default_rng(seed)
+            try:
+                return fn()
+            finally:
+                RNG = shared
+
+        return run
+
+    return wrap
+
+
+def crinkle(dur: float, density: float = 0.72) -> np.ndarray:
+    n = noise(dur)
+    return band(n * (RNG.random(len(n)) > density), 2600, 9000) * shape(dur, 0.006, dur * 0.6)
+
+
+@own_noise(101)
+def sfx_pack_rattle():
+    """The pack shaken harder and harder: crinkles that come faster and louder, over a rising rumble of foil."""
+    d = 0.95
+    layers = []
+    t, gap = 0.0, 0.15
+    while t < d - 0.05:
+        u = t / d
+        layers.append((t, crinkle(0.07) * (0.35 + 0.65 * u)))
+        t += gap
+        gap = max(0.035, gap * 0.82)
+    tt = t_axis(d)
+    rumble = band(noise(d), 300, 1400) * (tt / d) ** 1.6 * 0.35
+    rise = tone(220, d, 520, 1.6) * (tt / d) ** 2 * 0.12
+    return mix(d, *layers, (0, rumble), (0, rise))
+
+
+@own_noise(102)
+def sfx_pack_glow():
+    """Light pouring out of the torn pack: an airy swell that climbs, with a glitter on top."""
+    d = 0.8
+    t = t_axis(d)
+    swell = shape(d, 0.5, 0.25)
+    air = band(noise(d), 900, 5200) * swell * 0.5
+    glide = (tone(330, d, 990, 1.4) + 0.5 * tone(495, d, 1485, 1.4)) * swell * 0.22
+    glitter = shimmer(d, 0.5) * (t / d)
+    return mix(d, (0, air), (0, glide), (0, glitter))
+
+
+@own_noise(103)
+def sfx_card_deal():
+    """A card skimming into its place in the row."""
+    d = 0.12
+    fwip = band(noise(d), 1500, 7000) * shape(d, 0.03, 0.08)
+    tick = band(noise(0.015), 3000, 0) * decay(0.015, 0.003)
+    return mix(0.14, (0, fwip * 0.8), (0.1, tick * 0.35))
+
+
+@own_noise(104)
+def sfx_rare_charge():
+    """Charging up: three rising blips, one for each ring that closes in, over a hum that climbs to the flip."""
+    d = 1.05
+    blips = []
+    for i, f in enumerate((880, 1175, 1568)):
+        b = (tone(f, 0.11) + 0.3 * tone(f * 2, 0.11)) * decay(0.11, 0.035, 0.003)
+        blips.append((i * 0.26, b * (0.7 + 0.15 * i)))
+    t = t_axis(d)
+    hum = band(tone(180, d, 560, 1.3) + 0.5 * tone(360, d, 1120, 1.3), 0, 2400) * (t / d) ** 1.5 * 0.3
+    return mix(d, *blips, (0, hum))
+
+
+@own_noise(105)
+def sfx_crackle():
+    """Light running round the card's edge: soft electric snaps, kept low so nothing stings."""
+    d = 0.42
+    out = silence(d)
+    t = 0.0
+    while t < d - 0.03:
+        snap = band(noise(0.012), 1800, 6500) * decay(0.012, 0.0025) * RNG.uniform(0.4, 1.0)
+        i = int(t * SR)
+        out[i : i + len(snap)] += snap[: len(out) - i]
+        t += RNG.uniform(0.008, 0.03)
+    tt = t_axis(d)
+    buzz = band(square(110, d, 7), 0, 1800) * 0.12 * (0.6 + 0.4 * np.sin(2 * np.pi * 9 * tt))
+    return (out + buzz) * shape(d, 0.02, 0.15)
+
+
+@own_noise(106)
+def sfx_spot_whoosh():
+    """A big stage lamp clunking on and its beam sweeping across."""
+    d = 0.6
+    t = t_axis(d)
+    low = band(noise(d), 300, 1500)
+    high = band(noise(d), 1500, 6000)
+    u = t / d
+    sweep_ = (low * (1 - u) + high * u) * shape(d, 0.18, 0.3)
+    clunk = mix(0.1, (0, thump(150, 70, 0.1, 0.03)), (0, 0.6 * band(noise(0.04), 600, 3000) * decay(0.04, 0.008)))
+    return mix(d, (0, sweep_ * 0.8), (0, clunk * 0.7))
+
+
+@own_noise(107)
+def sfx_whoosh_up():
+    """Something lifting off, fast."""
+    d = 0.45
+    t = t_axis(d)
+    u = t / d
+    air = (band(noise(d), 600, 2500) * (1 - u) + band(noise(d), 2500, 8000) * u) * shape(d, 0.3, 0.1)
+    rise = tone(200, d, 900, 1.8) * shape(d, 0.3, 0.08) * 0.25
+    return air * 0.8 + rise
+
+
+@own_noise(108)
+def sfx_drum_roll():
+    """A held drum roll under the chasing lights: it starts soft and slow and gets faster and louder."""
+    d = 2.35
+    layers = []
+    t, gap = 0.0, 0.085
+    while t < d - 0.03:
+        u = t / d
+        hit = mix(0.07, (0, band(noise(0.07), 1200, 7000) * decay(0.07, 0.02)), (0, 0.35 * thump(240, 180, 0.05, 0.015)))
+        layers.append((t, hit * (0.25 + 0.75 * u**1.4) * RNG.uniform(0.85, 1.0)))
+        t += gap
+        gap = max(0.034, gap * 0.985)
+    tt = t_axis(d)
+    tom = tone(95, d, 75) * (tt / d) ** 2 * 0.35 * (0.8 + 0.2 * np.sin(2 * np.pi * 14 * tt))
+    return mix(d, *layers, (0, tom))
+
+
+@own_noise(109)
+def sfx_slam():
+    """The card landing: a deep boom, a crack and the room ringing after it. Rounded off so it is big but never sharp."""
+    d = 0.9
+    boom = thump(88, 32, 0.7, 0.22)
+    knock = thump(240, 120, 0.14, 0.04)
+    crack = band(noise(0.08), 400, 4500) * decay(0.08, 0.018)
+    tail = band(noise(d), 200, 2200) * decay(d, 0.25, 0.01) * 0.18
+    return punch(mix(d, (0, boom), (0, knock * 0.8), (0, crack * 1.3), (0.01, tail)), 2.2)
+
+
+@own_noise(110)
+def sfx_jackpot():
+    """The Legend's fanfare: a run up on brass, a big held chord, bells raining down and a cymbal swelling under it."""
+    b = 0.085
+    run_ = [(i * b, brass(n, b * 1.6) * 0.75) for i, n in enumerate((60, 64, 67, 72, 76))]
+    hit = 5 * b
+    chord = sum(brass(n, 1.6) for n in (60, 64, 67, 72, 76)) * 0.4
+    bells = [(hit + 0.12 + i * 0.09 + RNG.uniform(0, 0.02), bell(midi(n), 0.6, 0.22) * 0.5) for i, n in enumerate((96, 91, 88, 84, 91, 96, 100, 103))]
+    cym = band(noise(1.8), 4500, 0) * decay(1.8, 0.6) * 0.3
+    drum = thump(120, 45, 0.35, 0.12)
+    return mix(hit + 1.9, *run_, (hit, chord), *bells, (hit, cym), (hit, drum), (hit, shimmer(1.4, 0.25)))
+
+
+@own_noise(111)
+def sfx_lamp_tick():
+    """One lamp of a rating lighting up: a tiny, soft tick that does not tire after thirty in a row."""
+    d = 0.045
+    return (tone(1900, d) + 0.25 * tone(3800, d)) * decay(d, 0.008, 0.001) + 0.15 * band(noise(d), 3000, 0) * decay(d, 0.003)
+
+
+@own_noise(112)
+def sfx_neon_on():
+    """A neon sign stuttering on: the hum of the tube cutting in and out, then holding."""
+    d = 0.5
+    t = t_axis(d)
+    hum = band(saw(120, d, 16) + 0.6 * saw(240, d, 8), 80, 2200)
+    gate = np.zeros_like(t)
+    for start, end in ((0.0, 0.04), (0.08, 0.1), (0.15, 0.22), (0.27, 0.5)):
+        gate[(t >= start) & (t < end)] = 1.0
+    gate = band(gate, 0, 300)
+    tink = (tone(2400, 0.08) + 0.4 * tone(3600, 0.08)) * decay(0.08, 0.02)
+    return mix(d, (0, hum * gate * shape(d, 0.005, 0.2) * 0.6), (0.27, tink * 0.35))
+
+
+@own_noise(113)
+def sfx_sparkle():
+    """A few high bells, for sparkles round a card."""
+    notes = [(0.0, 96), (0.06, 100), (0.13, 103)]
+    return mix(0.5, *[(s, bell(midi(n), 0.35, 0.1) * 0.6) for s, n in notes], (0.0, shimmer(0.4, 0.12)))
+
+
 # --- music -----------------------------------------------------------------
 
 
@@ -650,6 +837,20 @@ SOUNDS = {
     "hypeEnd": (sfx_hype_end, 0.6),
     "win": (sfx_win, 0.9),
     "lose": (sfx_lose, 0.75),
+    # the pack opening (each with noise of its own: see own_noise)
+    "packRattle": (sfx_pack_rattle, 0.8),
+    "packGlow": (sfx_pack_glow, 0.75),
+    "cardDeal": (sfx_card_deal, 0.6),
+    "rareCharge": (sfx_rare_charge, 0.8),
+    "crackle": (sfx_crackle, 0.6),
+    "spotWhoosh": (sfx_spot_whoosh, 0.75),
+    "whooshUp": (sfx_whoosh_up, 0.75),
+    "drumRoll": (sfx_drum_roll, 0.8),
+    "slam": (sfx_slam, 0.9),
+    "jackpot": (sfx_jackpot, 0.92),
+    "lampTick": (sfx_lamp_tick, 0.4),
+    "neonOn": (sfx_neon_on, 0.55),
+    "sparkle": (sfx_sparkle, 0.65),
 }
 
 MUSIC = {"musicMenu": (music_menu, 0.8), "musicGame": (music_game, 0.8)}

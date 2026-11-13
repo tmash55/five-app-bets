@@ -14,7 +14,7 @@ import { attackSign, hoopXOf, shotApexTime, shotMeter } from '../sim/core';
 import { clamp, clamp01, lerp, smooth } from '../sim/math';
 import type { MatchState, PlayerSim } from '../sim/types';
 import { color, party, sparkle } from '../../theme/tokens';
-import { FigureAnimator, type AnimFrame, type Mood } from './animator';
+import { DrawnBall, FigureAnimator, type AnimFrame, type Mood } from './animator';
 import { buildCourt, type CourtId, type CourtMeshes } from './court';
 import { FigureView, newLightUniforms, type LightUniforms } from './figure';
 import { rgb, type Rgb } from './geo';
@@ -137,6 +137,7 @@ export class MatchRenderer {
   // interpolation
   private readonly prev: Float32Array;
   private readonly prevBall = new Float32Array(3);
+  private readonly drawnBall = new DrawnBall();
   private synced = false;
   // meter
   private meterHold = 0;
@@ -745,7 +746,13 @@ export class MatchRenderer {
       ringCol[i * 3 + 2] = you ? Math.min(1, tc[2] * 0.5 + 0.6) : tc[2];
     }
 
-    // --- ball
+    // --- ball: a held one is drawn where the holder's pose keeps it out of the head and the body
+    const hb = ball.state === 'held' ? ball.holder : -1;
+    const db = this.drawnBall;
+    db.update(bx, by, bz, hb, hb >= 0 ? this.anims[hb].ballPush : null, dt * scale);
+    bx = db.x;
+    by = db.y;
+    bz = db.z;
     const bm = this.ball;
     let ax = 0;
     let az = 0;

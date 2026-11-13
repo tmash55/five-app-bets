@@ -1,36 +1,60 @@
-/** Opening a pack: shake it, tear it, flip the cards one at a time, then see the haul. */
+/**
+ * Opening a pack. The sealed pack waits on the stage; a tap shakes it and tears it open; each card rises from
+ * its place in the row and plays its rarity's own reveal, then glides aside for what it says about the player;
+ * then the whole haul.
+ *
+ * `openPack` is called once, at the tear, and what it returns is what is revealed. Every reveal is a timeline
+ * on one clock, so a tap while one is playing jumps it to its end (its payoff sound still plays once), and a
+ * tap once it is finished goes on.
+ *
+ * Development builds only: `/open?pack=allstar&demo=common,rare,epic,legend` plays those reveals with the first
+ * player of each rarity, all new, without opening a pack or touching the save. It is how they are filmed.
+ */
 
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
 
-import { playSfx, type SfxName } from '@/audio/sound';
-import { mustPlayer, playerOverall, teamById } from '@/data/roster';
-import type { Rarity } from '@/data/types';
+import { duckMusic, playSfx } from '@/audio/sound';
 import { buzz } from '@/fx/feedback';
-import { levelProgress, type Gain } from '@/meta/collection';
+import { revealFor, type Cue, type Pulse, type Reveal } from '@/fx/reveal';
+import { CardInfo, lampPlan } from '@/fx/reveal/CardInfo';
+import { openLayout } from '@/fx/reveal/layout';
+import { REST_TILT, easeInOut, flashAt, lerp, span } from '@/fx/reveal/motion';
+import { Afterglow, around } from '@/fx/reveal/pieces';
+import { bestRarity, demoResult, parseDemo, planPack, type CardPlan } from '@/fx/reveal/plan';
+import { Sealed } from '@/fx/reveal/Sealed';
+import { Slots, type SlotState } from '@/fx/reveal/Slots';
+import { Summary } from '@/fx/reveal/Summary';
+import { Tear, landings } from '@/fx/reveal/Tear';
+import { ARRIVE, GLIDE, INFO, LEAVE, TEAR, tearLength } from '@/fx/reveal/times';
 import { packById, type PackDef, type PackResult } from '@/meta/packs';
 import { useSave } from '@/state/save';
-import { color, duration, layer, opacity, size as sizes, space, type ColorName } from '@/theme/tokens';
-import { CoinPill, ProgressBar, RARITY_COLOR, RarityTag, Tag, TeamBadge } from '@/ui/Bits';
-import { Confetti } from '@/ui/Confetti';
+import { night, rarityPaint, tube } from '@/theme/arcade';
+import { px } from '@/theme/tokens';
+import { CoinChip } from '@/ui/arcade/ArcadeScreen';
+import { RoundButton } from '@/ui/arcade/Buttons';
+import { ArcadeCard } from '@/ui/arcade/Card';
+import { StageWall } from '@/ui/arcade/Room';
+import { Chip } from '@/ui/arcade/Surface';
+import { Print } from '@/ui/arcade/Type';
 import { useAfter } from '@/ui/hooks';
-import { Icon } from '@/ui/Icon';
-import { PACK_RATIO, PackArt } from '@/ui/PackArt';
-import { PlayerCard } from '@/ui/PlayerCard';
-import { Backdrop, Sunburst } from '@/ui/Screen';
-import { IconButton, Sticker, StickerButton } from '@/ui/Sticker';
-import { StickerText, Txt } from '@/ui/Txt';
 
-type Stage = 'sealed' | 'cards' | 'summary';
+type Stage = 'sealed' | 'tear' | 'cards' | 'summary';
+/** where the card on show is: rising to the middle, being revealed, telling about its player, or done */
+type Step = 'arrive' | 'reveal' | 'info' | 'ready';
 
-/** how long a face-down card keeps you guessing */
-const TEASE: Record<Rarity, number> = { common: 260, rare: 520, epic: 820, legend: 1150 };
-const REVEAL: Record<Rarity, SfxName> = { common: 'revealCommon', rare: 'revealRare', epic: 'revealEpic', legend: 'revealLegend' };
-const RAYS = 12;
+/** the info side's own clock runs this long: everything on it is in by then */
+const INFO_END = 1100;
+/** the haul's clock, long enough for five cards to pop in */
+const HAUL_END = 2600;
+/** haptic ticks while the pack is shaken, closer and closer together */
+const RATTLE_TICKS = [210, 390, 530, 640, 730, 805, 865, 915] as const;
+/** how far the music steps back while a card is revealed: the better the card, the quieter the room */
+const DUCK = { common: 1, rare: 0.7, epic: 0.35, legend: 0.12 } as const;
+const NO_PULSES: { shakes: readonly Pulse[]; flashes: readonly Pulse[] } = { shakes: [], flashes: [] };
 
 function safePack(id: string): PackDef | null {
   try {
@@ -40,102 +64,21 @@ function safePack(id: string): PackDef | null {
   }
 }
 
-/** Rays all the way round, turning slowly behind a revealed card. */
-function RayBurst({ size, tint, strong }: { size: number; tint: string; strong: boolean }) {
-  const turn = useSharedValue(0);
-  useEffect(() => {
-    turn.set(withRepeat(withTiming(1, { duration: 14000, easing: Easing.linear }), -1));
-  }, [turn]);
-  const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${turn.value * 360}deg` }] }));
-  const d = useMemo(() => {
-    let out = '';
-    for (let i = 0; i < RAYS; i++) {
-      const a0 = (i / RAYS) * Math.PI * 2;
-      const a1 = a0 + Math.PI / RAYS;
-      out += `M50 50 L${(50 + Math.cos(a0) * 50).toFixed(1)} ${(50 + Math.sin(a0) * 50).toFixed(1)} L${(50 + Math.cos(a1) * 50).toFixed(1)} ${(50 + Math.sin(a1) * 50).toFixed(1)} Z `;
-    }
-    return out;
-  }, []);
-  return (
-    <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: size, height: size }, style]}>
-      <Svg width={size} height={size} viewBox="0 0 100 100">
-        <Path d={d} fill={tint} opacity={strong ? opacity.dim : opacity.ghost} />
-      </Svg>
-    </Animated.View>
-  );
+function fire(cue: Cue): void {
+  if (cue.sfx) playSfx(cue.sfx, cue.volume ?? 1);
+  if (cue.buzz) buzz(cue.buzz);
 }
-
-function CardBack({ width, edge }: { width: number; edge: ColorName }) {
-  const height = Math.round(width * sizes.cardRatio);
-  return (
-    <Sticker fill="inkSoft" edge={edge} round="lg" raise="mid" face={[styles.back, { width, height }]}>
-      <Sunburst strength={opacity.pattern} />
-      <View style={styles.backBall}>
-        <Icon name="ball" size={Math.round(width * 0.42)} color="orange" />
-      </View>
-    </Sticker>
-  );
-}
-
-function gainLabel(g: Gain): { text: string; fill: ColorName } {
-  if (g.isNew) return { text: 'NEW PLAYER!', fill: 'coral' };
-  if (g.coins > 0) return { text: `TOP LEVEL  +${g.coins}`, fill: 'sun' };
-  if (g.levelAfter > g.levelBefore) return { text: `LEVEL UP!  LV ${g.levelAfter}`, fill: 'mint' };
-  return { text: 'EXTRA COPY', fill: 'skyLight' };
-}
-
-function GainInfo({ gain, copies }: { gain: Gain; copies: number }) {
-  const player = mustPlayer(gain.playerId);
-  const team = teamById(player.team);
-  const label = gainLabel(gain);
-  const prog = levelProgress(copies);
-  return (
-    <View style={styles.info}>
-      <Tag label={label.text} fill={label.fill} />
-      <StickerText size="title" color="white">
-        {player.name}
-      </StickerText>
-      <View style={styles.infoRow}>
-        <TeamBadge team={team} diameter={sizes.badgeSmall} />
-        <Txt font="display" size="body" color="white" shadow>
-          {`${team.name}  ·  ${player.role}`}
-        </Txt>
-      </View>
-      <View style={styles.infoRow}>
-        <RarityTag rarity={player.rarity} />
-        <Tag label={`${playerOverall(player, prog.level)} OVR`} fill="paper" />
-        <Tag label={`LV ${prog.level}`} fill="paper" />
-      </View>
-      {!prog.maxed && (
-        <View style={styles.level}>
-          <ProgressBar value={prog.have / prog.need} fill={RARITY_COLOR[player.rarity].fill} height={sizes.barThick} />
-          <Txt size="small" color="white" shadow>
-            {`${prog.need - prog.have} more ${prog.need - prog.have === 1 ? 'copy' : 'copies'} to reach Level ${prog.level + 1}`}
-          </Txt>
-        </View>
-      )}
-      {gain.coins > 0 && (
-        <View style={styles.infoRow}>
-          <Icon name="coin" color="sun" />
-          <Txt font="display" size="large" color="white" shadow>
-            {`+${gain.coins} coins`}
-          </Txt>
-        </View>
-      )}
-    </View>
-  );
-}
-
-/** the widest the pack and its cards get, on a screen with room to spare */
-const BIGGEST = Math.round(sizes.cardLarge * 1.25);
 
 export default function OpenPack() {
-  const params = useLocalSearchParams<{ pack?: string; first?: string }>();
+  const params = useLocalSearchParams<{ pack?: string; first?: string; demo?: string }>();
   const packId = params.pack ?? 'playground';
   const first = params.first === '1';
+  // a store build ignores the demo entirely
+  const demo = useMemo(() => (__DEV__ ? parseDemo(params.demo) : null), [params.demo]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
+  const reduced = useReducedMotion();
   const after = useAfter();
   const def = useMemo(() => safePack(packId), [packId]);
   const count = useSave((s) => s.packs[packId] ?? 0);
@@ -144,207 +87,382 @@ export default function OpenPack() {
   const openPack = useSave((s) => s.openPack);
 
   const [stage, setStage] = useState<Stage>('sealed');
-  const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<PackResult | null>(null);
+  const plans = useMemo(() => (result ? planPack(result) : []), [result]);
   const [index, setIndex] = useState(0);
-  const [faceUp, setFaceUp] = useState(false);
-  const [burst, setBurst] = useState(0);
+  const [step, setStep] = useState<Step>('arrive');
+  const [infoFor, setInfoFor] = useState<number | null>(null);
+  const [lamps, setLamps] = useState(0);
+  const [pips, setPips] = useState(0);
+  const [counting, setCounting] = useState(false);
+  const [leaving, setLeaving] = useState<number | null>(null);
+  const [paid, setPaid] = useState(true);
 
-  const bob = useSharedValue(0);
-  const shake = useSharedValue(0);
-  const flash = useSharedValue(0);
-  const pop = useSharedValue(1);
-  const turn = useSharedValue(1);
-  const glow = useSharedValue(0);
-  const hint = useSharedValue(0);
+  /** bumped to call off everything still scheduled */
+  const run = useRef(0);
+  /** the reveal on show, and which of its cues have played */
+  const live = useRef<{ def: Reveal; plan: CardPlan; index: number; fired: Set<Cue> } | null>(null);
 
-  useEffect(() => {
-    bob.set(withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.quad) }), -1, true));
-    hint.set(withRepeat(withTiming(1, { duration: 700, easing: Easing.inOut(Easing.quad) }), -1, true));
-  }, [bob, hint]);
+  const clock = useSharedValue(-ARRIVE);
+  const tearClock = useSharedValue(0);
+  const info = useSharedValue(0);
+  const infoAlpha = useSharedValue(1);
+  const glide = useSharedValue(0);
+  const leave = useSharedValue(1);
+  const haul = useSharedValue(0);
+  const pulses = useSharedValue(NO_PULSES);
+  const skipFlash = useSharedValue(0);
 
-  const packStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: (bob.value - 0.5) * 10 }, { rotate: `${(bob.value - 0.5) * 5 + shake.value * 9}deg` }, { scale: 1 + Math.abs(shake.value) * 0.06 }],
-  }));
-  const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value }));
-  const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }, { scaleX: Math.max(0.02, turn.value) }, { rotate: `${(1 - glow.value) * -4}deg` }] }));
-  const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value, transform: [{ scale: 0.6 + glow.value * 0.4 }] }));
-  const hintStyle = useAnimatedStyle(() => ({ opacity: 0.55 + hint.value * 0.45, transform: [{ scale: 1 + hint.value * 0.05 }] }));
+  const cardsIn = demo?.length ?? def?.cards ?? 3;
+  const lay = useMemo(() => openLayout(width, height, insets, result ? result.cards.length : cardsIn), [width, height, insets, result, cardsIn]);
+  const plan = stage === 'cards' ? plans[index] : undefined;
+  const reveal = plan ? revealFor(plan.rarity, reduced) : null;
+  /** where the reveal plays: the middle of the stage, or where the card rests when the phone asks for less motion */
+  const origin = reduced ? lay.rest : lay.middle;
+  const from = lay.slots[index] ?? lay.middle;
+  const fromX = reduced ? 0 : from.x - origin.x;
+  const fromY = reduced ? 0 : from.y - origin.y;
+  const small = reduced ? 1 : lay.slot.width / lay.card.width;
+  const glideX = lay.rest.x - origin.x;
+
+  // the music comes back up whenever the page goes
+  useEffect(() => () => duckMusic(1), []);
+
+  const shakeStyle = useAnimatedStyle(() => {
+    const t = clock.value;
+    let x = 0;
+    let y = 0;
+    for (const s of pulses.value.shakes) {
+      const u = (t - s.at) / s.ms;
+      if (u > 0 && u < 1) {
+        const a = s.amount * (1 - u) * (1 - u);
+        x += a * Math.sin(t * 0.11 + s.at);
+        y += a * Math.cos(t * 0.137 + s.at * 0.7);
+      }
+    }
+    return { transform: [{ translateX: x }, { translateY: y }] };
+  });
+  const flashStyle = useAnimatedStyle(() => {
+    const t = clock.value;
+    let a = skipFlash.value;
+    for (const f of pulses.value.flashes) a = Math.max(a, f.amount * flashAt(t, f.at, f.ms));
+    return { opacity: a };
+  });
+  const spotStyle = useAnimatedStyle(() => ({ transform: [{ translateX: glideX * glide.value }] }));
+  const arriveStyle = useAnimatedStyle(() => {
+    const u = span(clock.value, -ARRIVE, 0);
+    const e = easeInOut(u);
+    return { opacity: Math.min(1, u * 6), transform: [{ translateX: fromX * (1 - e) }, { translateY: fromY * (1 - e) - px(36) * Math.sin(Math.PI * u) }, { scale: lerp(small, 1, e) }] };
+  });
+  const leaveTo = leaving !== null ? lay.slots[leaving] : lay.rest;
+  const leaveStyle = useAnimatedStyle(() => {
+    const u = leave.value;
+    const e = easeInOut(u);
+    return {
+      opacity: u >= 1 ? 0 : 1 - span(u, 0.75, 1),
+      transform: [{ translateX: (leaveTo.x - lay.rest.x) * e }, { translateY: (leaveTo.y - lay.rest.y) * e }, { rotate: `${REST_TILT * (1 - e)}deg` }, { scale: lerp(1, lay.slot.width / lay.card.width, e) }],
+    };
+  });
+  const infoStyle = useAnimatedStyle(() => ({ opacity: infoAlpha.value }));
 
   if (!def) return <Redirect href="/packs" />;
+  const available = demo ? 1 : count;
 
-  const showCard = (res: PackResult, i: number) => {
-    const gain = res.cards[i];
-    const rarity = mustPlayer(gain.playerId).rarity;
-    setIndex(i);
-    setFaceUp(false);
-    turn.set(1);
-    pop.set(0.4);
-    pop.set(withSpring(1, { damping: 11, stiffness: 220, mass: 0.7 }));
-    glow.set(0);
-    glow.set(withTiming(1, { duration: TEASE[rarity], easing: Easing.out(Easing.quad) }));
-    playSfx('cardFlip');
-    after(TEASE[rarity], () => {
-      turn.set(withSequence(withTiming(0, { duration: duration.quick }), withTiming(1, { duration: duration.normal, easing: Easing.out(Easing.back(2)) })));
-      after(duration.quick, () => {
-        setFaceUp(true);
-        playSfx(REVEAL[rarity]);
-        buzz(rarity === 'legend' || rarity === 'epic' ? 'success' : rarity === 'rare' ? 'medium' : 'light');
-        if (rarity === 'legend' || rarity === 'epic') setBurst((b) => b + 1);
-        if (!gain.isNew && gain.levelAfter > gain.levelBefore) after(duration.slow, () => playSfx('levelUp'));
-        if (gain.coins > 0) after(duration.slow, () => playSfx('coins'));
+  const showInfo = (p: CardPlan, i: number, my: number) => {
+    setStep('info');
+    setInfoFor(i);
+    setLamps(0);
+    setPips(0);
+    setCounting(false);
+    duckMusic(1);
+    infoAlpha.set(1);
+    if (!reduced) glide.set(withTiming(1, { duration: GLIDE, easing: Easing.inOut(Easing.cubic) }));
+    info.set(0);
+    info.set(withTiming(INFO_END, { duration: INFO_END, easing: Easing.linear }));
+    const ok = () => run.current === my;
+    const lp = lampPlan(p);
+    after(INFO.tag, () => {
+      if (!ok()) return;
+      if (p.gain.coins > 0) playSfx('coins');
+      else if (!p.gain.isNew && p.gain.levelAfter > p.gain.levelBefore) playSfx('levelUp');
+    });
+    after(INFO.sign, () => ok() && playSfx('neonOn', 0.6));
+    after(INFO.ovr, () => ok() && setCounting(true));
+    for (let k = 1; k <= lp.total; k++) {
+      after(INFO.lamps + (k - 1) * INFO.lampGap, () => {
+        if (!ok()) return;
+        setLamps(k);
+        playSfx('lampTick', 0.5 + (0.5 * k) / lp.total);
       });
-    });
+    }
+    const pipsAt = INFO.lamps + lp.total * INFO.lampGap + 60;
+    for (let j = 1; j <= p.team.have; j++) {
+      after(pipsAt + (j - 1) * INFO.pipGap, () => {
+        if (!ok()) return;
+        setPips(j);
+        playSfx('lampTick');
+      });
+    }
+    after(pipsAt + p.team.have * INFO.pipGap, () => ok() && setStep('ready'));
   };
 
-  const tear = () => {
-    if (busy || count <= 0) return;
-    const res = openPack(packId);
-    if (!res) return;
-    setBusy(true);
-    setResult(res);
-    playSfx('packShake');
-    buzz('medium');
-    shake.set(withSequence(withTiming(1, { duration: 70 }), withRepeat(withSequence(withTiming(-1, { duration: 80 }), withTiming(1, { duration: 80 })), 3), withTiming(0, { duration: 70 })));
-    after(620, () => {
-      playSfx('packOpen');
-      buzz('heavy');
-      flash.set(withSequence(withTiming(1, { duration: 70 }), withTiming(0, { duration: duration.slow })));
-      setStage('cards');
-      setBusy(false);
-      showCard(res, 0);
+  const startCard = (list: CardPlan[], i: number) => {
+    const p = list[i];
+    const r = revealFor(p.rarity, reduced);
+    const my = ++run.current;
+    const fired = new Set<Cue>();
+    live.current = { def: r, plan: p, index: i, fired };
+    setIndex(i);
+    setStep('arrive');
+    pulses.set({ shakes: r.shakes, flashes: r.flashes });
+    glide.set(reduced ? 1 : 0);
+    clock.set(-ARRIVE);
+    // with less motion asked for the reveal is only a fade, and a fade still plays rather than jumping to its end
+    clock.set(withTiming(r.length + r.tail, { duration: ARRIVE + r.length + r.tail, easing: Easing.linear, reduceMotion: ReduceMotion.Never }));
+    playSfx('cardDeal', 0.8);
+    after(ARRIVE, () => {
+      if (run.current !== my) return;
+      setStep('reveal');
+      duckMusic(DUCK[p.rarity]);
     });
+    for (const cue of r.cues) {
+      after(ARRIVE + cue.at, () => {
+        if (run.current !== my) return;
+        fired.add(cue);
+        fire(cue);
+      });
+    }
+    after(ARRIVE + r.length, () => run.current === my && showInfo(p, i, my));
   };
 
-  const next = () => {
-    if (stage === 'sealed') {
-      tear();
-    } else if (stage === 'cards' && result && faceUp) {
-      if (index + 1 < result.cards.length) {
-        showCard(result, index + 1);
-      } else {
-        playSfx('star');
-        setStage('summary');
+  /** Jump the reveal on show to its end: everything in place, and its payoff heard once. */
+  const skip = () => {
+    const s = live.current;
+    if (!s) return;
+    const my = ++run.current;
+    const r = s.def;
+    clock.set(r.length);
+    clock.set(withTiming(r.length + r.tail, { duration: Math.max(1, r.tail), easing: Easing.linear }));
+    skipFlash.set(0.4);
+    skipFlash.set(withTiming(0, { duration: 300 }));
+    for (const cue of r.cues) {
+      if (cue.at >= r.length) {
+        after(cue.at - r.length, () => run.current === my && fire(cue));
+      } else if (cue.stinger && !s.fired.has(cue)) {
+        s.fired.add(cue);
+        fire(cue);
       }
+    }
+    showInfo(s.plan, s.index, my);
+  };
+
+  /** Everything on the info side in place at once. */
+  const finishInfo = () => {
+    const s = live.current;
+    if (!s) return;
+    ++run.current;
+    info.set(INFO_END);
+    glide.set(1);
+    setLamps(lampPlan(s.plan).total);
+    setPips(s.plan.team.have);
+    setCounting(true);
+    setStep('ready');
+  };
+
+  const toSummary = (res: PackResult) => {
+    ++run.current;
+    live.current = null;
+    pulses.set(NO_PULSES);
+    duckMusic(1);
+    setStage('summary');
+    playSfx('star');
+    haul.set(0);
+    haul.set(withTiming(HAUL_END, { duration: HAUL_END, easing: Easing.linear }));
+    if (res.coins > 0 && !demo) {
+      const my = run.current;
+      after(900, () => {
+        if (run.current !== my) return;
+        setPaid(true);
+        playSfx('coins');
+      });
     }
   };
 
-  const leave = () => {
+  /** On to the next card, or to the haul after the last. */
+  const advance = () => {
+    const s = live.current;
+    if (!s || !result) return;
+    const i = s.index;
+    if (i + 1 >= plans.length) {
+      toSummary(result);
+      return;
+    }
+    // the card drops back into its place in the row while what it said fades
+    setLeaving(i);
+    leave.set(0);
+    leave.set(withTiming(1, { duration: LEAVE, easing: Easing.inOut(Easing.quad) }));
+    infoAlpha.set(withTiming(0, { duration: 180 }));
+    after(LEAVE, () => setLeaving((l) => (l === i ? null : l)));
+    after(180, () => setInfoFor((f) => (f === i ? null : f)));
+    startCard(plans, i + 1);
+  };
+
+  const beginCards = (list: CardPlan[]) => {
+    setStage('cards');
+    startCard(list, 0);
+  };
+
+  const tear = () => {
+    if (available <= 0) return;
+    const res = demo ? demoResult(demo, owned) : openPack(packId);
+    if (!res || res.cards.length === 0) return;
+    const list = planPack(res);
+    setResult(res);
+    setPaid(res.coins === 0 || !!demo);
+    setInfoFor(null);
+    setLeaving(null);
+    const my = ++run.current;
+    if (reduced) {
+      playSfx('packOpen');
+      beginCards(list);
+      return;
+    }
+    setStage('tear');
+    const len = tearLength(list.length);
+    tearClock.set(0);
+    tearClock.set(withTiming(len, { duration: len, easing: Easing.linear }));
+    const ok = () => run.current === my;
+    playSfx('packRattle');
+    buzz('light');
+    for (const at of RATTLE_TICKS) after(at, () => ok() && buzz(at > 700 ? 'medium' : 'light'));
+    after(TEAR.rip, () => {
+      if (!ok()) return;
+      playSfx('packOpen');
+      buzz('heavy');
+    });
+    after(TEAR.rip + 80, () => ok() && playSfx('packGlow', 0.9));
+    after(TEAR.flash, () => {
+      if (!ok()) return;
+      playSfx('sparkle', 0.7);
+      buzz('success');
+    });
+    for (let i = 0; i < list.length; i++) after(TEAR.deal + i * TEAR.dealGap, () => ok() && playSfx('cardDeal'));
+    after(len, () => ok() && beginCards(list));
+  };
+
+  const skipTear = () => {
+    if (!result) return;
+    ++run.current;
+    tearClock.set(tearLength(result.cards.length));
+    beginCards(planPack(result));
+  };
+
+  const next = () => {
+    if (stage === 'sealed') tear();
+    else if (stage === 'tear') skipTear();
+    else if (stage === 'cards') {
+      if (step === 'arrive' || step === 'reveal') skip();
+      else if (step === 'info') finishInfo();
+      else advance();
+    }
+  };
+
+  const leavePage = () => {
     if (first) router.replace('/');
     else if (router.canGoBack()) router.back();
     else router.replace('/packs');
   };
 
   const again = () => {
+    ++run.current;
+    live.current = null;
     setResult(null);
-    setFaceUp(false);
+    setInfoFor(null);
+    setLeaving(null);
+    setIndex(0);
     setStage('sealed');
   };
 
-  const packW = Math.min(BIGGEST, Math.round((height * 0.56) / PACK_RATIO));
-  const cardW = Math.min(BIGGEST, Math.round((height * 0.6) / sizes.cardRatio));
-  const gain = result && stage === 'cards' ? result.cards[index] : null;
-  const gainPlayer = gain ? mustPlayer(gain.playerId) : null;
-  const rc = gainPlayer ? RARITY_COLOR[gainPlayer.rarity] : null;
-  const padX = Math.max(insets.left, insets.right, space.lg);
-  const summaryW = result ? Math.min(sizes.card + space.lg, Math.floor((width - padX * 2 - space.md * (result.cards.length - 1)) / result.cards.length)) : sizes.card;
+  const slotStates: SlotState[] = plans.map((_, i) => {
+    if (i === leaving) return 'shown';
+    if (i < index) return 'done';
+    if (i === index) return step === 'arrive' || step === 'reveal' ? 'current' : 'shown';
+    return 'waiting';
+  });
+  const rarities = plans.map((p) => p.rarity);
+  const light = tube[rarityPaint[bestRarity(plans)].tube];
+  const stageProps = reveal ? { clock, width: lay.card.width, height: lay.card.height, screen: lay.screen, at: origin } : null;
+  const shownInfo = infoFor !== null ? plans[infoFor] : undefined;
+  const leavingPlan = leaving !== null ? plans[leaving] : undefined;
+  const topBar = { top: Math.max(insets.top, px(4)), left: Math.max(insets.left, px(13)), right: Math.max(insets.right, px(18)) };
+  const wallAt: readonly [number, number] = stage === 'cards' ? [lay.rest.x / width, lay.rest.y / height] : [0.5, lay.pack.y / height];
 
   return (
     <View style={styles.root}>
-      <Backdrop tone="grape" />
       {stage !== 'summary' && (
-        <Pressable style={styles.stage} onPress={next} accessibilityRole="button" accessibilityLabel={stage === 'sealed' ? 'Open the pack' : 'Next'}>
-          {stage === 'sealed' && (
-            <View style={styles.center}>
-              <Txt font="display" size="large" color="white" shadow>
-                {count > 0 || busy ? def.name.toUpperCase() : 'NO PACKS LEFT'}
-              </Txt>
-              <Animated.View style={packStyle}>
-                <PackArt pack={def} width={packW} />
-                {count > 1 && !busy && <Tag label={`x${count}`} fill="coral" textColor="white" style={styles.count} />}
-              </Animated.View>
-              {/* kept in place while the pack tears so nothing jumps */}
-              <View style={count > 0 && !busy ? null : styles.unseen}>
-                <Animated.View style={hintStyle}>
-                  <StickerText size="title" color="sun">
-                    TAP TO OPEN!
-                  </StickerText>
+        <>
+          {/* everything that only shows, shaken together; the taps go to the stage below it, and only the buttons drawn above that catch their own */}
+          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, shakeStyle]}>
+            <StageWall at={wallAt} />
+            {stage === 'tear' && result && (
+              <>
+                <Tear clock={tearClock} def={def} lay={lay} light={light} />
+                <Slots lay={lay} rarities={rarities} states={plans.map(() => 'waiting')} landing={{ clock: tearClock, at: landings(plans.length) }} />
+              </>
+            )}
+            {stage === 'cards' && reveal && stageProps && plan && (
+              <>
+                {reveal.Room && <reveal.Room {...stageProps} />}
+                <Animated.View style={[styles.point, { left: origin.x, top: origin.y }, spotStyle]}>
+                  {reveal.Behind && <reveal.Behind {...stageProps} />}
+                  <Afterglow clock={clock} from={reveal.flipAt} rarity={plan.rarity} width={lay.card.width} height={lay.card.height} />
+                  <Animated.View style={[around(lay.card.width, lay.card.height), arriveStyle]}>
+                    <reveal.Card key={index} {...stageProps} face={<ArcadeCard player={plan.player} level={plan.level} width={lay.card.width} shine={plan.rarity === 'epic' || plan.rarity === 'legend'} />} />
+                  </Animated.View>
+                  {reveal.Front && <reveal.Front {...stageProps} />}
                 </Animated.View>
-              </View>
-            </View>
-          )}
-
-          {stage === 'cards' && gain && gainPlayer && rc && result && (
-            <View style={[styles.reveal, { paddingHorizontal: padX }]}>
-              <View style={[styles.cardSpot, { width: cardW + space.huge, height: Math.round(cardW * sizes.cardRatio) + space.xl }]}>
-                <Animated.View pointerEvents="none" style={[styles.burst, glowStyle]}>
-                  <RayBurst size={cardW * 2.5} tint={color[rc.fill]} strong={faceUp} />
-                </Animated.View>
-                <Animated.View style={cardStyle}>
-                  {faceUp ? (
-                    <PlayerCard player={gainPlayer} level={levelProgress(result.owned[gain.playerId] ?? 1).level} width={cardW} shine={gainPlayer.rarity === 'legend' || gainPlayer.rarity === 'epic'} />
-                  ) : (
-                    <CardBack width={cardW} edge={gainPlayer.rarity === 'common' ? 'ink' : rc.deep} />
-                  )}
-                </Animated.View>
-                <Confetti burst={burst} />
-              </View>
-              <View style={styles.side}>
-                {faceUp ? (
-                  <GainInfo gain={gain} copies={result.owned[gain.playerId] ?? 1} />
-                ) : (
-                  <StickerText size="big" color={gainPlayer.rarity === 'common' ? 'white' : rc.fill}>
-                    ???
-                  </StickerText>
-                )}
-                <View style={styles.dots}>
-                  {result.cards.map((c, i) => {
-                    const shown = i < index || (i === index && faceUp);
-                    return <View key={i} style={[styles.dot, shown ? { backgroundColor: color[RARITY_COLOR[mustPlayer(c.playerId).rarity].fill], borderColor: color.white } : null, i === index ? styles.dotNow : null]} />;
-                  })}
-                  {faceUp && (
-                    <Animated.View style={hintStyle}>
-                      <Txt font="display" size="body" color="white" shadow>
-                        {index + 1 < result.cards.length ? 'TAP FOR THE NEXT CARD' : 'TAP TO FINISH'}
-                      </Txt>
+                <Slots lay={lay} rarities={rarities} states={slotStates} />
+                {leavingPlan && (
+                  <View style={[styles.point, { left: lay.rest.x, top: lay.rest.y }]}>
+                    <Animated.View style={[around(lay.card.width, lay.card.height), leaveStyle]}>
+                      <ArcadeCard player={leavingPlan.player} level={leavingPlan.level} width={lay.card.width} />
                     </Animated.View>
-                  )}
-                </View>
-              </View>
-            </View>
+                  </View>
+                )}
+                {reveal.Over && <reveal.Over {...stageProps} />}
+                <Chip style={[styles.chip, { left: lay.edge.left, top: topBar.top + px(10) }]}>
+                  <Print face="bold" size={px(12.5)} color={tube.indigo.soft} track="wide" glow={tube.indigo.glass} lines={1}>
+                    {def.name.toUpperCase()}
+                  </Print>
+                  <Print face="bold" size={px(12.5)} color="textFaint" track="wide" lines={1}>{`PLAYER ${index + 1} OF ${plans.length}`}</Print>
+                </Chip>
+              </>
+            )}
+          </Animated.View>
+          <Pressable style={StyleSheet.absoluteFill} onPress={next} accessibilityRole="button" accessibilityLabel={stage === 'sealed' ? 'Open the pack' : 'Next'} />
+          {stage === 'sealed' && <Sealed def={def} lay={lay} count={available} onShop={() => router.dismissTo('/packs')} />}
+          {stage === 'cards' && shownInfo && infoFor !== null && (
+            <Animated.View pointerEvents="box-none" style={[styles.info, { left: lay.info.left, top: lay.info.top, width: lay.info.width, height: lay.info.height }, infoStyle]}>
+              <CardInfo key={infoFor} plan={shownInfo} clock={info} lamps={lamps} pips={pips} counting={counting} last={infoFor + 1 >= plans.length} onNext={advance} width={lay.info.width} />
+            </Animated.View>
           )}
-        </Pressable>
+          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.flash, flashStyle]} />
+        </>
       )}
 
       {stage === 'summary' && result && (
-        <View style={[styles.center, { paddingHorizontal: padX }]}>
-          <StickerText size="title" color="sun">
-            {first ? 'YOUR FIRST PLAYERS!' : 'NICE PULLS!'}
-          </StickerText>
-          <View style={styles.haul}>
-            {result.cards.map((g, i) => {
-              const label = gainLabel(g);
-              return (
-                <View key={i} style={styles.haulItem}>
-                  <PlayerCard player={mustPlayer(g.playerId)} level={levelProgress(owned[g.playerId] ?? 1).level} width={summaryW} />
-                  <Tag label={label.text} fill={label.fill} style={styles.haulTag} />
-                </View>
-              );
-            })}
-          </View>
-          <View style={styles.buttons}>
-            {count > 0 && !first && <StickerButton label={`OPEN ANOTHER (${count})`} icon="pack" iconColor="mint" fill="white" onPress={again} textSize="body" />}
-            <StickerButton label={first ? "LET'S PLAY!" : 'DONE'} fill="mint" onPress={leave} style={styles.done} />
-          </View>
-        </View>
+        <>
+          <StageWall at={wallAt} />
+          <Summary clock={haul} plans={plans} lay={lay} first={first} another={demo ? 0 : count} onAgain={again} onDone={leavePage} />
+        </>
       )}
 
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.flash, flashStyle]} />
-
-      <View pointerEvents="box-none" style={[styles.top, { top: Math.max(insets.top, space.sm), left: Math.max(insets.left, space.lg), right: Math.max(insets.right, space.lg) }]}>
-        {stage === 'sealed' && !first && !busy ? <IconButton name="back" label="Back" onPress={leave} /> : <View />}
-        <CoinPill coins={coins} />
-      </View>
+      {(stage === 'sealed' || stage === 'summary') && (
+        <View pointerEvents="box-none" style={[styles.top, topBar]}>
+          {stage === 'sealed' && !first ? <RoundButton icon="close" label="Back" tube="cyan" sound="back" onPress={leavePage} /> : <View />}
+          <CoinChip coins={stage === 'summary' && result && !paid ? coins - result.coins : coins} />
+        </View>
+      )}
     </View>
   );
 }
@@ -352,116 +470,26 @@ export default function OpenPack() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: color.grapeDeep,
+    backgroundColor: night.stageEdge,
   },
-  stage: {
-    flex: 1,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.sm,
-  },
-  count: {
+  point: {
     position: 'absolute',
-    top: space.xs,
-    right: -space.sm,
-  },
-  reveal: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.xl,
-  },
-  cardSpot: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  burst: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  back: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backBall: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  side: {
-    width: sizes.panelMax / 2 + space.xl,
-    gap: space.md,
-    justifyContent: 'center',
   },
   info: {
-    gap: space.sm,
-    alignItems: 'flex-start',
+    position: 'absolute',
+    justifyContent: 'center',
   },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-  },
-  level: {
-    alignSelf: 'stretch',
-    gap: space.xs,
-  },
-  dots: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    minHeight: space.xl,
-  },
-  dot: {
-    width: space.md,
-    height: space.md,
-    borderRadius: space.md / 2,
-    borderWidth: space.hair,
-    borderColor: color.ink,
-    backgroundColor: color.scrimSoft,
-  },
-  unseen: {
-    opacity: 0,
-  },
-  dotNow: {
-    transform: [{ scale: 1.3 }],
-  },
-  haul: {
-    flexDirection: 'row',
-    gap: space.md,
-    alignItems: 'flex-start',
-  },
-  haulItem: {
-    alignItems: 'center',
-    gap: space.xs,
-  },
-  haulTag: {
-    alignSelf: 'center',
-  },
-  buttons: {
-    flexDirection: 'row',
-    gap: space.md,
-    alignItems: 'flex-end',
-  },
-  done: {
-    minWidth: sizes.cardLarge,
+  chip: {
+    position: 'absolute',
   },
   flash: {
-    backgroundColor: color.white,
-    zIndex: layer.overlay,
+    backgroundColor: night.white,
   },
-  // the same row every other screen's header has, so the coins do not jump on the way here
   top: {
     position: 'absolute',
-    height: sizes.button,
+    height: px(48),
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    zIndex: layer.overlay,
+    justifyContent: 'space-between',
   },
 });
-

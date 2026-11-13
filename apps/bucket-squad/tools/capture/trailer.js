@@ -23,7 +23,9 @@ mark('welcome'); rec(1.2); tap('Coyotes'); rec(1.6); tap('THIS IS MY TEAM'); rec
 mark('first pack');
 // a representative first pack (two everyday players, then a rare) instead of whatever the dice say on the day
 js(`(()=>{ const mul=(seed)=>{ let s=seed>>>0; return ()=>{ s=(s+0x6d2b79f5)>>>0; let t=s; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; }; }; const orig=__save.getState().openPack; __save.setState({ openPack:(id)=>{ const real=Math.random; Math.random=mul(${PACK_SEED}); try { return orig(id); } finally { Math.random=real; __save.setState({ openPack: orig }); } } }); return 'pack seeded' })()`);
-tap('Open the pack'); rec(3.0); tap('Next'); rec(2.6); tap('Next'); rec(2.9); tap('Next'); rec(2.4);
+// each rec runs past the card's reveal and until what it says about the player is all in, so each Next moves on
+// (the tear about 2.4 s, a card rising 0.4 s, a common's reveal 0.9 s and a rare's 1.6 s, then about 1.7 s of its side)
+tap('Open the pack'); rec(5.8); tap('Next'); rec(3.3); tap('Next'); rec(4.0); tap('Next'); rec(2.4);
 if (upto !== 'pack') {
   mark('home'); tap("LET'S PLAY"); rec(2.2); tap('Play'); rec(1.5); tap('TOUR'); rec(1.9);
   mark('versus'); tap('Warm-Up');
@@ -42,7 +44,7 @@ if (upto !== 'pack') {
     js(`location.pathname`);
     mark('results'); rec(7.5);
     if (upto !== 'results') {
-      tap('HOME'); rec(1.8); tap('SHELF'); rec(2.0); tap('Nia Brooks'); rec(2.8); tap('Back'); rec(0.7); tap('Back'); rec(0.7); tap('PACKS'); rec(2.6);
+      tap('HOME'); rec(1.8); tap('COLLECTION'); rec(2.0); tap('Nia Brooks'); rec(2.8); tap('Back'); rec(0.7); tap('PACKS'); rec(2.6);
     }
   }
 }

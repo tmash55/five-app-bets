@@ -3,7 +3,7 @@
  * Every label on a menu page goes through one of the two.
  */
 
-import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
 import { fade, neonFont, neonLeading, neonText, night, track as tracks, tubeOf, type NeonFace, type NeonSize, type NightName, type Tube, type TubeName } from '@/theme/arcade';
 import { px } from '@/theme/tokens';
@@ -27,6 +27,13 @@ function gapOf(t: TrackName | number): number {
 
 /** how far the soft light round plain print reaches */
 const SOFT_GLOW = px(8);
+
+/**
+ * A line fitted to its room is measured by hand, and a phone may draw it a point or two wider than that.
+ * A browser lets such a line run over the edge of its box where nobody sees it; a phone cuts it and adds dots
+ * ("KEEP MY GA..."). So on a phone the line may finish the shrinking itself.
+ */
+const FITS_ITSELF = Platform.OS === 'web' ? null : ({ adjustsFontSizeToFit: true, minimumFontScale: 0.72 } as const);
 
 export interface PrintProps {
   children: React.ReactNode;
@@ -58,6 +65,7 @@ export function Print({ children, face = 'body', size = 'body', color = 'text', 
     <Text
       allowFontScaling={false}
       numberOfLines={lines ?? (room !== undefined ? 1 : undefined)}
+      {...(room !== undefined ? FITS_ITSELF : null)}
       style={[
         { fontFamily: neonFont[face], fontSize: fs, lineHeight: Math.round(fs * neonLeading[face]), color: paint(color), letterSpacing: gap * (fs / base) },
         center && styles.center,

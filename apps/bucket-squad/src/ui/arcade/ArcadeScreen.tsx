@@ -47,6 +47,26 @@ export function useArcadeBody(): { width: number; height: number } {
   };
 }
 
+/**
+ * The gap the frame keeps at a page's left and right edges: past a phone's notch, and never less than the page's own margin.
+ * A row that scrolls sideways takes these back with negative margins and gives them to its content as padding,
+ * so its cards slide out under the notch instead of ending on a line in mid-air.
+ */
+export function useArcadeEdges(): { left: number; right: number } {
+  const insets = useSafeAreaInsets();
+  return { left: Math.max(insets.left, EDGE), right: Math.max(insets.right, EDGE) };
+}
+
+/** the gap a page asked to keep at its bottom edge, if its style names one */
+function bottomAsked(style: StyleProp<ViewStyle>): number | undefined {
+  const flat = StyleSheet.flatten(style);
+  for (const key of ['paddingBottom', 'paddingVertical', 'padding'] as const) {
+    const v = flat?.[key];
+    if (typeof v === 'number') return v;
+  }
+  return undefined;
+}
+
 export interface ArcadeScreenProps {
   children: React.ReactNode;
   /** the page's name, lit in the top bar */
@@ -112,7 +132,8 @@ export function ArcadeScreen({ children, title, tube: t = 'pink', back = true, o
           {coins !== false && <CoinChip coins={typeof coins === 'number' ? coins : coinCount} />}
         </View>
       </View>
-      <View style={[styles.body, { paddingLeft: padLeft, paddingRight: padRight, paddingBottom: Math.max(insets.bottom, space.sm) }, style]}>{children}</View>
+      {/* a page may ask for more room at the bottom, never for less than the phone's home bar takes */}
+      <View style={[styles.body, { paddingLeft: padLeft, paddingRight: padRight }, style, { paddingBottom: Math.max(insets.bottom, bottomAsked(style) ?? space.sm) }]}>{children}</View>
     </View>
   );
 }
