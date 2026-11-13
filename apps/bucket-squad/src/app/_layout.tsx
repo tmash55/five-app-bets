@@ -7,7 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { setMusicEnabled, setSoundEnabled } from '@/audio/sound';
+import { setMusicEnabled, setSoundEnabled, warmSounds } from '@/audio/sound';
 import { exposeForTooling } from '@/dev/expose';
 import { setHapticsEnabled } from '@/fx/feedback';
 import { useSave, useSaveReady } from '@/state/save';
@@ -31,6 +31,8 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync().catch(() => {});
+    // the very first tap should already click
+    if (ready) warmSounds(['tap', 'back']);
   }, [ready]);
 
   if (!ready) return null;

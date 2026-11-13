@@ -1,50 +1,50 @@
 /**
- * Sound effects and music.
+ * Sound effects, the sound of the court, and music.
  *
- * Each effect gets a tiny pool of players so the same sound can overlap
- * itself (two dribbles, a run of coins). A sound can have several takes
- * (recordings of the same thing); a different one plays each time, so a run of
- * dribbles never sounds like a machine. Players are created the first time a
- * sound is needed. Everything here fails quietly: a game with no sound is
- * better than a crash because a speaker was busy.
+ * A sound can have several takes (recordings of the same thing). A different
+ * take plays each time, at a slightly different speed, so a run of dribbles
+ * never sounds like a machine. Every take has its own player that waits,
+ * rewound, at its start: playing it is one call with nothing left to load.
+ * Players are made the first time a sound is needed, or ahead of time with
+ * `warmSounds`. Everything here fails quietly: a game with no sound is better
+ * than a crash because a speaker was busy.
  */
 
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer, type AudioSource } from 'expo-audio';
+import { Platform } from 'react-native';
 
-import { MUSIC_FILES, SFX_FILES } from './files';
+import { AMBIENCE_FILES, MUSIC_FILES, SFX_FILES } from './files';
 
 export type SfxName = keyof typeof SFX_FILES;
 export type MusicName = keyof typeof MUSIC_FILES;
+type AmbienceName = keyof typeof AMBIENCE_FILES;
 
-/** how many copies of a sound may play at once (default 1); a sound with several takes always gets a player per take */
+/** how many copies of one sound may play at once (default 1); a sound with several takes always gets a player per take */
 const VOICES: Partial<Record<SfxName, number>> = {
   tap: 2,
   coin: 3,
-  dribble: 3,
-  bounce: 2,
-  rim: 2,
   cardFlip: 2,
   star: 3,
   swipe: 2,
-  land: 2,
   tick: 2,
 };
 
 /** loudness trim per sound, on top of the level baked into the file */
 const TRIM: Partial<Record<SfxName, number>> = {
-  dribble: 0.6,
-  bounce: 0.7,
-  board: 0.8,
-  swish: 0.75,
+  // the recorded court sounds are levelled against each other in recordings.json, so most play as they are
+  swish: 0.85,
+  catch: 0.8,
+  land: 0.8,
+  scuff: 0.7,
   shoot: 0.6,
   pass: 0.6,
-  catch: 0.85,
   swipe: 0.5,
-  land: 0.6,
   squeak: 0.35,
+  // the kids watching sit behind the game
   cheer: 0.6,
   cheerBig: 0.7,
   ooh: 0.55,
+  aww: 0.5,
   tap: 0.6,
   back: 0.6,
   // piercing or sustained tones: easy to overdo next to everything else
@@ -57,29 +57,97 @@ const TRIM: Partial<Record<SfxName, number>> = {
   lose: 0.7,
 };
 
+/**
+ * How far a sound's speed may drift from one play to the next (0.04 is 4 % either
+ * way). Speed bends the pitch, as on a tape, so the same take never sounds
+ * quite the same twice. Only knocks and scrapes drift: voices and tunes stay true.
+ */
+const DRIFT: Partial<Record<SfxName, number>> = {
+  dribble: 0.04,
+  bounce: 0.04,
+  board: 0.03,
+  rim: 0.02,
+  swish: 0.03,
+  catch: 0.05,
+  steal: 0.05,
+  block: 0.04,
+  land: 0.05,
+  scuff: 0.07,
+  shoot: 0.04,
+  pass: 0.05,
+};
+
 const MUSIC_LEVEL: Record<MusicName, number> = { menu: 0.5, game: 0.36 };
+/** the court's own sound sits under the music, and comes forward when the music is off */
+const AMBIENCE_LEVEL = { underMusic: 0.22, alone: 0.45 };
+
+/**
+ * Android lets one app hold about 40 audio outputs, and every player holds
+ * one. So there the engine keeps fewer takes of each sound, one copy of each,
+ * and lets go of the players that have been quiet longest when it runs out.
+ * Other platforms keep everything. (Not yet tried on an Android phone.)
+ */
+const LEAN = Platform.OS === 'android';
+const LEAN_TAKES: Partial<Record<SfxName, number>> = { dribble: 3, bounce: 2, swish: 2, rim: 2, cheer: 2 };
+const MAX_PLAYERS = LEAN ? 34 : 96;
+/** a sound that played this recently may still be sounding, so its players are not let go */
+const STILL_SOUNDING_MS = 5000;
+/** a finish reported this soon after a start belongs to the play before it */
+const STALE_FINISH_MS = 25;
+/** warming makes one sound's players, then lets a frame through */
+const WARM_GAP_MS = 24;
+/** nothing here watches progress, so players report as rarely as they can */
+const PLAYER_OPTIONS = { updateInterval: 2000, keepAudioSessionActive: true };
+
+interface Voice {
+  player: AudioPlayer;
+  /** rewound and quiet: a plain `play()` starts it from the top */
+  parked: boolean;
+  /** counts starts, so an answer that arrives late for an earlier start is dropped */
+  run: number;
+  /** when it last started (ms) */
+  used: number;
+  rate: number;
+  sub: { remove(): void } | null;
+}
 
 interface Pool {
-  /** one row of players per take */
-  rows: AudioPlayer[][];
+  /** one row of voices per take */
+  rows: Voice[][];
   /** whose turn it is in each row */
   turn: number[];
+  /** when the sound last played (ms) */
+  used: number;
+  /** how many players it holds */
+  count: number;
+}
+
+interface Bed<Name> {
+  name: Name;
+  player: AudioPlayer;
 }
 
 const pools = new Map<SfxName, Pool>();
+/** players alive in the pools */
+let live = 0;
 /** the take each sound played last */
 const lastTake = new Map<SfxName, number>();
 let soundOn = true;
 let musicOn = true;
-let music: { name: MusicName; player: AudioPlayer } | null = null;
+let music: Bed<MusicName> | null = null;
 let wanted: MusicName | null = null;
+let ambience: Bed<AmbienceName> | null = null;
+let wantedAmbience: AmbienceName | null = null;
+let notedAmbience: { name: AmbienceName | null; level: number } = { name: null, level: 0 };
 let modeSet = false;
+let warming: SfxName[] = [];
+let warmTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Development only: the preview tooling reads this log to lay a soundtrack under a captured video. */
-function note(kind: 'sfx' | 'music', name: string | null, volume: number, take = 0): void {
+function note(kind: 'sfx' | 'music' | 'amb', name: string | null, volume: number, take = 0, rate = 1): void {
   if (!__DEV__) return;
-  const log = (globalThis as { __soundLog?: { t: number; kind: string; name: string | null; volume: number; take: number }[] }).__soundLog;
-  if (log) log.push({ t: performance.now(), kind, name, volume, take });
+  const log = (globalThis as { __soundLog?: { t: number; kind: string; name: string | null; volume: number; take: number; rate: number }[] }).__soundLog;
+  if (log) log.push({ t: performance.now(), kind, name, volume, take, rate });
 }
 
 function ensureMode(): void {
@@ -89,79 +157,220 @@ function ensureMode(): void {
   setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers', shouldPlayInBackground: false }).catch(() => undefined);
 }
 
-function poolFor(name: SfxName): Pool | null {
-  let pool = pools.get(name);
-  if (pool) return pool;
+function takesOf(name: SfxName): readonly AudioSource[] {
+  const all: readonly AudioSource[] = SFX_FILES[name];
+  return LEAN ? all.slice(0, LEAN_TAKES[name] ?? 1) : all;
+}
+
+function drop(voice: Voice): void {
   try {
-    ensureMode();
-    const takes: readonly AudioSource[] = SFX_FILES[name];
-    const each = Math.max(1, Math.ceil((VOICES[name] ?? 1) / takes.length));
-    const rows = takes.map((file) => Array.from({ length: each }, () => createAudioPlayer(file)));
-    pool = { rows, turn: rows.map(() => 0) };
-    pools.set(name, pool);
-    return pool;
+    voice.sub?.remove();
+    voice.player.remove();
   } catch {
-    return null;
+    // ignore: it is on its way out anyway
   }
 }
 
-/** Which take to play: any but the one that played last. */
-function nextTake(name: SfxName): number {
-  const takes = SFX_FILES[name].length;
-  if (takes < 2) return 0;
-  const last = lastTake.get(name);
-  let take = Math.floor(Math.random() * (last === undefined ? takes : takes - 1));
-  if (last !== undefined && take >= last) take++;
-  lastTake.set(name, take);
-  return take;
+/** A sound ended by itself: put it back at its start, so the next play is instant. */
+function rewind(voice: Voice): void {
+  if (Date.now() - voice.used < STALE_FINISH_MS) return;
+  const run = voice.run;
+  try {
+    voice.player.seekTo(0, 0, 0).then(
+      () => {
+        if (voice.run === run) voice.parked = true;
+      },
+      () => undefined,
+    );
+  } catch {
+    // ignore: an unparked voice still plays, through the slower path
+  }
 }
 
-/** Load sounds ahead of time so the first dunk does not hitch. */
-export function warmSounds(names: readonly SfxName[]): void {
-  for (const n of names) poolFor(n);
+function makeVoice(file: AudioSource): Voice {
+  const player = createAudioPlayer(file, PLAYER_OPTIONS);
+  const voice: Voice = { player, parked: true, run: 0, used: 0, rate: 1, sub: null };
+  try {
+    // a change of speed should bend the pitch: that is the point of it
+    player.shouldCorrectPitch = false;
+    voice.sub = player.addListener('playbackStatusUpdate', (status) => {
+      if (status.didJustFinish) rewind(voice);
+    });
+  } catch {
+    // a voice that cannot say when it has finished is never parked, and restarts through a seek every time
+  }
+  return voice;
 }
 
-export function playSfx(name: SfxName, volume = 1): void {
-  if (!soundOn) return;
-  const level = Math.max(0, Math.min(1, volume * (TRIM[name] ?? 1)));
-  const take = nextTake(name);
-  note('sfx', name, level, take);
-  const pool = poolFor(name);
-  if (!pool) return;
-  const row = pool.rows[take];
-  const p = row[pool.turn[take]];
-  pool.turn[take] = (pool.turn[take] + 1) % row.length;
+function start(voice: Voice, level: number, rate: number): void {
+  const p = voice.player;
+  const run = ++voice.run;
+  voice.used = Date.now();
   try {
     p.volume = level;
-    p.seekTo(0).catch(() => undefined);
-    p.play();
+    if (rate !== voice.rate) {
+      voice.rate = rate;
+      p.setPlaybackRate(rate);
+    }
+    if (voice.parked) {
+      voice.parked = false;
+      p.play();
+      return;
+    }
+    // still sounding, or ended a moment ago: a phone's player stays where it stopped, and playing there
+    // gives silence. So go back to the top first, and only then play.
+    p.seekTo(0, 0, 0).then(
+      () => {
+        if (voice.run !== run) return;
+        try {
+          p.play();
+        } catch {
+          // ignore
+        }
+      },
+      () => undefined,
+    );
   } catch {
     // ignore: sound is never worth interrupting play for
   }
 }
 
-function stopMusic(): void {
-  if (!music) return;
+/** Lets go of the sounds that have been quiet longest until `need` more players fit. */
+function makeRoom(need: number): void {
+  if (live + need <= MAX_PLAYERS) return;
+  const now = Date.now();
+  const quietFirst = [...pools.entries()].sort((a, b) => a[1].used - b[1].used);
+  for (const [name, pool] of quietFirst) {
+    if (live + need <= MAX_PLAYERS || now - pool.used < STILL_SOUNDING_MS) break;
+    for (const row of pool.rows) row.forEach(drop);
+    live -= pool.count;
+    pools.delete(name);
+  }
+}
+
+function poolFor(name: SfxName): Pool | null {
+  const have = pools.get(name);
+  if (have) return have;
+  const rows: Voice[][] = [];
   try {
-    music.player.pause();
-    music.player.remove();
+    ensureMode();
+    const takes = takesOf(name);
+    const each = LEAN ? 1 : Math.max(1, Math.ceil((VOICES[name] ?? 1) / takes.length));
+    makeRoom(takes.length * each);
+    for (const file of takes) {
+      const row: Voice[] = [];
+      rows.push(row);
+      for (let i = 0; i < each; i++) row.push(makeVoice(file));
+    }
+    const pool: Pool = { rows, turn: rows.map(() => 0), used: 0, count: takes.length * each };
+    live += pool.count;
+    pools.set(name, pool);
+    return pool;
+  } catch {
+    for (const row of rows) row.forEach(drop);
+    return null;
+  }
+}
+
+/** Which take to play: any but the one that played last. */
+function nextTake(name: SfxName, takes: number): number {
+  if (takes < 2) return 0;
+  const last = lastTake.get(name);
+  let take = Math.floor(Math.random() * (last === undefined || last >= takes ? takes : takes - 1));
+  if (last !== undefined && last < takes && take >= last) take++;
+  lastTake.set(name, take);
+  return take;
+}
+
+function warmStep(): void {
+  warmTimer = null;
+  const name = warming.shift();
+  if (name) poolFor(name);
+  if (warming.length) warmTimer = setTimeout(warmStep, WARM_GAP_MS);
+}
+
+/** Make the players for these sounds ahead of time, a sound per frame, so the first dunk does not hitch. */
+export function warmSounds(names: readonly SfxName[]): void {
+  for (const n of names) if (!pools.has(n) && !warming.includes(n)) warming.push(n);
+  if (!warmTimer && warming.length) warmTimer = setTimeout(warmStep, 0);
+}
+
+export function playSfx(name: SfxName, volume = 1): void {
+  if (!soundOn) return;
+  const level = Math.max(0, Math.min(1, volume * (TRIM[name] ?? 1)));
+  const take = nextTake(name, takesOf(name).length);
+  const drift = DRIFT[name] ?? 0;
+  const rate = drift > 0 ? 1 + (Math.random() * 2 - 1) * drift : 1;
+  note('sfx', name, level, take, rate);
+  const pool = poolFor(name);
+  if (!pool) return;
+  pool.used = Date.now();
+  const row = pool.rows[take];
+  const voice = row[pool.turn[take]];
+  pool.turn[take] = (pool.turn[take] + 1) % row.length;
+  start(voice, level, rate);
+}
+
+function stopBed(bed: Bed<unknown> | null): void {
+  if (!bed) return;
+  try {
+    bed.player.pause();
+    bed.player.remove();
   } catch {
     // ignore
   }
-  music = null;
 }
 
-function startMusic(name: MusicName): void {
+function startBed<Name>(name: Name, file: AudioSource, level: number): Bed<Name> | null {
   try {
     ensureMode();
-    const player = createAudioPlayer(MUSIC_FILES[name]);
+    const player = createAudioPlayer(file, PLAYER_OPTIONS);
     player.loop = true;
-    player.volume = MUSIC_LEVEL[name];
+    player.volume = level;
     player.play();
-    music = { name, player };
+    return { name, player };
   } catch {
-    music = null;
+    return null;
   }
+}
+
+/** browsers refuse to start audio before the first tap, so a bed that should be playing is nudged again */
+function nudge(bed: Bed<unknown> | null): void {
+  if (!bed) return;
+  try {
+    if (!bed.player.playing) bed.player.play();
+  } catch {
+    // ignore
+  }
+}
+
+function ambienceLevel(): number {
+  return music ? AMBIENCE_LEVEL.underMusic : AMBIENCE_LEVEL.alone;
+}
+
+/** Bring the court's sound in line with what is wanted, the sound switch, and whether music plays over it. */
+function syncAmbience(): void {
+  const name = soundOn ? wantedAmbience : null;
+  const level = name === null ? 0 : ambienceLevel();
+  if (name !== notedAmbience.name || level !== notedAmbience.level) {
+    notedAmbience = { name, level };
+    note('amb', name, level);
+  }
+  if (ambience && ambience.name !== name) {
+    stopBed(ambience);
+    ambience = null;
+  }
+  if (name === null) return;
+  if (!ambience) {
+    ambience = startBed(name, AMBIENCE_FILES[name], level);
+    return;
+  }
+  try {
+    ambience.player.volume = level;
+  } catch {
+    // ignore
+  }
+  nudge(ambience);
 }
 
 /** Choose the music bed, or `null` for none. Safe to call often. */
@@ -169,20 +378,25 @@ export function setMusic(name: MusicName | null): void {
   wanted = name;
   note('music', musicOn ? name : null, name ? MUSIC_LEVEL[name] : 0);
   if (!musicOn || name === null) {
-    stopMusic();
-    return;
+    stopBed(music);
+    music = null;
+  } else if (music?.name === name) {
+    nudge(music);
+  } else {
+    stopBed(music);
+    music = startBed(name, MUSIC_FILES[name], MUSIC_LEVEL[name]);
   }
-  if (music?.name === name) {
-    // browsers refuse to start audio before the first tap, so nudge it again
-    try {
-      if (!music.player.playing) music.player.play();
-    } catch {
-      // ignore
-    }
-    return;
-  }
-  stopMusic();
-  startMusic(name);
+  syncAmbience();
+}
+
+/**
+ * Choose the background sound of a court (birds in the park, waves at the
+ * beach), or `null` for none. A court without one of its own is quiet. It
+ * follows the sound switch, not the music switch.
+ */
+export function setAmbience(court: string | null): void {
+  wantedAmbience = court !== null && court in AMBIENCE_FILES ? (court as AmbienceName) : null;
+  syncAmbience();
 }
 
 /** Turn the music down while something louder is happening (0..1). */
@@ -197,21 +411,16 @@ export function duckMusic(level: number): void {
 
 export function setSoundEnabled(on: boolean): void {
   soundOn = on;
+  syncAmbience();
 }
 
 export function setMusicEnabled(on: boolean): void {
   musicOn = on;
-  if (on) setMusic(wanted);
-  else stopMusic();
+  setMusic(wanted);
 }
 
-/** Called on any tap: lets music that a browser blocked start playing. */
+/** Called on any tap: lets music and court sound that a browser blocked start playing. */
 export function nudgeMusic(): void {
-  if (musicOn && wanted && music && !music.player.playing) {
-    try {
-      music.player.play();
-    } catch {
-      // ignore
-    }
-  }
+  if (musicOn && wanted) nudge(music);
+  if (soundOn) nudge(ambience);
 }

@@ -14,7 +14,9 @@ The account key is read from the environment variable ELEVENLABS_API_KEY, or fro
 file ~/.elevenlabs-key. It is never printed, logged or written anywhere. Files that
 already exist are kept, so running this again costs nothing.
 
-Needs only Python 3 and curl. Costs 40 credits for every second of sound.
+Needs only Python 3 and curl. `--cost` counts 40 credits for every second of sound, which is
+a ceiling: in November 2026 the service really charged about 11 a second (220 for a 20 second
+clip), and `generated-log.json` records what each file did cost.
 """
 
 from __future__ import annotations

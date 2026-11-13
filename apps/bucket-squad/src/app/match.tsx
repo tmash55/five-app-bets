@@ -6,12 +6,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, BackHandler, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { setMusic } from '@/audio/sound';
+import { setAmbience, setMusic, warmSounds } from '@/audio/sound';
 import { shortName } from '@/data/roster';
 import { MatchView } from '@/game/MatchView';
 import { MatchRunner, type HudState } from '@/game/runner';
 import { Controls } from '@/match/Controls';
-import { MatchDirector } from '@/match/director';
+import { MATCH_SOUNDS, MatchDirector } from '@/match/director';
 import { HowToOverlay } from '@/match/HowTo';
 import { CalloutLayer, ControlPlate, Scoreboard, type CalloutHandle } from '@/match/Hud';
 import { PauseMenu } from '@/match/PauseMenu';
@@ -41,7 +41,11 @@ function Match({ setup }: { setup: MatchSetup }) {
 
   useEffect(() => {
     setMusic('game');
-  }, []);
+    setAmbience(setup.court);
+    // the countdown is long enough to have every sound of the match ready before tip-off
+    warmSounds(MATCH_SOUNDS);
+    return () => setAmbience(null);
+  }, [setup.court]);
 
   useEffect(() => {
     const director = new MatchDirector({
@@ -52,6 +56,7 @@ function Match({ setup }: { setup: MatchSetup }) {
     runner.listen({
       onHud: setHud,
       onEvent: (e, m) => director.handle(e, m),
+      onStep: (m) => director.watch(m),
       onFinal: (m) => {
         if (setup.spectate) {
           router.dismissTo('/');

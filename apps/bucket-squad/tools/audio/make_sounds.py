@@ -709,6 +709,9 @@ def write_file_list():
     for name in MUSIC:
         key = name[len("music"):].lower()
         lines.append(f"  {key}: require('../../assets/sounds/{name}.wav'),")
+    lines += ["} as const;", "", "/** the background sound of each court: a quiet loop (see import_recordings.py) */", "export const AMBIENCE_FILES = {"]
+    for path in sorted(OUT.glob("amb[A-Z]*.wav")):
+        lines.append(f"  {path.stem[3:].lower()}: require('../../assets/sounds/{path.stem}.wav'),")
     lines += ["} as const;", ""]
     (ROOT / "src" / "audio" / "files.ts").write_text("\n".join(lines))
 

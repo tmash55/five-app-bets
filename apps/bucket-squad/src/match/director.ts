@@ -3,9 +3,12 @@
  * what flashes on screen: the game's announcer, minus the voice.
  */
 
-import { playSfx } from '@/audio/sound';
+import { playSfx, type SfxName } from '@/audio/sound';
 import { buzz } from '@/fx/feedback';
 import type { MatchState, SimEvent } from '@/game/sim/types';
+
+/** every sound a match can play, in the order a match first needs them, so they can be made ready before tip-off */
+export const MATCH_SOUNDS: readonly SfxName[] = ['tick', 'go', 'dribble', 'catch', 'pass', 'shoot', 'swish', 'rim', 'board', 'bounce', 'cheer', 'scuff', 'land', 'swipe', 'steal', 'block', 'ooh', 'aww', 'dunk', 'cheerBig', 'perfect', 'ankle', 'hype', 'hypeEnd', 'whistle', 'buzzer'];
 
 export type CalloutTone = 'home' | 'away' | 'gold' | 'white' | 'perfect' | 'good' | 'okay' | 'bad';
 
@@ -38,12 +41,36 @@ const BLOCKS = ['NOT TODAY!', 'SWATTED!', 'DENIED!'];
 const ANKLES = ['SHOOK!', 'ANKLE BREAKER!', 'WHOOPS!'];
 const ROLLS = ['ON A ROLL!', 'CAN’T MISS!', 'UNSTOPPABLE!'];
 
+/** how far back the sneaker listener looks, in simulation steps (0.15 s) */
+const CUT_STEPS = 9;
+/**
+ * Speed a player must shed inside that time to scrape the court (a sprint is
+ * about 7): a hard stop or a sharp cut. Everyone in this game stops hard all
+ * the time, so the scrapes are rationed: the player in the person's hands
+ * answers every hard flick of the stick, and all the others together are
+ * heard only now and then (measured: about one scrape a second in a normal game).
+ */
+const CUT_LOSS = 5;
+const CUT_REST = 0.5;
+const OTHERS_CUT_LOSS = 5.5;
+const OTHERS_CUT_REST = 1.6;
+/** seconds between two groans from the kids watching */
+const AWW_REST = 6;
+
 export class MatchDirector {
   /** a shot at the horn won it or tied it for the person's team */
   buzzerBeater = false;
   private n = 0;
   private lastPoster = -9;
   private lastTickSound = -1;
+  /** the shot in the air: whose it is, and whether it has touched the rim */
+  private shot: { team: number; rim: boolean } | null = null;
+  private lastAww = -9;
+  /** each player's velocity over the last few steps (x and z per step), and when sneakers were last heard */
+  private trail = new Float32Array(0);
+  private trailAt = 0;
+  private lastCut = -9;
+  private lastOthersCut = -9;
 
   constructor(private readonly o: DirectorOptions) {}
 
@@ -72,6 +99,7 @@ export class MatchDirector {
         break;
       }
       case 'period': {
+        this.shot = null;
         if (e.start) {
           playSfx('go');
           this.lastTickSound = -1;
@@ -94,6 +122,7 @@ export class MatchDirector {
       }
       case 'shot': {
         playSfx('shoot');
+        this.shot = { team: m.players[e.by].team, rim: false };
         if (e.by === m.control) {
           const err = m.players[e.by].relErr;
           const label = e.grade === 'perfect' ? 'PERFECT!' : e.grade === 'good' ? 'GOOD' : err < 0 ? 'EARLY' : 'LATE';
@@ -107,6 +136,7 @@ export class MatchDirector {
         break;
       }
       case 'score': {
+        this.shot = null;
         const dunk = e.kind === 'dunk' || e.kind === 'oop';
         playSfx(dunk ? 'dunk' : 'swish');
         playSfx(dunk || e.points === 3 || e.buzzer ? 'cheerBig' : 'cheer', ours(e.team) ? 1 : 0.6);
@@ -134,6 +164,7 @@ export class MatchDirector {
       }
       case 'rim':
         playSfx('rim', Math.min(1, 0.35 + e.speed * 0.12));
+        if (this.shot) this.shot.rim = true;
         break;
       case 'board':
         playSfx('board', Math.min(1, 0.35 + e.speed * 0.1));
@@ -141,9 +172,13 @@ export class MatchDirector {
       case 'bounce':
         if (e.speed > 1.2) playSfx('bounce', Math.min(1, 0.25 + e.speed * 0.1));
         break;
-      case 'dribble':
-        playSfx('dribble', ours(m.players[e.by].team) ? 0.9 : 0.6);
+      case 'dribble': {
+        // a sprint pounds the ball harder than a walk
+        const p = m.players[e.by];
+        const pace = Math.min(1, Math.hypot(p.vx, p.vz) / 7);
+        playSfx('dribble', (ours(p.team) ? 0.7 : 0.45) + pace * 0.3);
         break;
+      }
       case 'pass':
         playSfx('pass');
         break;
@@ -162,6 +197,7 @@ export class MatchDirector {
         break;
       }
       case 'block': {
+        this.shot = null;
         playSfx('block');
         playSfx('ooh');
         const team = m.players[e.by].team;
@@ -183,8 +219,15 @@ export class MatchDirector {
         break;
       case 'rebound':
         playSfx('catch', 0.8);
+        // off the rim and out: the kids groan for the person's team, now and then
+        if (this.shot && this.shot.rim && ours(this.shot.team) && m.time - this.lastAww > AWW_REST) {
+          this.lastAww = m.time;
+          playSfx('aww', 0.7);
+        }
+        this.shot = null;
         break;
       case 'pickup':
+        this.shot = null;
         playSfx('catch', 0.6);
         break;
       case 'hype': {
@@ -203,6 +246,44 @@ export class MatchDirector {
         break;
       default:
         break;
+    }
+  }
+
+  /**
+   * Once per simulation step: listens for sneakers. A player on the floor who
+   * sheds a lot of speed in a moment has stopped or cut hard, and scrapes the
+   * court.
+   */
+  watch(m: MatchState): void {
+    const n = m.players.length;
+    if (this.trail.length !== n * CUT_STEPS * 2) {
+      this.trail = new Float32Array(n * CUT_STEPS * 2);
+      this.trailAt = 0;
+    }
+    // the slot about to be overwritten holds the velocity from CUT_STEPS steps ago
+    const slot = this.trailAt;
+    this.trailAt = (slot + 1) % CUT_STEPS;
+    const live = m.phase === 'live';
+    for (let i = 0; i < n; i++) {
+      const p = m.players[i];
+      const k = (i * CUT_STEPS + slot) * 2;
+      const ox = this.trail[k];
+      const oz = this.trail[k + 1];
+      this.trail[k] = p.vx;
+      this.trail[k + 1] = p.vz;
+      if (!live || p.y > 0 || p.state !== 'free') continue;
+      // how much of the speed the player had, in the direction they had it, is gone (more than all of it on a turn back)
+      const old = Math.hypot(ox, oz);
+      const lost = old > 0.01 ? old - (p.vx * ox + p.vz * oz) / old : 0;
+      if (i === m.control) {
+        if (lost < CUT_LOSS || m.time - this.lastCut < CUT_REST) continue;
+        this.lastCut = m.time;
+        playSfx('scuff', Math.min(1, 0.55 + (lost - CUT_LOSS) * 0.15));
+      } else {
+        if (lost < OTHERS_CUT_LOSS || m.time - this.lastOthersCut < OTHERS_CUT_REST) continue;
+        this.lastOthersCut = m.time;
+        playSfx('scuff', 0.4);
+      }
     }
   }
 }

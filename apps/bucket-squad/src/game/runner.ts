@@ -50,6 +50,8 @@ export function waitForGL(gl: GLContextLike): void {
 export interface RunnerHooks {
   onHud?: (hud: HudState) => void;
   onEvent?: (e: SimEvent, m: MatchState) => void;
+  /** once per simulation step, after that step's events */
+  onStep?: (m: MatchState) => void;
   onFinal?: (m: MatchState) => void;
 }
 
@@ -147,6 +149,7 @@ export class MatchRunner {
     if (onEvent) {
       for (const e of m.events) onEvent(e, m);
     }
+    this.hooks.onStep?.(m);
     if (m.phase === 'final' && !this.finalSent && m.phaseT > 2.4) {
       this.finalSent = true;
       this.hooks.onFinal?.(m);
