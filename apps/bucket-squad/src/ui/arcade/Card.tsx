@@ -8,14 +8,15 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { memo, useEffect } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming, type SharedValue } from 'react-native-reanimated';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { MAX_LEVEL, cardArt, headArt, playerOverall, teamById } from '@/data/roster';
 import { RARITY_LABEL, type PlayerDef, type Rarity } from '@/data/types';
 import { tapFeedback } from '@/fx/feedback';
-import { RIM_STOPS, arcade, blend, fade, halo, night, rarityPaint, ring, track, tube as tubes, tubeOf, type Tube, type TubeName } from '@/theme/arcade';
+import { RIM_STOPS, arcade, blend, fade, halo, levelPaint, night, rarityPaint, ring, track, tube as tubes, tubeOf, type Tube, type TubeName } from '@/theme/arcade';
 import { duration, px, size as sizes } from '@/theme/tokens';
+import { LevelFrame } from './LevelFrame';
 import { LineIcon } from './LineIcon';
 import { fitPerson } from './measure';
 import { Breathe, Found } from './Motion';
@@ -66,6 +67,24 @@ const HaloFill = memo(function HaloFill({ colors, at = [0.5, 0.38] }: { colors: 
   );
 });
 
+const LEVEL = tubes[levelPaint.tube];
+
+/**
+ * Something that changes when a card levels up in place: shown as `t` runs from `at` to `to` (0 to 1), or hidden
+ * then (`out`), so the old overall gives way to the new one and a level's lamp lights.
+ */
+function OnLevel({ t, at, to, out, style, children }: { t: SharedValue<number>; at: number; to: number; out?: boolean; style?: StyleProp<ViewStyle>; children?: React.ReactNode }) {
+  const anim = useAnimatedStyle(() => {
+    const u = Math.max(0, Math.min(1, (t.value - at) / (to - at)));
+    return { opacity: out ? 1 - u : u };
+  });
+  return (
+    <Animated.View pointerEvents="none" style={[style, anim]}>
+      {children}
+    </Animated.View>
+  );
+}
+
 /** A slow glint that crosses the card now and then. */
 function Glint({ width, height }: { width: number; height: number }) {
   const t = useSharedValue(0);
@@ -91,11 +110,17 @@ export interface ArcadeCardProps {
   shine?: boolean;
   /** no light round it: for cards in a long list */
   flat?: boolean;
+  /**
+   * A level up in place: the level the card had, and the clock (0 to 1) it upgrades on. The card shows `levelFrom`
+   * until `levelUp` runs, then its new frame pieces snap in, its new level lamp lights and its overall turns over.
+   */
+  levelFrom?: number;
+  levelUp?: SharedValue<number>;
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
 }
 
-export const ArcadeCard = memo(function ArcadeCard({ player, level = 1, width = sizes.card, locked, fresh, selected, shine, flat, onPress, style }: ArcadeCardProps) {
+export const ArcadeCard = memo(function ArcadeCard({ player, level = 1, width = sizes.card, locked, fresh, selected, shine, flat, levelFrom, levelUp, onPress, style }: ArcadeCardProps) {
   const height = Math.round(width * sizes.cardRatio);
   const rp = rarityPaint[player.rarity];
   const tb = tubes[rp.tube];
@@ -104,6 +129,9 @@ export const ArcadeCard = memo(function ArcadeCard({ player, level = 1, width = 
   const shown = Math.max(1, level);
   const small = width < SMALL;
   const hero = width >= HERO;
+  // a level up plays only when there is one to play
+  const up = !locked && levelUp !== undefined && levelFrom !== undefined && levelFrom >= 1 && levelFrom < shown ? levelUp : undefined;
+  const before = up ? (levelFrom as number) : shown;
 
   const rim = Math.max(px(2), Math.round(width * 0.022));
   const round = Math.round(width * 0.087);
@@ -151,9 +179,24 @@ export const ArcadeCard = memo(function ArcadeCard({ player, level = 1, width = 
           </View>
         ) : (
           <View style={[styles.corner, styles.ovr, { left: edge, top: edge, width: chip, height: chip, borderRadius: Math.round(chip * 0.225), borderColor: rp.rim[0], borderWidth: Math.max(px(1.5), Math.round(width * 0.011)) }]}>
-            <Print face="display" size={chip * 0.45}>
-              {String(playerOverall(player, shown))}
-            </Print>
+            {up ? (
+              <>
+                <OnLevel t={up} at={0.25} to={0.6} out style={styles.ovrNumber}>
+                  <Print face="display" size={chip * 0.45}>
+                    {String(playerOverall(player, before))}
+                  </Print>
+                </OnLevel>
+                <OnLevel t={up} at={0.35} to={0.75} style={styles.ovrNumber}>
+                  <Print face="display" size={chip * 0.45} color={LEVEL.tint}>
+                    {String(playerOverall(player, shown))}
+                  </Print>
+                </OnLevel>
+              </>
+            ) : (
+              <Print face="display" size={chip * 0.45}>
+                {String(playerOverall(player, shown))}
+              </Print>
+            )}
           </View>
         )}
         {!locked && !small && (
@@ -179,12 +222,15 @@ export const ArcadeCard = memo(function ArcadeCard({ player, level = 1, width = 
           {!locked && (
             <View aria-hidden importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={[styles.lamps, { gap: Math.max(1, Math.round(width * 0.014)) }]}>
               {Array.from({ length: MAX_LEVEL }, (_, i) => (
-                <View key={i} style={{ width: Math.round(width * 0.075), height: lampH, borderRadius: lampH / 2, backgroundColor: i < shown ? tb.glass : night.line }} />
+                <View key={i} style={{ width: Math.round(width * 0.075), height: lampH, borderRadius: lampH / 2, backgroundColor: i < before ? LEVEL.glass : night.line }}>
+                  {up && i >= before && i < shown && <OnLevel t={up} at={0.2} to={0.45} style={[StyleSheet.absoluteFill, { borderRadius: lampH / 2, backgroundColor: LEVEL.glass, boxShadow: [halo(LEVEL.glass, 6, 1)] }]} />}
+                </View>
               ))}
             </View>
           )}
         </View>
       </View>
+      {!locked && <LevelFrame level={shown} from={up ? before : undefined} t={up} glow={tb} width={width} height={height} round={round} rim={rim} />}
       {fresh && <Tag label="NEW!" tube="pink" small={!hero} style={[styles.fresh, { top: -px(11), right: -px(9) }]} />}
     </View>
   );
@@ -193,7 +239,7 @@ export const ArcadeCard = memo(function ArcadeCard({ player, level = 1, width = 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${player.name}${locked ? ', not collected yet' : `, ${RARITY_LABEL[player.rarity]}`}`}
+      accessibilityLabel={`${player.name}${locked ? ', not collected yet' : `, ${RARITY_LABEL[player.rarity]}, level ${shown}`}`}
       onPress={() => {
         tapFeedback();
         onPress();
@@ -262,14 +308,13 @@ export const HeadCell = memo(function HeadCell({ player, level = 0, selected, fr
   // and shoulders smaller, standing on the cell's bottom edge, with the picture's top corners rounded off so a head of
   // hair cut flat by the picture's own edge still shows as a round top
   const shadow = Math.min(width, height) * 0.98;
-  const body = (
+  const face = (
     <View
       style={[
         styles.cell,
         { width, height },
         owned ? { borderColor: selected ? night.white : tb.glass, backgroundColor: rp.cell, boxShadow: selected ? [ring(tb.glass, 2), halo(tb.glass, 16, 1, 3)] : [halo(tb.glass, 7, 0.9)] } : selected ? { borderColor: night.white } : undefined,
         selected && styles.cellSelected,
-        onPress ? undefined : style,
       ]}>
       {owned && <LinearGradient colors={[fade(night.stageOut, 0), fade(night.stageOut, 0.25), night.stageOut]} locations={[0, 0.5, 1]} style={StyleSheet.absoluteFill} />}
       {head !== undefined && (
@@ -295,6 +340,13 @@ export const HeadCell = memo(function HeadCell({ player, level = 0, selected, fr
       {fresh && owned && <Breathe depth={0.55} swell={0.35} ms={800} style={[styles.cellDot, { backgroundColor: tubes.pink.glass, boxShadow: [halo(tubes.pink.glass, 6, 1)] }]} />}
     </View>
   );
+  // the level's frame sits over the cell, outside its clipped edge, so the chrome and the crest can stand round it
+  const body = (
+    <View style={[{ width, height }, onPress ? undefined : style]}>
+      {face}
+      {owned && <LevelFrame level={level} glow={tb} width={width} height={height} round={arcade.rCell} rim={selected ? arcade.outline : arcade.hairline} small />}
+    </View>
+  );
   // a player just found and not looked at yet springs into its place as the grid opens
   const cell = fresh && owned ? <Found>{body}</Found> : body;
   if (!onPress) return cell;
@@ -302,7 +354,7 @@ export const HeadCell = memo(function HeadCell({ player, level = 0, selected, fr
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected: !!selected }}
-      accessibilityLabel={owned ? `${player.name}, ${RARITY_LABEL[player.rarity]}, ${playerOverall(player, level)} overall` : `${player.name}, ${RARITY_LABEL[player.rarity]}, not found yet`}
+      accessibilityLabel={owned ? `${player.name}, ${RARITY_LABEL[player.rarity]}, level ${level}, ${playerOverall(player, level)} overall` : `${player.name}, ${RARITY_LABEL[player.rarity]}, not found yet`}
       onPress={() => {
         tapFeedback();
         onPress();
@@ -331,6 +383,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: night.onTube,
+  },
+  ovrNumber: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   team: {
     alignItems: 'center',
