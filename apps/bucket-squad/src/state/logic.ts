@@ -359,7 +359,7 @@ export interface MatchOutcome {
 }
 
 export function finishMatch(data: SaveData, summary: MatchSummary, day: string): { data: SaveData; outcome: MatchOutcome } {
-  if (summary.mode === 'duo') return finishDuo(data, summary, day);
+  if (summary.mode === 'duo' || summary.mode === 'online') return finishDuo(data, summary, day);
   const firstWin = summary.won && data.firstWinDay !== day;
   const rewards = matchRewards(summary, firstWin);
   let coins = data.coins + rewards.total;
@@ -460,7 +460,8 @@ export function finishMatch(data: SaveData, summary: MatchSummary, day: string):
 }
 
 /**
- * A two-player game on one screen. The device's save gets the quick-game coins for its squad (P1); it is a game
+ * A two-player game, on one screen or on two devices. The device's save gets the quick-game coins for its own squad
+ * (P1 on one screen; online, each device its own side, the summary already turned to it); it is a game
  * against a person, not the computer, so it moves no ladder, tour, career record or first win of the day. Of the
  * missions only "Play N games" counts it: that one is plainly about playing.
  */
