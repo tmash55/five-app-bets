@@ -13,6 +13,7 @@ import { RARITY_LABEL } from '@/data/types';
 import { uniformById, type UniformDef } from '@/data/uniforms';
 import { tapFeedback } from '@/fx/feedback';
 import { MAX_COPIES, levelOf, levelProgress, type Gain } from '@/meta/collection';
+import type { PlayerDef } from '@/data/types';
 import { dayKey } from '@/meta/rng';
 import { MONTH_NAMES, clock, msToMidnight, shortBy, shortClock, type ShopSlot } from '@/meta/shop';
 import type { slotBlock } from '@/state/logic';
@@ -22,6 +23,8 @@ import { GhostButton, GoldButton, RoundButton } from '@/ui/arcade/Buttons';
 import { ArcadeCard, Gems } from '@/ui/arcade/Card';
 import { fitText } from '@/ui/arcade/fitText';
 import { JERSEY_FULL_RATIO, Jersey } from '@/ui/arcade/Jersey';
+import { CopyMeter, useCopyBeat } from '@/ui/arcade/LevelBeat';
+import { copyLine } from '@/ui/arcade/levels';
 import { Coin, LineIcon, type LineIconName } from '@/ui/arcade/LineIcon';
 import { MIN_FIT_LABEL, widthOf } from '@/ui/arcade/measure';
 import { Arrive, Breathe } from '@/ui/arcade/Motion';
@@ -371,6 +374,58 @@ export interface ShopDetailProps {
   onClose: () => void;
 }
 
+/**
+ * The pop-up once something is bought: the item popping in with sparks and what it means. A copy of a player the
+ * child had plays its beat beside the card: one more lamp toward the next level, or the level up itself, the card's
+ * frame upgrading in place. A tap on the card or the words jumps the beat to its end.
+ */
+function Bought({ slot, gain, copies, number, onClose }: { slot: ShopSlot; gain?: Gain; copies: number; number: number; onClose: () => void }) {
+  const tb = slotTube(slot);
+  const uniform = slotUniform(slot);
+  const player: PlayerDef | null = slot.item.kind === 'player' ? mustPlayer(slot.item.id) : null;
+  const [burst, setBurst] = useState(0);
+  const after = useAfter();
+  const copy = useCopyBeat(player ? gain : undefined, copies);
+  useEffect(() => {
+    after(60, () => setBurst((b) => b + 1));
+  }, [after]);
+  const up = copy.plan?.kind === 'levelUp';
+  const art = uniform ? (
+    <View style={styles.bigJersey}>
+      <StageRing width={BIG_JERSEY * 1.45} height={px(30)} tube={LIMITED_TUBE} style={styles.bigRing} />
+      <Jersey kit={uniform.kit} number={number} width={BIG_JERSEY} shorts />
+    </View>
+  ) : player ? (
+    <ArcadeCard player={player} level={copy.plan ? copy.plan.level : Math.max(1, levelOf(copies))} levelFrom={up ? copy.plan?.levelBefore : undefined} levelUp={up ? copy.levelUp : undefined} width={BIG_CARD} shine onPress={copy.plan ? copy.finish : undefined} />
+  ) : null;
+  const title = uniform ? 'YOURS!' : gain?.isNew ? 'NEW PLAYER!' : up ? 'LEVEL UP!' : '+1 COPY';
+  const sub = uniform ? 'Your squad wears it now.' : gain?.isNew ? `${player?.name} joins your collection.` : gain && copy.plan ? copyLine(gain, copies) : `One more ${player?.name} card.`;
+  return (
+    <Popup onDismiss={onClose} tube={tb} width={px(520)} style={styles.detail}>
+      <View style={styles.detailRow}>
+        <View style={styles.revealArt}>
+          <Arrive from="pop">{art}</Arrive>
+          <Sparks burst={burst} around count={40} reach={150} />
+        </View>
+        <View style={styles.detailWords}>
+          <Glow face="display" size="big" tube={tb} track="close">
+            {title}
+          </Glow>
+          <Print face="medium" size="body" color="textMuted">
+            {sub}
+          </Print>
+          {copy.plan && (
+            <Pressable onPress={copy.finish} accessibilityRole="button" accessibilityLabel="Show it all">
+              <CopyMeter plan={copy.plan} beat={copy.beat} gained={copy.gained} width={WORDS - px(20)} />
+            </Pressable>
+          )}
+          <GoldButton label="NICE!" icon="check" size="small" onPress={onClose} style={styles.detailButton} />
+        </View>
+      </View>
+    </Popup>
+  );
+}
+
 /** The pop-up for one slot: the item up close, what it is, and BUY with its price. After buying, a short reveal. */
 export function ShopDetail({ slot, block, coins, copies, number, bought, onBuy, onClose }: ShopDetailProps) {
   const tb = slotTube(slot);
@@ -378,11 +433,8 @@ export function ShopDetail({ slot, block, coins, copies, number, bought, onBuy, 
   const player = slot.item.kind === 'player' ? mustPlayer(slot.item.id) : null;
   const name = fitText(slotName(slot).toUpperCase(), 'display', neonText.big, WORDS, 'close', MIN_FIT_LABEL);
   const short = shortBy({ coins }, slot.price);
-  const [burst, setBurst] = useState(0);
-  const after = useAfter();
-  useEffect(() => {
-    if (bought) after(60, () => setBurst((b) => b + 1));
-  }, [bought, after]);
+
+  if (bought) return <Bought slot={slot} gain={bought.gain} copies={copies} number={number} onClose={onClose} />;
 
   const art = uniform ? (
     <View style={styles.bigJersey}>
@@ -390,33 +442,8 @@ export function ShopDetail({ slot, block, coins, copies, number, bought, onBuy, 
       <Jersey kit={uniform.kit} number={number} width={BIG_JERSEY} shorts />
     </View>
   ) : player ? (
-    <ArcadeCard player={player} level={Math.max(1, levelOf(copies))} width={BIG_CARD} fresh={!bought && copies === 0} shine />
+    <ArcadeCard player={player} level={Math.max(1, levelOf(copies))} width={BIG_CARD} fresh={copies === 0} shine />
   ) : null;
-
-  if (bought) {
-    const gain = bought.gain;
-    const title = uniform ? 'YOURS!' : gain?.isNew ? 'NEW PLAYER!' : gain && gain.levelAfter > gain.levelBefore ? 'LEVEL UP!' : '+1 COPY';
-    const sub = uniform ? 'Your squad wears it now.' : gain?.isNew ? `${player?.name} joins your collection.` : gain && gain.levelAfter > gain.levelBefore ? `${player?.name} is level ${gain.levelAfter} now.` : `One more ${player?.name} card.`;
-    return (
-      <Popup onDismiss={onClose} tube={tb} width={px(520)} style={styles.detail}>
-        <View style={styles.detailRow}>
-          <View style={styles.revealArt}>
-            <Arrive from="pop">{art}</Arrive>
-            <Sparks burst={burst} around count={40} reach={150} />
-          </View>
-          <View style={styles.detailWords}>
-            <Glow face="display" size="big" tube={tb} track="close">
-              {title}
-            </Glow>
-            <Print face="medium" size="body" color="textMuted">
-              {sub}
-            </Print>
-            <GoldButton label="NICE!" icon="check" size="small" onPress={onClose} style={styles.detailButton} />
-          </View>
-        </View>
-      </Popup>
-    );
-  }
 
   const kind = uniform?.holiday ? `${uniform.holiday} uniform` : uniform ? 'Limited-edition uniform' : player ? `${teamById(player.team).place} ${teamById(player.team).name} · ${RARITY_LABEL[player.rarity]}` : '';
   const about = uniform?.month !== undefined ? `${uniform.blurb ?? ''} Sold only in the Daily Shop, and only in ${MONTH_NAMES[uniform.month - 1]}.`.trim() : uniform ? `${uniform.blurb ?? ''} Sold only in the Daily Shop, and only on its day.`.trim() : slot.limited ? 'Featured today: pick exactly who you get.' : 'A daily deal: pick this player instead of hoping for them in a pack.';

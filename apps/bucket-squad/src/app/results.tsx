@@ -33,6 +33,8 @@ import { TierMedal, tierIndexOf, tierTube } from '@/ui/arcade/Medal';
 import { FoilPack } from '@/ui/arcade/Foil';
 import { Arrive, Breathe, Bump } from '@/ui/arcade/Motion';
 import { Popup } from '@/ui/arcade/Popup';
+import { CopyMeter, useCopyBeat } from '@/ui/arcade/LevelBeat';
+import { copyLine } from '@/ui/arcade/levels';
 import { CoinAmount, PackPrize } from '@/ui/arcade/Rewards';
 import { Rays } from '@/ui/arcade/Room';
 import { SegBar, lampsFor } from '@/ui/arcade/SegBar';
@@ -53,6 +55,8 @@ const SCORE = px(56);
 const DECK_AT = 260;
 const STAR = px(30);
 const MOMENT_CARD = sizes.card + space.md;
+/** a prize copy's level meter beside the card */
+const MOMENT_METER = px(280);
 /** once the coins are in, the ladder points count up and the bar fills, lamp by lamp, over this long */
 const LADDER_MS = 650;
 /** then each prize pops in, this long after the last */
@@ -108,39 +112,49 @@ function headline(s: MatchSummary): string {
   return s.score[1] - s.score[0] <= 3 ? 'SO CLOSE!' : 'GOOD GAME!';
 }
 
+/**
+ * A prize player: new, or a copy of one the child had. A copy plays its beat beside the card, one more lamp toward
+ * the next level or the level up itself with the card's frame upgrading in place; a tap on it jumps to its end.
+ */
+function PlayerMoment({ gain, onClose }: { gain: Gain; onClose: () => void }) {
+  const player = mustPlayer(gain.playerId);
+  const copies = useSave((s) => s.owned[gain.playerId] ?? 1);
+  const copy = useCopyBeat(gain, copies, 700);
+  const up = copy.plan?.kind === 'levelUp';
+  const title = gain.isNew ? 'NEW PLAYER!' : up ? 'LEVEL UP!' : 'EXTRA COPY!';
+  return (
+    <Popup tube="gold" width={sizes.panelMax - px(60)} style={styles.moment}>
+      {/* first, so it is behind everything in the pop-up, and from its edges outward, so it frames it */}
+      <Sparks burst={1} around count={36} reach={170} />
+      <View>
+        <Rays size={MOMENT_CARD * 2.6} color={tubes.gold.glass} alpha={0.26} count={18} fill={0.3} fadeAt={[0.25, 0.9]} style={styles.momentRays} />
+        <Arrive>
+          <ArcadeCard player={player} level={copy.plan ? copy.plan.level : Math.max(1, gain.levelAfter)} levelFrom={up ? copy.plan?.levelBefore : undefined} levelUp={up ? copy.levelUp : undefined} width={MOMENT_CARD} shine onPress={copy.plan ? copy.finish : undefined} />
+        </Arrive>
+      </View>
+      <View style={styles.momentText}>
+        <Glow face="display" size="title" tube="gold" track="close">
+          {title}
+        </Glow>
+        <Print face="display" size="large" color="text">
+          {player.name}
+        </Print>
+        <Print face="medium" size="body" color="textSoft">
+          {gain.isNew ? `You beat the ${teamById(player.team).name}, so their star joins your collection.` : copy.plan ? `You already had this star. ${copyLine(gain, copies)}` : 'You already had this star, so they got stronger.'}
+        </Print>
+        {copy.plan && <CopyMeter plan={copy.plan} beat={copy.beat} gained={copy.gained} width={MOMENT_METER} />}
+        <GoldButton label="AWESOME!" size="small" onPress={onClose} />
+      </View>
+    </Popup>
+  );
+}
+
 function MomentOverlay({ moment, onClose }: { moment: Moment; onClose: () => void }) {
   useEffect(() => {
     playSfx(moment.kind === 'player' ? 'revealEpic' : 'levelUp');
     buzz('success');
   }, [moment]);
-  if (moment.kind === 'player') {
-    const player = mustPlayer(moment.gain.playerId);
-    const title = moment.gain.isNew ? 'NEW PLAYER!' : moment.gain.levelAfter > moment.gain.levelBefore ? 'LEVEL UP!' : 'EXTRA COPY!';
-    return (
-      <Popup tube="gold" width={sizes.panelMax - px(60)} style={styles.moment}>
-        {/* first, so it is behind everything in the pop-up, and from its edges outward, so it frames it */}
-        <Sparks burst={1} around count={36} reach={170} />
-        <View>
-          <Rays size={MOMENT_CARD * 2.6} color={tubes.gold.glass} alpha={0.26} count={18} fill={0.3} fadeAt={[0.25, 0.9]} style={styles.momentRays} />
-          <Arrive>
-            <ArcadeCard player={player} level={Math.max(1, moment.gain.levelAfter)} width={MOMENT_CARD} shine />
-          </Arrive>
-        </View>
-        <View style={styles.momentText}>
-          <Glow face="display" size="title" tube="gold" track="close">
-            {title}
-          </Glow>
-          <Print face="display" size="large" color="text">
-            {player.name}
-          </Print>
-          <Print face="medium" size="body" color="textSoft">
-            {moment.gain.isNew ? `You beat the ${teamById(player.team).name}, so their star joins your collection.` : 'You already had this star, so they got stronger.'}
-          </Print>
-          <GoldButton label="AWESOME!" size="small" onPress={onClose} />
-        </View>
-      </Popup>
-    );
-  }
+  if (moment.kind === 'player') return <PlayerMoment gain={moment.gain} onClose={onClose} />;
   const { tier } = moment;
   const index = tierIndexOf(tier.name);
   return (
