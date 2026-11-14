@@ -1,4 +1,4 @@
-/** Pick a way to play: the Tour, the Ladder, or a quick game. */
+/** Pick a way to play: the Tour, the Ladder, a quick game, or two players on one screen. */
 
 import { useRouter, type Href } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -34,6 +34,16 @@ const RAYS = px(260);
 const TWO_LINES = Math.round(px(13) * 1.25) * 2;
 /** one row of a sign's foot: the ladder's tier medal, its tallest piece */
 const FOOT_ROW = px(30);
+/** the tour's star count beside its meter: the star, the widest count and the gaps between them */
+const TOUR_COUNT = px(18) + px(64) + space.sm * 2;
+/** one lamp of the meter and the gap after it */
+const LAMP = px(10);
+
+/** As many lamps as the tour's foot has room for beside its count, up to ten (four signs share a narrow screen). */
+function tourLamps(room: number): number {
+  if (room <= 0) return 10;
+  return Math.max(3, Math.min(10, Math.floor((room - TOUR_COUNT) / LAMP)));
+}
 
 function ModeSign({ title, text, icon, tube: t, delay, onPress, children }: { title: string; text: string; icon: LineIconName; tube: TubeName; delay: number; onPress: () => void; children: (room: number) => React.ReactNode }) {
   const tb = tubes[t];
@@ -102,8 +112,8 @@ export default function Play() {
             <>
               <View style={styles.line}>
                 <Star lit size={px(18)} />
-                <Print face="display" size="body" color={tubes.gold.tint} glow={tubes.gold.glass}>{`${have} / ${all}`}</Print>
-                <Meter value={all > 0 ? have / all : 0} lamps={10} tube="gold" />
+                <Print face="display" size="body" color={tubes.gold.tint} glow={tubes.gold.glass} lines={1}>{`${have} / ${all}`}</Print>
+                <Meter value={all > 0 ? have / all : 0} lamps={tourLamps(room)} tube="gold" />
               </View>
               {nextStage ? (
                 <View style={styles.line}>
@@ -157,6 +167,30 @@ export default function Play() {
               <View style={styles.line}>
                 <Pips have={settings.difficulty + 1} of={DIFFICULTY_NAMES.length} tube="cyan" size={px(10)} />
                 <Print face="medium" size="small" color="textDim">{`${DIFFICULTY_NAMES[settings.difficulty]} level`}</Print>
+              </View>
+            </>
+          )}
+        </ModeSign>
+
+        <ModeSign title="2 PLAYERS" text="Play a friend on one screen." icon="duo" tube="pink" delay={250} onPress={go('/duo')}>
+          {() => (
+            <>
+              <View style={styles.line}>
+                <Glow face="display" size="large" tube="cyan" track="close">
+                  P1
+                </Glow>
+                <Print face="bold" size="tiny" color="textFaint" track="wide">
+                  VS
+                </Print>
+                <Glow face="display" size="large" tube="pink" track="close">
+                  P2
+                </Glow>
+              </View>
+              <View style={styles.line}>
+                <LineIcon name="squad" size={px(18)} tube="pink" />
+                <Print face="medium" size="small" color="textDim">
+                  Your squad vs any team
+                </Print>
               </View>
             </>
           )}
