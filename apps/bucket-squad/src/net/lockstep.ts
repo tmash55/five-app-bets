@@ -99,6 +99,8 @@ export class Lockstep {
   private readonly theirHashes = new Map<number, number>();
   private waitingSince: number | null = null;
   private finished = false;
+  /** the match here is past its final buzzer, playing out its last seconds */
+  ending = false;
   private readonly outs: [InputFrame, InputFrame] = [emptyFrame(), emptyFrame()];
 
   constructor(opts: LockstepOptions) {
@@ -176,6 +178,7 @@ export class Lockstep {
 
   /** Call after every step: every `hashEvery` ticks the match's hash is noted and compared. */
   afterStep(m: MatchState): void {
+    this.ending = m.phase === 'final';
     const every = this.o.hashEvery;
     if (m.tick % every !== 0) return;
     const h = this.o.hash(m);

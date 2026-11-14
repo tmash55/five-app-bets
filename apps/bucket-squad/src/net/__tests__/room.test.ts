@@ -193,6 +193,18 @@ describe('during the match', () => {
     expect(host.state).toMatchObject({ phase: 'failed', problem: 'left' });
   });
 
+  it('lets the other device go once both are past the final buzzer', async () => {
+    const { w, host, guest } = await playing();
+    // the host's match is in its last seconds; the guest finished a moment sooner and leaves
+    host.lock!.ending = true;
+    guest.finish();
+    guest.leave();
+    await w.run(10000);
+    expect(host.state.phase).toBe('playing');
+    host.finish();
+    expect(host.state).toMatchObject({ phase: 'done', problem: null });
+  });
+
   it('ends the game when the other device goes quiet for 8 seconds, and not before', async () => {
     const { w, host, guest } = await playing();
     w.relay.cut(guest.self.id);

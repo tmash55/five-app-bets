@@ -17,6 +17,7 @@ export function PauseMenu({
   onQuit,
   quitNote,
   lefty = true,
+  note,
 }: {
   /** one line about where the game stands, e.g. "COM 12 - 9 STM" */
   line: string;
@@ -27,6 +28,8 @@ export function PauseMenu({
   quitNote: string;
   /** offer the left-handed pad (a two-player game has a cluster each and no such switch) */
   lefty?: boolean;
+  /** one more line under the score, e.g. who paused an online game */
+  note?: string;
 }) {
   const [confirm, setConfirm] = useState(false);
   const settings = useSave((s) => s.settings);
@@ -60,6 +63,11 @@ export function PauseMenu({
         <Txt font="display" size="body" color="inkSoft" center>
           {line}
         </Txt>
+        {note !== undefined && (
+          <Txt size="small" color="inkSoft" center>
+            {note}
+          </Txt>
+        )}
         <StickerButton label="RESUME" icon="play" iconColor="white" fill="mint" onPress={onResume} height={sizes.button} />
         <View style={styles.row}>
           <StickerButton label="HOW TO PLAY" icon="help" iconColor="sun" fill="white" onPress={onHowTo} style={styles.grow} textSize="body" />

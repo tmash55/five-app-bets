@@ -14,13 +14,20 @@ import { Controls } from '@/match/Controls';
 import { DuoControls, type DuoSeat } from '@/match/DuoControls';
 import { MATCH_SOUNDS, MatchDirector } from '@/match/director';
 import { HowToOverlay } from '@/match/HowTo';
-import { CalloutLayer, ControlPlate, Scoreboard, SquadHeat, type CalloutHandle } from '@/match/Hud';
+import { CalloutLayer, ControlPlate, NetHint, Scoreboard, SquadHeat, type CalloutHandle } from '@/match/Hud';
 import { PauseMenu } from '@/match/PauseMenu';
-import { buildMatch, summarize, type MatchSetup } from '@/meta/match';
+import { buildMatch, seenBy, summarize, type MatchSetup } from '@/meta/match';
+import { problemWords } from '@/net/words';
+import { useOnline } from '@/state/online';
 import { useSave } from '@/state/save';
 import { useSession } from '@/state/session';
-import { color, layer, space } from '@/theme/tokens';
-import { IconButton } from '@/ui/Sticker';
+import { color, layer, px, size as sizes, space } from '@/theme/tokens';
+import { Overlay, Panel } from '@/ui/Overlay';
+import { IconButton, StickerButton } from '@/ui/Sticker';
+import { StickerText, Txt } from '@/ui/Txt';
+
+/** an online game held up this long (ms) for the other device's moves says so on screen */
+const HINT_AFTER = 300;
 
 const HOW_TO_TIP = 'howToPlay';
 
@@ -29,13 +36,27 @@ function Match({ setup }: { setup: MatchSetup }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const built = useMemo(() => buildMatch(setup), [setup]);
-  const [runner] = useState(() => new MatchRunner(built.config, built.visuals));
+  // two devices: both run this same match in lockstep; this one plays its own team (the guest's is the away side)
+  const online = setup.mode === 'online';
+  const room = useOnline((s) => s.room);
+  const view = useOnline((s) => s.view);
+  const local = online && room?.role === 'guest' ? 1 : 0;
+  const [runner] = useState(() => {
+    const r = new MatchRunner(built.config, built.visuals);
+    const lock = online ? room?.lock : null;
+    if (lock) {
+      r.setLocalTeam(local);
+      r.setSource(0, lock.source(0, local === 0 ? r.pads[0] : undefined));
+      r.setSource(1, lock.source(1, local === 1 ? r.pads[1] : undefined));
+    }
+    return r;
+  });
   const [hud, setHud] = useState<HudState | null>(null);
   const [paused, setPaused] = useState(false);
   const firstGame = useSave((s) => !s.tips[HOW_TO_TIP]);
   // two people on one screen: a cluster of controls each, and either of them can pause
   const duo = setup.mode === 'duo' && setup.duo !== undefined && !setup.spectate;
-  const [howTo, setHowTo] = useState(firstGame && !setup.spectate && !duo);
+  const [howTo, setHowTo] = useState(firstGame && !setup.spectate && !duo && !online);
   const callouts = useRef<CalloutHandle>(null);
   const lefty = useSave((s) => s.settings.lefty);
   const finishMatch = useSave((s) => s.finishMatch);
@@ -59,13 +80,18 @@ function Match({ setup }: { setup: MatchSetup }) {
     runner.listen({
       onHud: setHud,
       onEvent: (e, m) => director.handle(e, m),
-      onStep: (m) => director.watch(m),
+      onStep: (m) => {
+        director.watch(m);
+        if (online) room?.lock?.afterStep(m);
+      },
       onFinal: (m) => {
         if (setup.spectate) {
           router.dismissTo('/');
           return;
         }
-        const summary = summarize(m, setup, director.buzzerBeater);
+        if (online) room?.finish();
+        // online, each device's own side comes first in what it is paid and shown
+        const summary = seenBy(summarize(m, setup, director.buzzerBeater), local);
         finish(summary, finishMatch(summary));
         router.replace('/results');
       },
@@ -73,9 +99,19 @@ function Match({ setup }: { setup: MatchSetup }) {
     // tooling: `__bs.pads[0]` and `__bs.pads[1]` are each team's input frame, for driving a two-player game by script
     if (__DEV__) (globalThis as Record<string, unknown>).__bs = runner;
     return () => runner.listen({});
-  }, [runner, built, setup, router, finish, finishMatch]);
+  }, [runner, built, setup, router, finish, finishMatch, room, online, local]);
 
-  const stopped = paused || howTo;
+  // online, a pause on either device pauses both, and a game that has ended for a reason stays stopped
+  const netPaused = online && view?.paused === true;
+  const netFailed = online && view?.phase === 'failed' ? view.problem : null;
+  const pauseHere = useCallback(
+    (on: boolean) => {
+      if (online) room?.pause(on);
+      else setPaused(on);
+    },
+    [online, room],
+  );
+  const stopped = paused || howTo || netPaused || netFailed !== null;
   useEffect(() => {
     runner.setPaused(stopped);
   }, [runner, stopped]);
@@ -83,10 +119,10 @@ function Match({ setup }: { setup: MatchSetup }) {
   // a game left in the background waits, paused, for its player to come back
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state !== 'active' && runner.m.phase !== 'final') setPaused(true);
+      if (state !== 'active' && runner.m.phase !== 'final') pauseHere(true);
     });
     return () => sub.remove();
-  }, [runner]);
+  }, [runner, pauseHere]);
 
   const closeHowTo = useCallback(() => {
     seeTip(HOW_TO_TIP);
@@ -94,37 +130,47 @@ function Match({ setup }: { setup: MatchSetup }) {
   }, [seeTip]);
 
   const quit = useCallback(() => {
+    if (online) useOnline.getState().leave();
     router.dismissTo('/');
-  }, [router]);
+  }, [router, online]);
 
   // Android's back button never drops a game by accident: it pauses, and a second press carries on
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (howTo) closeHowTo();
-      else if (runner.m.phase !== 'final') setPaused((p) => !p);
+      else if (runner.m.phase !== 'final') {
+        if (online) room?.pause(!(useOnline.getState().view?.paused ?? false));
+        else setPaused((p) => !p);
+      }
       return true;
     });
     return () => sub.remove();
-  }, [runner, howTo, closeHowTo]);
+  }, [runner, howTo, closeHowTo, online, room]);
 
   const names: [string, string] = [setup.home.short, setup.away.short];
   const over = hud?.phase === 'final';
-  const controlled = hud && hud.control >= 0 ? built.lineup[hud.control] : null;
-  // the person's own players (always the first side), each with their flame meter
-  const squad = hud && !setup.spectate && !duo ? built.lineup.flatMap((l, i) => (l.team === 0 ? [{ id: l.def.id, fire: hud.fire[i] ?? 0, you: i === hud.control }] : [])) : [];
+  // the person on this screen: the first side, or online the guest's away side (the match's second seat)
+  const mine = hud ? (local === 1 ? { offense: hud.second?.offense ?? false, turbo: hud.second?.turbo ?? 0, control: hud.second?.control ?? -1 } : { offense: hud.offense, turbo: hud.turbo, control: hud.control }) : null;
+  const controlled = mine && mine.control >= 0 ? built.lineup[mine.control] : null;
+  // the person's own players, each with their flame meter
+  const squad = hud && mine && !setup.spectate && !duo ? built.lineup.flatMap((l, i) => (l.team === local ? [{ id: l.def.id, fire: hud.fire[i] ?? 0, you: i === mine.control }] : [])) : [];
+  const showPause = paused || netPaused;
+  const hint = online && view?.phase === 'playing' && !netPaused && view.waiting >= HINT_AFTER ? (runner.m.tick < 60 ? 'Waiting for your friend…' : 'Connecting…') : null;
+  const failedWords = netFailed ? problemWords(netFailed) : null;
 
   return (
     <View style={styles.root}>
       <MatchView runner={runner} />
       {hud && <Scoreboard hud={hud} names={names} colors={built.colors} />}
       <CalloutLayer ref={callouts} colors={built.colors} />
-      {hud && !setup.spectate && !over && !duo && <Controls runner={runner} offense={hud.offense} lefty={lefty} turbo={hud.turbo} enabled={!stopped} />}
+      {hud && mine && !setup.spectate && !over && !duo && <Controls runner={runner} offense={mine.offense} lefty={lefty} turbo={mine.turbo} enabled={!stopped} />}
       {hud && duo && !over && <DuoControls runner={runner} seats={duoSeats(hud)} colors={built.colors} enabled={!stopped} />}
-      {squad.length > 0 && !over && <SquadHeat players={squad} fill={built.colors[0]} />}
-      {controlled && !over && !duo && <ControlPlate playerId={controlled.def.id} name={shortName(controlled.def)} fill={built.colors[0]} hyped={hud !== null && hud.hype[0] > 20} onFire={hud !== null && (hud.fire[hud.control] ?? 0) > 20} />}
+      {squad.length > 0 && !over && <SquadHeat players={squad} fill={built.colors[local]} />}
+      {controlled && mine && !over && !duo && <ControlPlate playerId={controlled.def.id} name={shortName(controlled.def)} fill={built.colors[local]} hyped={hud !== null && hud.hype[local] > 20} onFire={hud !== null && (hud.fire[mine.control] ?? 0) > 20} />}
+      {hint !== null && !over && <NetHint text={hint} />}
       {!over && (
         <View style={[styles.pause, { top: Math.max(insets.top, space.sm), left: Math.max(insets.left, space.md) }]}>
-          <IconButton name="pause" label={duo ? 'Pause, Player 1' : 'Pause'} onPress={() => setPaused(true)} />
+          <IconButton name="pause" label={duo ? 'Pause, Player 1' : 'Pause'} onPress={() => pauseHere(true)} />
         </View>
       )}
       {!over && duo && (
@@ -132,15 +178,29 @@ function Match({ setup }: { setup: MatchSetup }) {
           <IconButton name="pause" label="Pause, Player 2" onPress={() => setPaused(true)} />
         </View>
       )}
-      {paused && !howTo && hud && (
+      {showPause && !howTo && hud && !failedWords && (
         <PauseMenu
           line={`${names[0]} ${hud.score[0]}  -  ${hud.score[1]} ${names[1]}`}
-          onResume={() => setPaused(false)}
+          onResume={() => pauseHere(false)}
           onHowTo={() => setHowTo(true)}
           onQuit={quit}
           lefty={!duo}
-          quitNote={setup.mode === 'quick' || setup.mode === 'duo' ? 'This game will not count.' : 'This game will not count, and you will not win anything for it.'}
+          note={online ? (view?.pausedBy === 'friend' ? 'Your friend paused the game.' : 'Your friend’s game is paused too.') : undefined}
+          quitNote={online ? 'This game will not count for either of you.' : setup.mode === 'quick' || setup.mode === 'duo' ? 'This game will not count.' : 'This game will not count, and you will not win anything for it.'}
         />
+      )}
+      {failedWords && (
+        <Overlay>
+          <Panel width={sizes.panelMax - px(120)} face={styles.panel}>
+            <StickerText size="title" color="coral" center>
+              {failedWords.title}
+            </StickerText>
+            <Txt center color="inkSoft">
+              {failedWords.text}
+            </Txt>
+            <StickerButton label="HOME" icon="home" iconColor="white" fill="mint" onPress={quit} height={sizes.button} />
+          </Panel>
+        </Overlay>
       )}
       {howTo && <HowToOverlay onClose={closeHowTo} closeLabel={paused ? 'BACK' : "LET'S PLAY!"} />}
     </View>
@@ -170,5 +230,9 @@ const styles = StyleSheet.create({
   pause: {
     position: 'absolute',
     zIndex: layer.menu,
+  },
+  panel: {
+    padding: space.lg,
+    gap: space.sm,
   },
 });

@@ -241,6 +241,11 @@ export class OnlineRoom {
         this.set({ paused: msg.on, pausedBy: msg.on ? 'friend' : null });
         return;
       case 'bye':
+        // past the final buzzer the other device may finish first and go: this one has every frame it still needs
+        if (this.view.phase === 'playing' && this.lock?.ending) {
+          this.lock.finish();
+          return;
+        }
         if (this.view.phase !== 'done') this.fail('left');
         return;
       default:
