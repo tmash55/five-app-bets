@@ -127,7 +127,7 @@ export function DuoControls({ runner, seats, colors, enabled }: Props) {
 
   // tooling: where each cluster's stick and buttons are, so a script can play both sides with real touches
   useEffect(() => {
-    if (__DEV__) (globalThis as Record<string, unknown>).__duoLayouts = layouts;
+    if (__DEV__) (globalThis as Record<string, unknown>).__duoLayouts = layouts.map((l) => ({ ...l, stickR: (pad.stick / 2) * (l.scale ?? 1) }));
   }, [layouts]);
 
   useEffect(() => {
