@@ -97,6 +97,11 @@ export function missionsAfterMatch(day: MissionDay, summary: MatchSummary): Miss
   });
 }
 
+/** A two-player game counts for playing games, and for nothing else. */
+export function missionsAfterDuo(day: MissionDay): MissionDay {
+  return bump(day, { games: 1 });
+}
+
 export function missionsAfterPack(day: MissionDay): MissionDay {
   return bump(day, { packs: 1 });
 }

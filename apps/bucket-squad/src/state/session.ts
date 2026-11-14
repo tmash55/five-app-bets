@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 
 import type { MatchSetup, MatchSummary } from '@/meta/match';
-import type { QuickOptions } from '@/meta/setups';
+import type { DuoOptions, QuickOptions } from '@/meta/setups';
 import type { MatchOutcome } from './logic';
 
 interface Session {
@@ -11,10 +11,12 @@ interface Session {
   setup: MatchSetup | null;
   /** the choices behind the last quick game, for "play again" */
   quick: QuickOptions | null;
+  /** the choices behind the last two-player game, for "play again" */
+  duo: DuoOptions | null;
   /** what the results screen shows */
   summary: MatchSummary | null;
   outcome: MatchOutcome | null;
-  begin: (setup: MatchSetup, quick?: QuickOptions) => void;
+  begin: (setup: MatchSetup, quick?: QuickOptions, duo?: DuoOptions) => void;
   finish: (summary: MatchSummary, outcome: MatchOutcome) => void;
   clearResults: () => void;
 }
@@ -22,9 +24,10 @@ interface Session {
 export const useSession = create<Session>((set) => ({
   setup: null,
   quick: null,
+  duo: null,
   summary: null,
   outcome: null,
-  begin: (setup, quick) => set((s) => ({ setup, quick: quick ?? s.quick, summary: null, outcome: null })),
+  begin: (setup, quick, duo) => set((s) => ({ setup, quick: quick ?? s.quick, duo: duo ?? s.duo, summary: null, outcome: null })),
   finish: (summary, outcome) => set({ summary, outcome }),
   clearResults: () => set({ summary: null, outcome: null }),
 }));
