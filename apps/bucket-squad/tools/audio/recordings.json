@@ -1,0 +1,183 @@
+{
+  "about": "Which stretch of which recording each recorded sound is cut from, and how it is cleaned up (see import_recordings.py). Times are in seconds, levels in dB.",
+  "sources": {
+    "402710": {"title": "Desert wind stereo", "author": "KasDonatov", "url": "https://freesound.org/people/KasDonatov/sounds/402710/"},
+    "412157": {"title": "High Five.m4a", "author": "chancelombardo", "url": "https://freesound.org/people/chancelombardo/sounds/412157/"},
+    "453757": {"title": "basketball ext dribble bounce hard surface.flac", "author": "kyles", "url": "https://freesound.org/people/kyles/sounds/453757/"},
+    "518048": {"title": "Basketball Net Swish Sound.wav", "author": "Hann90", "url": "https://freesound.org/people/Hann90/sounds/518048/"},
+    "538422": {"title": "Referee whistle sound.wav", "author": "Rosa-Orenes256", "url": "https://freesound.org/people/Rosa-Orenes256/sounds/538422/"},
+    "675319": {"title": "S02-28 Basketball hard against backboard.wav", "author": "craigsmith", "url": "https://freesound.org/people/craigsmith/sounds/675319/"}
+  },
+  "generated": {
+    "ambBeach_1": "Beach ambience at sunset: gentle ocean waves rolling onto sand, a few seagulls in the distance, a light sea breeze, no music, no voices",
+    "ambPark_1": "Peaceful neighborhood park ambience on a sunny afternoon: birds singing in pine trees, a light breeze in the branches, kids playing very far away, no music, no close voices",
+    "ambSnow_1": "High mountain ambience in winter: cold wind blowing over snow in soft gusts, quiet and airy, no music, no voices",
+    "ambStreet_1": "Quiet suburban street ambience on a summer afternoon: a lawn mower far away, a dog barking in the distance, a light breeze, a few birds, no music, no close voices",
+    "aww_1": "A group of kids groan awww in disappointment after a missed shot, short crowd reaction, outdoors, no music",
+    "aww_2": "A group of kids groan awww in disappointment after a missed shot, short crowd reaction, outdoors, no music",
+    "block_1": "A blocked basketball shot, a hand swats the ball hard in mid-air, loud flat smack, punchy, dry, one-shot",
+    "block_3": "A blocked basketball shot, a hand swats the ball hard in mid-air, loud flat smack, punchy, dry, one-shot",
+    "catch_1": "Two hands catch a basketball, firm slap of palms on the leather ball, close up, dry, one-shot",
+    "catch_2": "Two hands catch a basketball, firm slap of palms on the leather ball, close up, dry, one-shot",
+    "catch_3": "Two hands catch a basketball, firm slap of palms on the leather ball, close up, dry, one-shot",
+    "cheerBig_1": "A big group of kids go wild, cheering, screaming with joy and clapping after an amazing basketball play, outdoors on a playground, natural, no music",
+    "cheerBig_2": "A big group of kids go wild, cheering, screaming with joy and clapping after an amazing basketball play, outdoors on a playground, natural, no music",
+    "cheer_1": "A small group of kids at a neighborhood playground cheer and clap after a basket, happy excited shouts, outdoors, natural, no music",
+    "cheer_2": "A small group of kids at a neighborhood playground cheer and clap after a basket, happy excited shouts, outdoors, natural, no music",
+    "cheer_4": "A small group of kids at a neighborhood playground cheer and clap after a basket, happy excited shouts, outdoors, natural, no music",
+    "dunk_1": "Slam dunk on an outdoor basketball hoop: the ball is slammed through, the rim snaps down and rattles hard, the net whips, heavy powerful impact, close up, one-shot",
+    "el-basketball-dunk-1": "Basketball slam dunk on an outdoor court: the ball slams through a metal hoop, the rim rattles and the net snaps",
+    "el-basketball-dunk-2": "Basketball slam dunk on an outdoor court: the ball slams through a metal hoop, the rim rattles and the net snaps",
+    "el-city-rooftop-ambience-1": "City rooftop ambience: distant traffic hum, light wind, faint far-off city sounds, no music, no voices",
+    "el-jump-landing-concrete-1": "Sneakers landing after a jump on a concrete basketball court, soft thud with a short shoe scuff",
+    "el-jump-landing-concrete-2": "Sneakers landing after a jump on a concrete basketball court, soft thud with a short shoe scuff",
+    "el-scoreboard-horn-1": "Basketball arena scoreboard horn at the end of a quarter, loud electronic buzzer blast",
+    "ooh_1": "A group of kids react with a loud impressed ooooh after an amazing basketball move, short crowd reaction, outdoors, no music",
+    "ooh_2": "A group of kids react with a loud impressed ooooh after an amazing basketball move, short crowd reaction, outdoors, no music",
+    "rim_1": "A basketball clanks hard off the steel rim of an outdoor playground hoop, loud metallic clang with a short rattle, close up, dry, no echo, one-shot",
+    "rim_2": "A basketball clanks hard off the steel rim of an outdoor playground hoop, loud metallic clang with a short rattle, close up, dry, no echo, one-shot",
+    "rim_3": "A basketball clanks hard off the steel rim of an outdoor playground hoop, loud metallic clang with a short rattle, close up, dry, no echo, one-shot",
+    "scuff_2": "One quick sneaker scrape on a gritty outdoor asphalt basketball court, a sharp shuffle step, close up, dry, one-shot",
+    "scuff_3": "One quick sneaker scrape on a gritty outdoor asphalt basketball court, a sharp shuffle step, close up, dry, one-shot",
+    "scuff_4": "One quick sneaker scrape on a gritty outdoor asphalt basketball court, a sharp shuffle step, close up, dry, one-shot",
+    "steal_1": "A hand slaps a basketball away from a dribble, sharp quick smack on rubber, dry, one-shot"
+  },
+  "sounds": {
+    "dribble": {
+      "level": -15.0, "len": 0.17, "hp": 80, "shelf": [260, -8], "warm": [300, 1.6], "tail": 0.06,
+      "takes": [
+        {"src": "453757", "at": 1.764},
+        {"src": "453757", "at": 3.291},
+        {"src": "453757", "at": 4.844},
+        {"src": "453757", "at": 6.644}
+      ]
+    },
+    "bounce": {
+      "level": -15.0, "len": 0.17, "hp": 80, "shelf": [260, -8], "warm": [300, 1.6], "tail": 0.06,
+      "takes": [
+        {"src": "453757", "at": 12.814},
+        {"src": "453757", "at": 14.468},
+        {"src": "453757", "at": 17.924}
+      ]
+    },
+    "board": {
+      "level": -12.0, "len": 0.26, "hp": 90, "shelf": [220, -4], "tail": 0.1,
+      "takes": [
+        {"src": "675319", "at": 2.264},
+        {"src": "675319", "at": 5.566},
+        {"src": "675319", "at": 7.782}
+      ]
+    },
+    "swish": {
+      "level": -11.0, "hp": 350, "fade_in": 0.008, "lead": 0.0, "tail": 0.07, "window": 0.06,
+      "takes": [
+        {"src": "518048", "at": 0.205, "len": 0.26},
+        {"src": "518048", "at": 1.612, "len": 0.3},
+        {"src": "518048", "at": 4.126, "len": 0.33},
+        {"src": "518048", "at": 5.013, "len": 0.36}
+      ]
+    },
+    "rim": {
+      "level": -10.5, "hp": 160, "tail": 0.25,
+      "takes": [
+        {"src": "rim_1", "at": 0.1, "len": 0.64},
+        {"src": "rim_2", "at": 0.052, "len": 0.68},
+        {"src": "rim_3", "at": 0.053, "len": 0.64}
+      ]
+    },
+    "dunk": {
+      "level": -9.0, "hp": 60, "warm": [160, 1.8], "tail": 0.3,
+      "takes": [
+        {"src": "el-basketball-dunk-1", "at": 0.005, "len": 1.25},
+        {"src": "el-basketball-dunk-2", "at": 0.515, "len": 0.9},
+        {"src": "dunk_1", "at": 0.0, "len": 0.6, "tail": 0.25}
+      ]
+    },
+    "catch": {
+      "level": -17.0, "len": 0.11, "hp": 140, "shelf": [220, -6], "tail": 0.04,
+      "takes": [
+        {"src": "catch_1", "at": 0.009},
+        {"src": "catch_2", "at": 0.0, "len": 0.1},
+        {"src": "catch_3", "at": 0.224}
+      ]
+    },
+    "steal": {
+      "level": -14.0, "hp": 200, "tail": 0.05,
+      "takes": [
+        {"src": "412157", "at": 0.419, "len": 0.16},
+        {"src": "steal_1", "at": 0.0, "len": 0.14}
+      ]
+    },
+    "block": {
+      "level": -10.5, "hp": 100, "shelf": [200, -4], "tail": 0.1,
+      "takes": [
+        {"src": "block_3", "at": 0.027, "len": 0.3},
+        {"src": "block_1", "at": 0.0, "len": 0.28}
+      ]
+    },
+    "land": {
+      "level": -14.0, "len": 0.26, "hp": 80, "shelf": [220, -6], "warm": [250, 1.6], "tail": 0.08,
+      "takes": [
+        {"src": "el-jump-landing-concrete-1", "at": 0.037},
+        {"src": "el-jump-landing-concrete-2", "at": 0.085}
+      ]
+    },
+    "scuff": {
+      "level": -18.0, "hp": 300, "fade_in": 0.004, "tail": 0.08, "window": 0.06,
+      "takes": [
+        {"src": "scuff_2", "at": 0.04, "len": 0.24},
+        {"src": "scuff_3", "at": 0.078, "len": 0.27},
+        {"src": "scuff_4", "at": 0.15, "len": 0.22}
+      ]
+    },
+    "whistle": {
+      "level": -8.0, "hp": 500, "window": 0.1,
+      "takes": [
+        {"src": "538422", "at": 0.028, "len": 0.4, "tail": 0.08}
+      ]
+    },
+    "buzzer": {
+      "level": -12.0, "hp": 120, "fade_in": 0.004, "tail": 0.18, "window": 0.3,
+      "takes": [
+        {"src": "el-scoreboard-horn-1", "at": 0.0, "len": 1.25}
+      ]
+    },
+    "cheer": {
+      "level": -12.0, "hp": 200, "fade_in": 0.03, "tail": 0.6, "window": 0.4,
+      "takes": [
+        {"src": "cheer_1", "at": 0.0, "len": 2.45},
+        {"src": "cheer_2", "at": 0.0, "len": 2.35},
+        {"src": "cheer_4", "at": 0.0, "len": 2.45}
+      ]
+    },
+    "cheerBig": {
+      "level": -12.5, "hp": 200, "fade_in": 0.04, "tail": 0.9, "window": 0.4,
+      "takes": [
+        {"src": "cheerBig_1", "at": 0.0, "len": 3.4},
+        {"src": "cheerBig_2", "at": 0.0, "len": 3.4}
+      ]
+    },
+    "ooh": {
+      "level": -13.0, "hp": 200, "fade_in": 0.02, "tail": 0.35, "window": 0.3,
+      "takes": [
+        {"src": "ooh_1", "at": 0.0, "len": 1.62},
+        {"src": "ooh_2", "at": 0.0, "len": 1.72}
+      ]
+    },
+    "aww": {
+      "level": -13.0, "hp": 200, "fade_in": 0.02, "tail": 0.35, "window": 0.3,
+      "takes": [
+        {"src": "aww_1", "at": 0.0, "len": 1.62},
+        {"src": "aww_2", "at": 0.0, "len": 1.68}
+      ]
+    }
+  },
+  "loops": {
+    "ambPark": {"src": "ambPark_1", "at": 0.5, "len": 16, "seam": 2.0, "hp": 200, "level": -24.0},
+    "ambStreet": {"src": "ambStreet_1", "at": 0.5, "len": 16, "seam": 2.0, "hp": 150, "level": -24.0},
+    "ambBeach": {"src": "ambBeach_1", "at": 0.5, "len": 16, "seam": 2.0, "hp": 120, "level": -24.0},
+    "ambSnow": {"src": "ambSnow_1", "at": 0.5, "len": 16, "seam": 2.0, "hp": 150, "level": -24.0},
+    "ambRooftop": {"src": "el-city-rooftop-ambience-1", "at": 2.0, "len": 16, "seam": 2.0, "hp": 120, "level": -24.0},
+    "ambCanyon": {"src": "402710", "at": 14.0, "len": 16, "seam": 2.0, "hp": 150, "level": -27.0}
+  }
+}

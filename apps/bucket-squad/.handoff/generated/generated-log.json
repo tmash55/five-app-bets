@@ -1,0 +1,546 @@
+[
+ {
+  "file": "rim_1.mp3",
+  "text": "A basketball clanks hard off the steel rim of an outdoor playground hoop, loud metallic clang with a short rattle, close up, dry, no echo, one-shot",
+  "seconds": 1.0,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 11
+ },
+ {
+  "file": "rim_2.mp3",
+  "text": "A basketball clanks hard off the steel rim of an outdoor playground hoop, loud metallic clang with a short rattle, close up, dry, no echo, one-shot",
+  "seconds": 1.0,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 11
+ },
+ {
+  "file": "rim_3.mp3",
+  "text": "A basketball clanks hard off the steel rim of an outdoor playground hoop, loud metallic clang with a short rattle, close up, dry, no echo, one-shot",
+  "seconds": 1.0,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 11
+ },
+ {
+  "file": "rim_4.mp3",
+  "text": "A basketball clanks hard off the steel rim of an outdoor playground hoop, loud metallic clang with a short rattle, close up, dry, no echo, one-shot",
+  "seconds": 1.0,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 11
+ },
+ {
+  "file": "dunk_1.mp3",
+  "text": "Slam dunk on an outdoor basketball hoop: the ball is slammed through, the rim snaps down and rattles hard, the net whips, heavy powerful impact, close up, one-shot",
+  "seconds": 1.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 17
+ },
+ {
+  "file": "dunk_2.mp3",
+  "text": "Slam dunk on an outdoor basketball hoop: the ball is slammed through, the rim snaps down and rattles hard, the net whips, heavy powerful impact, close up, one-shot",
+  "seconds": 1.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 17
+ },
+ {
+  "file": "dunk_3.mp3",
+  "text": "Slam dunk on an outdoor basketball hoop: the ball is slammed through, the rim snaps down and rattles hard, the net whips, heavy powerful impact, close up, one-shot",
+  "seconds": 1.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 17
+ },
+ {
+  "file": "swish_1.mp3",
+  "text": "A basketball swishes cleanly through a nylon net, nothing but net, crisp soft snap of the net, close up, dry, outdoors, one-shot",
+  "seconds": 0.8,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 9
+ },
+ {
+  "file": "swish_2.mp3",
+  "text": "A basketball swishes cleanly through a nylon net, nothing but net, crisp soft snap of the net, close up, dry, outdoors, one-shot",
+  "seconds": 0.8,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 9
+ },
+ {
+  "file": "swish_3.mp3",
+  "text": "A basketball swishes cleanly through a nylon net, nothing but net, crisp soft snap of the net, close up, dry, outdoors, one-shot",
+  "seconds": 0.8,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 9
+ },
+ {
+  "file": "swish_4.mp3",
+  "text": "A basketball swishes cleanly through a nylon net, nothing but net, crisp soft snap of the net, close up, dry, outdoors, one-shot",
+  "seconds": 0.8,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 9
+ },
+ {
+  "file": "board_1.mp3",
+  "text": "A basketball bangs off a metal playground backboard, hollow thud with a short rattle, close up, dry, outdoors, one-shot",
+  "seconds": 0.7,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 8
+ },
+ {
+  "file": "board_2.mp3",
+  "text": "A basketball bangs off a metal playground backboard, hollow thud with a short rattle, close up, dry, outdoors, one-shot",
+  "seconds": 0.7,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 8
+ },
+ {
+  "file": "board_3.mp3",
+  "text": "A basketball bangs off a metal playground backboard, hollow thud with a short rattle, close up, dry, outdoors, one-shot",
+  "seconds": 0.7,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 8
+ },
+ {
+  "file": "dribble_1.mp3",
+  "text": "One single hard basketball bounce on outdoor asphalt, close up, punchy, dry, no echo, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "dribble_2.mp3",
+  "text": "One single hard basketball bounce on outdoor asphalt, close up, punchy, dry, no echo, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "dribble_3.mp3",
+  "text": "One single hard basketball bounce on outdoor asphalt, close up, punchy, dry, no echo, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "dribble_4.mp3",
+  "text": "One single hard basketball bounce on outdoor asphalt, close up, punchy, dry, no echo, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "catch_1.mp3",
+  "text": "Two hands catch a basketball, firm slap of palms on the leather ball, close up, dry, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "catch_2.mp3",
+  "text": "Two hands catch a basketball, firm slap of palms on the leather ball, close up, dry, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "catch_3.mp3",
+  "text": "Two hands catch a basketball, firm slap of palms on the leather ball, close up, dry, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "catch_4.mp3",
+  "text": "Two hands catch a basketball, firm slap of palms on the leather ball, close up, dry, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "pass_1.mp3",
+  "text": "A quick basketball chest pass, short soft whoosh of the ball through the air, subtle, dry, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "pass_2.mp3",
+  "text": "A quick basketball chest pass, short soft whoosh of the ball through the air, subtle, dry, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "pass_3.mp3",
+  "text": "A quick basketball chest pass, short soft whoosh of the ball through the air, subtle, dry, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "steal_1.mp3",
+  "text": "A hand slaps a basketball away from a dribble, sharp quick smack on rubber, dry, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "steal_2.mp3",
+  "text": "A hand slaps a basketball away from a dribble, sharp quick smack on rubber, dry, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "steal_3.mp3",
+  "text": "A hand slaps a basketball away from a dribble, sharp quick smack on rubber, dry, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "block_1.mp3",
+  "text": "A blocked basketball shot, a hand swats the ball hard in mid-air, loud flat smack, punchy, dry, one-shot",
+  "seconds": 0.6,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 7
+ },
+ {
+  "file": "block_2.mp3",
+  "text": "A blocked basketball shot, a hand swats the ball hard in mid-air, loud flat smack, punchy, dry, one-shot",
+  "seconds": 0.6,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 7
+ },
+ {
+  "file": "block_3.mp3",
+  "text": "A blocked basketball shot, a hand swats the ball hard in mid-air, loud flat smack, punchy, dry, one-shot",
+  "seconds": 0.6,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 7
+ },
+ {
+  "file": "land_1.mp3",
+  "text": "Two sneakers land hard on asphalt after a jump, rubber soles thud with a little grit, close up, dry, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "land_2.mp3",
+  "text": "Two sneakers land hard on asphalt after a jump, rubber soles thud with a little grit, close up, dry, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "land_3.mp3",
+  "text": "Two sneakers land hard on asphalt after a jump, rubber soles thud with a little grit, close up, dry, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "scuff_1.mp3",
+  "text": "One quick sneaker scrape on a gritty outdoor asphalt basketball court, a sharp shuffle step, close up, dry, one-shot",
+  "seconds": 0.6,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 7
+ },
+ {
+  "file": "scuff_2.mp3",
+  "text": "One quick sneaker scrape on a gritty outdoor asphalt basketball court, a sharp shuffle step, close up, dry, one-shot",
+  "seconds": 0.6,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 7
+ },
+ {
+  "file": "scuff_3.mp3",
+  "text": "One quick sneaker scrape on a gritty outdoor asphalt basketball court, a sharp shuffle step, close up, dry, one-shot",
+  "seconds": 0.6,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 7
+ },
+ {
+  "file": "scuff_4.mp3",
+  "text": "One quick sneaker scrape on a gritty outdoor asphalt basketball court, a sharp shuffle step, close up, dry, one-shot",
+  "seconds": 0.6,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 7
+ },
+ {
+  "file": "whistle_1.mp3",
+  "text": "A referee whistle, one short sharp blast, outdoors, dry, one-shot",
+  "seconds": 0.8,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 9
+ },
+ {
+  "file": "whistle_2.mp3",
+  "text": "A referee whistle, one short sharp blast, outdoors, dry, one-shot",
+  "seconds": 0.8,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 9
+ },
+ {
+  "file": "buzzer_1.mp3",
+  "text": "A basketball scoreboard buzzer, loud harsh horn held for one second and then it stops, one-shot",
+  "seconds": 1.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 17
+ },
+ {
+  "file": "buzzer_2.mp3",
+  "text": "A basketball scoreboard buzzer, loud harsh horn held for one second and then it stops, one-shot",
+  "seconds": 1.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 17
+ },
+ {
+  "file": "cheer_1.mp3",
+  "text": "A small group of kids at a neighborhood playground cheer and clap after a basket, happy excited shouts, outdoors, natural, no music",
+  "seconds": 2.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 28
+ },
+ {
+  "file": "cheer_2.mp3",
+  "text": "A small group of kids at a neighborhood playground cheer and clap after a basket, happy excited shouts, outdoors, natural, no music",
+  "seconds": 2.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 28
+ },
+ {
+  "file": "cheer_3.mp3",
+  "text": "A small group of kids at a neighborhood playground cheer and clap after a basket, happy excited shouts, outdoors, natural, no music",
+  "seconds": 2.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 28
+ },
+ {
+  "file": "cheer_4.mp3",
+  "text": "A small group of kids at a neighborhood playground cheer and clap after a basket, happy excited shouts, outdoors, natural, no music",
+  "seconds": 2.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 28
+ },
+ {
+  "file": "cheerBig_1.mp3",
+  "text": "A big group of kids go wild, cheering, screaming with joy and clapping after an amazing basketball play, outdoors on a playground, natural, no music",
+  "seconds": 3.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 38
+ },
+ {
+  "file": "cheerBig_2.mp3",
+  "text": "A big group of kids go wild, cheering, screaming with joy and clapping after an amazing basketball play, outdoors on a playground, natural, no music",
+  "seconds": 3.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 38
+ },
+ {
+  "file": "cheerBig_3.mp3",
+  "text": "A big group of kids go wild, cheering, screaming with joy and clapping after an amazing basketball play, outdoors on a playground, natural, no music",
+  "seconds": 3.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 38
+ },
+ {
+  "file": "ooh_1.mp3",
+  "text": "A group of kids react with a loud impressed ooooh after an amazing basketball move, short crowd reaction, outdoors, no music",
+  "seconds": 1.8,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 20
+ },
+ {
+  "file": "ooh_2.mp3",
+  "text": "A group of kids react with a loud impressed ooooh after an amazing basketball move, short crowd reaction, outdoors, no music",
+  "seconds": 1.8,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 20
+ },
+ {
+  "file": "ooh_3.mp3",
+  "text": "A group of kids react with a loud impressed ooooh after an amazing basketball move, short crowd reaction, outdoors, no music",
+  "seconds": 1.8,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 20
+ },
+ {
+  "file": "aww_1.mp3",
+  "text": "A group of kids groan awww in disappointment after a missed shot, short crowd reaction, outdoors, no music",
+  "seconds": 1.8,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 20
+ },
+ {
+  "file": "aww_2.mp3",
+  "text": "A group of kids groan awww in disappointment after a missed shot, short crowd reaction, outdoors, no music",
+  "seconds": 1.8,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 20
+ },
+ {
+  "file": "ambPark_1.mp3",
+  "text": "Peaceful neighborhood park ambience on a sunny afternoon: birds singing in pine trees, a light breeze in the branches, kids playing very far away, no music, no close voices",
+  "seconds": 20,
+  "loop": true,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 220
+ },
+ {
+  "file": "ambStreet_1.mp3",
+  "text": "Quiet suburban street ambience on a summer afternoon: a lawn mower far away, a dog barking in the distance, a light breeze, a few birds, no music, no close voices",
+  "seconds": 20,
+  "loop": true,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 220
+ },
+ {
+  "file": "ambBeach_1.mp3",
+  "text": "Beach ambience at sunset: gentle ocean waves rolling onto sand, a few seagulls in the distance, a light sea breeze, no music, no voices",
+  "seconds": 20,
+  "loop": true,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 220
+ },
+ {
+  "file": "ambSnow_1.mp3",
+  "text": "High mountain ambience in winter: cold wind blowing over snow in soft gusts, quiet and airy, no music, no voices",
+  "seconds": 20,
+  "loop": true,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 220
+ },
+ {
+  "file": "ambCanyon_1.mp3",
+  "text": "Desert canyon ambience: a dry warm wind, cicadas buzzing, a hawk calling far away, no music, no voices",
+  "seconds": 20,
+  "loop": true,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 220
+ },
+ {
+  "file": "packRip_1.mp3",
+  "text": "Tearing open a foil trading card pack, a crisp foil rip, close up, dry, one-shot",
+  "seconds": 1.2,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 13
+ },
+ {
+  "file": "packRip_2.mp3",
+  "text": "Tearing open a foil trading card pack, a crisp foil rip, close up, dry, one-shot",
+  "seconds": 1.2,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 13
+ },
+ {
+  "file": "packRip_3.mp3",
+  "text": "Tearing open a foil trading card pack, a crisp foil rip, close up, dry, one-shot",
+  "seconds": 1.2,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 13
+ },
+ {
+  "file": "cardFlip_1.mp3",
+  "text": "A trading card is flipped over onto a table, a quick snappy card flick, close up, dry, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "cardFlip_2.mp3",
+  "text": "A trading card is flipped over onto a table, a quick snappy card flick, close up, dry, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "cardFlip_3.mp3",
+  "text": "A trading card is flipped over onto a table, a quick snappy card flick, close up, dry, one-shot",
+  "seconds": 0.5,
+  "loop": false,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 6
+ },
+ {
+  "file": "ambCanyon_1.mp3",
+  "text": "Hot desert canyon ambience in the afternoon: a steady dry wind blowing between red rocks, cicadas buzzing in the heat, now and then a hawk crying far away, no music, no voices",
+  "seconds": 20,
+  "loop": true,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 220
+ },
+ {
+  "file": "ambCanyon_2.mp3",
+  "text": "Hot desert canyon ambience in the afternoon: a steady dry wind blowing between red rocks, cicadas buzzing in the heat, now and then a hawk crying far away, no music, no voices",
+  "seconds": 20,
+  "loop": true,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 220
+ },
+ {
+  "file": "ambCanyon_2.mp3",
+  "text": "Hot desert canyon ambience in the afternoon: a steady dry wind blowing between red rocks, cicadas buzzing in the heat, now and then a hawk crying far away, no music, no voices",
+  "seconds": 20,
+  "loop": true,
+  "model": "eleven_text_to_sound_v3",
+  "credits": 220
+ }
+]
