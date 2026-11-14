@@ -161,33 +161,31 @@ function SmallCards() {
   );
 }
 
-/** every level's frame: big, as a small card, and as a cell in the collection grid */
+/** every level's frame: the same player big at each level, small cards, and a cell of each rarity at each level */
 function Levels() {
   const levels = [1, 2, 3, 4, 5];
   return (
     <View style={styles.sheet}>
       <View style={styles.cardRow}>
         {levels.map((l) => (
-          <ArcadeCard key={l} player={best(RARITIES[(l - 1) % RARITIES.length])} level={l} width={px(132)} />
+          <ArcadeCard key={l} player={best('epic')} level={l} width={px(104)} />
         ))}
       </View>
       <View style={styles.packRow}>
-        {levels.map((l) => (
-          <ArcadeCard key={l} player={best('rare')} level={l} width={px(64)} />
-        ))}
+        <View style={styles.levelSmall}>
+          {levels.map((l) => (
+            <ArcadeCard key={l} player={best('rare')} level={l} width={px(52)} />
+          ))}
+        </View>
         <View style={styles.levelCells}>
           {RARITIES.map((r) => (
             <View key={r} style={styles.levelCellRow}>
               {levels.map((l) => (
-                <HeadCell key={l} player={best(r)} level={l} />
+                <HeadCell key={l} player={best(r)} level={l} width={px(50)} height={px(36)} />
               ))}
             </View>
           ))}
         </View>
-      </View>
-      <View style={styles.stats}>
-        <StatRow label="SHOT" value={78} levelFrom={7} lit={8} next={1} />
-        <StatRow label="DUNK" value={92} levelFrom={8} lit={9} />
       </View>
     </View>
   );
@@ -285,12 +283,16 @@ const styles = StyleSheet.create({
     gap: space.sm,
     width: px(300),
   },
+  levelSmall: {
+    flexDirection: 'row',
+    gap: px(10),
+  },
   levelCells: {
-    gap: px(8),
+    gap: px(7),
   },
   levelCellRow: {
     flexDirection: 'row',
-    gap: px(6),
+    gap: px(7),
   },
   tile: {
     flex: 1,

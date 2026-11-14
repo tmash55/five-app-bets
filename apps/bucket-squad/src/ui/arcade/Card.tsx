@@ -143,6 +143,8 @@ export const ArcadeCard = memo(function ArcadeCard({ player, level = 1, width = 
   const wordSize = clamp(width * 0.057, px(8.5), px(13));
   const lampH = Math.max(px(2.5), Math.round(width * 0.018));
   const padY = Math.max(px(3), Math.round(width * 0.022));
+  // the level lamps sit clear of the neon trim a level draws just inside the rim, at every level, so nothing moves when it comes in
+  const trimRoom = Math.max(px(2), Math.round(width * 0.02));
   // measured with the letter spacing it is drawn with, and clear of the card's sides, so a long name shrinks or shortens instead of running to the edge
   const nameGap = small ? 0 : track.close;
   const name = fitPerson(player.name.toUpperCase(), 'display', nameSize, innerW - edge * 2.4, nameGap, player.short?.toUpperCase());
@@ -207,7 +209,7 @@ export const ArcadeCard = memo(function ArcadeCard({ player, level = 1, width = 
           </View>
         )}
 
-        <View style={[styles.band, { paddingTop: padY, paddingBottom: padY, gap: Math.max(1, Math.round(width * 0.008)) }]}>
+        <View style={[styles.band, { paddingTop: padY, paddingBottom: padY + trimRoom, gap: Math.max(1, Math.round(width * 0.008)) }]}>
           <Print face="display" size={name.size} color={locked ? 'textFaint' : 'text'} track={small ? 'none' : 'close'} lines={1} center style={{ lineHeight: Math.round(name.size * 1.08) }}>
             {name.text}
           </Print>
