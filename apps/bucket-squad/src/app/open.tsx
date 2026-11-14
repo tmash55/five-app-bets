@@ -522,7 +522,10 @@ export default function OpenPack() {
               <StageRoom key={i} {...layer(i)} />
             ))}
             {stage === 'tear' && result && <Tear clock={tearClock} def={def} lay={lay} light={light} />}
-            {/* under the cards, so a top-level card's crest stands in front of it */}
+            {(stage === 'tear' || stage === 'cards') && result && points}
+            {onStage.map((i) => (
+              <StageOver key={i} {...layer(i)} />
+            ))}
             {stage === 'cards' && (
               <>
                 <Chip style={[styles.chip, { left: lay.edge.left, top: topBar.top + px(10) }]}>
@@ -533,10 +536,6 @@ export default function OpenPack() {
                 </Chip>
               </>
             )}
-            {(stage === 'tear' || stage === 'cards') && result && points}
-            {onStage.map((i) => (
-              <StageOver key={i} {...layer(i)} />
-            ))}
           </Animated.View>
           <Pressable style={StyleSheet.absoluteFill} onPress={next} accessibilityRole="button" accessibilityLabel={stage === 'sealed' ? 'Open the pack' : 'Next'} />
           {stage === 'sealed' && <Sealed def={def} lay={lay} count={available} onShop={() => router.dismissTo('/packs')} />}

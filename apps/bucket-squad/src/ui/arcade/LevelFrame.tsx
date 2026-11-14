@@ -45,8 +45,8 @@ function measure(b: FrameBox) {
   const studAt = Math.max(b.rim * 0.5 + stud * 0.4, b.round * 0.3);
   const chrome = b.small ? px(1.7) : Math.max(px(2), w * 0.021);
   const crest = b.small ? px(13) : Math.max(px(17), w * 0.17);
-  // the crest stands on the top edge: a card's half above it, a cell's mostly inside, clear of the row above
-  const crestTop = b.small ? -crest * 0.3 : -crest * 0.52;
+  // the crest stands on the top edge: a card's a little under half above it, a cell's mostly inside, clear of the row above
+  const crestTop = b.small ? -crest * 0.3 : -crest * 0.45;
   const pad = Math.ceil(Math.max(chrome * 3.5, stud * 2, -crestTop + px(2)));
   return { trim, trimAt, stud, studAt, chrome, crest, crestTop, pad };
 }
