@@ -16,6 +16,7 @@ export function PauseMenu({
   onHowTo,
   onQuit,
   quitNote,
+  lefty = true,
 }: {
   /** one line about where the game stands, e.g. "COM 12 - 9 STM" */
   line: string;
@@ -24,6 +25,8 @@ export function PauseMenu({
   onQuit: () => void;
   /** what quitting costs, shown before the person confirms */
   quitNote: string;
+  /** offer the left-handed pad (a two-player game has a cluster each and no such switch) */
+  lefty?: boolean;
 }) {
   const [confirm, setConfirm] = useState(false);
   const settings = useSave((s) => s.settings);
@@ -65,7 +68,7 @@ export function PauseMenu({
         <View style={styles.row}>
           <ToggleChip label="Sound" icon="sound" iconOff="mute" on={settings.sound} onChange={(v) => setSetting('sound', v)} style={styles.grow} />
           <ToggleChip label="Music" icon="music" on={settings.music} onChange={(v) => setSetting('music', v)} style={styles.grow} />
-          <ToggleChip label="Lefty" icon="swap" fill="sun" on={settings.lefty} onChange={(v) => setSetting('lefty', v)} style={styles.grow} />
+          {lefty && <ToggleChip label="Lefty" icon="swap" fill="sun" on={settings.lefty} onChange={(v) => setSetting('lefty', v)} style={styles.grow} />}
         </View>
       </Panel>
     </Overlay>
