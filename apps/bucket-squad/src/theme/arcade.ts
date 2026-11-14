@@ -114,6 +114,32 @@ export const rarityPaint: Record<Rarity, RarityPaint> = {
   legend: { tube: 'amber', rim: ['#FFF6C2', '#FFB800', '#FF3DA5', '#FFE14A', '#FF8A00'], halo: ['#FFE9A8', '#D9930A', '#4A2400'], cell: '#A8720A', gems: 4 },
 };
 
+/**
+ * How a player's level is drawn. The rarity stays the card's colour (its rim, its light, its gems); the level is
+ * the frame round it, and every level adds a piece: a neon trim, lit corner studs, a chrome edge, and at the top
+ * level a gold edge and a crest. Gold is the level's colour everywhere: its lamps, and the rating lamps a player
+ * gained by levelling up.
+ */
+export const levelPaint = {
+  /** the level's lamps, the rating lamps it lit, and the next level's dim outlines */
+  tube: 'gold' as TubeName,
+  /** the neon line inside the rim: a white-hot core in the rarity's own glow */
+  trim: tube.white.glass,
+  /** a lit stud in each corner: its glass and its hot middle */
+  stud: tube.gold.glass,
+  studCore: tube.gold.tint,
+  /** the chrome edge round the card, corner to corner */
+  chrome: ['#FFFFFF', '#8E98AE', '#F2F5FA', '#5E677C', '#E6EAF2'],
+  /** at the top level the edge turns to gold */
+  goldChrome: ['#FFFAD0', '#FFB800', '#FFF07A', '#B87A00', '#FFE14A'],
+  /** the crest on top: its plate, from top to bottom, and the crown on it */
+  crest: ['#FFF6C2', '#FFD23F', '#E89B00'],
+  crestInk: night.onTube,
+} as const;
+
+/** where the five colours of a chrome edge sit along it */
+export const CHROME_STOPS = [0, 0.26, 0.5, 0.76, 1] as const;
+
 /** The one yellow button every page has. */
 export const goldButton = {
   top: '#FFF07A',

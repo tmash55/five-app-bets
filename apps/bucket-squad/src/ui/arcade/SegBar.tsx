@@ -7,14 +7,17 @@
 import { memo } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { arcade, halo, night, tubeOf, type Tube, type TubeName } from '@/theme/arcade';
+import { arcade, fade, halo, levelPaint, night, tube as tubes, tubeOf, type Tube, type TubeName } from '@/theme/arcade';
 import { px } from '@/theme/tokens';
+import { lampsFor } from './levels';
 import { Print } from './Type';
 
-/** How many of `lamps` a rating out of 100 lights. */
-export function lampsFor(value: number, lamps = 10): number {
-  return Math.max(0, Math.min(lamps, Math.round((value / 100) * lamps)));
-}
+export { lampsFor };
+
+const LEVEL = tubes[levelPaint.tube];
+/** a lamp the next level would light: only its outline, faint */
+const NEXT_LAMP = { borderWidth: arcade.hairline, borderColor: fade(LEVEL.glass, 0.55), backgroundColor: fade(LEVEL.glass, 0.08) } as const;
+const LEVEL_LAMP = { backgroundColor: LEVEL.glass, boxShadow: [halo(LEVEL.glass, 5, 0.95)] };
 
 export interface SegBarProps {
   /** a rating out of 100 */
@@ -23,18 +26,26 @@ export interface SegBarProps {
   lit?: number;
   lamps?: number;
   tube?: TubeName | Tube;
+  /** the lamps from this one on are lit in the level's gold: the ones levelling up lit */
+  levelFrom?: number;
+  /** after the lit lamps, this many show as faint gold outlines: what the next level would light */
+  next?: number;
   small?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
 /** A row of lamps, lit from the left. */
-export const SegBar = memo(function SegBar({ value = 0, lit, lamps = 10, tube: t = 'cyan', small, style }: SegBarProps) {
+export const SegBar = memo(function SegBar({ value = 0, lit, lamps = 10, tube: t = 'cyan', levelFrom, next = 0, small, style }: SegBarProps) {
   const tb = tubeOf(t);
   const on = lit ?? lampsFor(value, lamps);
+  const gold = levelFrom ?? lamps;
   return (
     <View aria-hidden importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={[styles.bar, small && styles.barSmall, style]}>
       {Array.from({ length: lamps }, (_, i) => (
-        <View key={i} style={[styles.lamp, small && styles.lampSmall, i < on ? { backgroundColor: tb.glass, boxShadow: [halo(tb.glass, 5, 0.9)] } : undefined]} />
+        <View
+          key={i}
+          style={[styles.lamp, small && styles.lampSmall, i < on ? (i >= gold ? LEVEL_LAMP : { backgroundColor: tb.glass, boxShadow: [halo(tb.glass, 5, 0.9)] }) : i < on + next ? NEXT_LAMP : undefined]}
+        />
       ))}
     </View>
   );
@@ -49,6 +60,12 @@ export interface StatRowProps {
   /** the number shown, when it is counting up */
   shown?: number;
   tube?: TubeName | Tube;
+  /** the lamps from this one on are gold: lit by levelling up */
+  levelFrom?: number;
+  /** what the next level would light, as faint outlines */
+  next?: number;
+  /** points levelling up added, for a screen reader */
+  bonus?: number;
   small?: boolean;
   /** hide the number: for the very young, the lamps are the rating */
   bare?: boolean;
@@ -56,13 +73,13 @@ export interface StatRowProps {
 }
 
 /** One rating: its name, its lamps and its number. */
-export const StatRow = memo(function StatRow({ label, value, lit, shown, tube: t = 'cyan', small, bare, style }: StatRowProps) {
+export const StatRow = memo(function StatRow({ label, value, lit, shown, tube: t = 'cyan', levelFrom, next, bonus, small, bare, style }: StatRowProps) {
   return (
-    <View accessible accessibilityLabel={`${label} ${value}`} style={[styles.row, small && styles.rowSmall, style]}>
+    <View accessible accessibilityLabel={bonus ? `${label} ${value}, ${bonus} of it from levels` : `${label} ${value}`} style={[styles.row, small && styles.rowSmall, style]}>
       <Print face="bold" size={small ? px(11) : px(12.5)} color="textDim" track={small ? 'normal' : 'wide'} lines={1} style={small ? styles.labelSmall : styles.label}>
         {label}
       </Print>
-      <SegBar value={value} lit={lit} tube={t} small={small} style={styles.grow} />
+      <SegBar value={value} lit={lit} tube={t} levelFrom={levelFrom} next={next} small={small} style={styles.grow} />
       {!bare && (
         <Print face="bold" size={small ? px(12.5) : px(15)} right lines={1} style={small ? styles.numberSmall : styles.number}>
           {String(shown ?? value)}

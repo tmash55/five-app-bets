@@ -418,7 +418,8 @@ export default function Shop() {
     // a uniform is bought to be worn: the squad puts it straight on, as on the Uniforms page
     if (slot.item.kind === 'uniform') wearUniform(slot.item.id);
     const gain = res.gain;
-    after(REVEAL_SOUND_MS, () => playSfx(!gain ? 'sparkle' : gain.isNew ? 'star' : gain.levelAfter > gain.levelBefore ? 'levelUp' : 'sparkle'));
+    // a copy of a player already held plays its own beat in the pop-up, with the level-up sound when it levels up
+    after(REVEAL_SOUND_MS, () => playSfx(!gain ? 'sparkle' : gain.isNew ? 'star' : gain.coins > 0 ? 'coins' : 'sparkle'));
     setBought({ gain });
   };
 

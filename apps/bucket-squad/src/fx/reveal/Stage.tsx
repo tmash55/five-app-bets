@@ -24,19 +24,24 @@ import type { CardProps, Reveal, StageProps } from './types';
 /** what a card's layers are doing: waiting hidden for their turn, playing, or carrying the card back to the row */
 export type StageRole = 'hidden' | 'live' | 'leaving';
 
-/** The values one card's layers move by: its reveal's clock, its glide aside, and its trip back to the row. */
+/**
+ * The values one card's layers move by: its reveal's clock, its glide aside, its trip back to the row, and (for a
+ * copy that levels the player up) its frame upgrading in place, 0 to 1.
+ */
 export interface StageValues {
   clock: SharedValue<number>;
   glide: SharedValue<number>;
   leave: SharedValue<number>;
+  levelUp: SharedValue<number>;
 }
 
-/** A set of stage values, parked: the clock before the card has set off, nothing glided, nothing left. */
+/** A set of stage values, parked: the clock before the card has set off, nothing glided, nothing left, no level up yet. */
 export function useStageValues(): StageValues {
   const clock = useSharedValue(-ARRIVE);
   const glide = useSharedValue(0);
   const leave = useSharedValue(0);
-  return useMemo(() => ({ clock, glide, leave }), [clock, glide, leave]);
+  const levelUp = useSharedValue(0);
+  return useMemo(() => ({ clock, glide, leave, levelUp }), [clock, glide, leave, levelUp]);
 }
 
 /**
@@ -51,6 +56,7 @@ export function parkStage(v: StageValues, reduced: boolean): void {
   v.clock.set(-ARRIVE);
   v.glide.set(reduced ? 1 : 0);
   v.leave.set(0);
+  v.levelUp.set(0);
 }
 
 /** how high a card arcs on its way in (worked out here: a worklet can't call `px`) */
@@ -71,8 +77,13 @@ const Part = memo(function Part({ part: P, stage }: { part: ComponentType<StageP
   return <P {...stage} />;
 });
 
-const CardPart = memo(function CardPart({ part: P, stage, plan }: { part: ComponentType<CardProps>; stage: StageProps; plan: CardPlan }) {
-  const face = useMemo(() => <ArcadeCard player={plan.player} level={plan.level} width={stage.width} shine={plan.rarity === 'epic' || plan.rarity === 'legend'} />, [plan, stage.width]);
+/** The card's face, built once: a level up shows the level it had until its beat upgrades the frame in place. */
+const CardPart = memo(function CardPart({ part: P, stage, plan, levelUp }: { part: ComponentType<CardProps>; stage: StageProps; plan: CardPlan; levelUp: SharedValue<number> }) {
+  const up = plan.kind === 'levelUp';
+  const face = useMemo(
+    () => <ArcadeCard player={plan.player} level={plan.level} levelFrom={up ? plan.levelBefore : undefined} levelUp={up ? levelUp : undefined} width={stage.width} shine={plan.rarity === 'epic' || plan.rarity === 'legend'} />,
+    [plan, stage.width, up, levelUp],
+  );
   return <P {...stage} face={face} />;
 });
 
@@ -152,7 +163,7 @@ export const StagePoint = memo(function StagePoint({ role, reveal, values, lay, 
           <Glow clock={clock} from={reveal.flipAt} rarity={plan.rarity} width={lay.card.width} height={lay.card.height} />
         </View>
         <Animated.View style={[around(lay.card.width, lay.card.height), arrive]}>
-          <CardPart part={reveal.Card} stage={stage} plan={plan} />
+          <CardPart part={reveal.Card} stage={stage} plan={plan} levelUp={values.levelUp} />
         </Animated.View>
         {reveal.Front && (
           <View style={[styles.point, extras]}>

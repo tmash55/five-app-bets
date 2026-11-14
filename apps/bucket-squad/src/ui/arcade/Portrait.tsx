@@ -15,6 +15,7 @@ import { RARITY_LABEL, type PlayerDef } from '@/data/types';
 import { tapFeedback } from '@/fx/feedback';
 import { arcade, fade, night, rarityPaint, tube as tubes } from '@/theme/arcade';
 import { px } from '@/theme/tokens';
+import { LevelFrame } from './LevelFrame';
 import { MIN_FIT_LABEL } from './measure';
 import { Rays, useSvgId } from './Room';
 import { OvrBox } from './Surface';
@@ -73,7 +74,7 @@ export const Portrait = memo(function Portrait({ player, level, onPress, style }
   const word = RARITY_LABEL[player.rarity].toUpperCase();
 
   const face = (
-    <View onLayout={onLayout} style={[styles.box, { backgroundColor: found ? rp.halo[2] : night.plate }, onPress ? styles.fill : style]}>
+    <View onLayout={onLayout} style={[styles.box, styles.fill, { backgroundColor: found ? rp.halo[2] : night.plate }]}>
       {w > 0 && (
         <>
           {found && <Backlight colors={rp.halo} />}
@@ -111,7 +112,14 @@ export const Portrait = memo(function Portrait({ player, level, onPress, style }
       )}
     </View>
   );
-  if (!onPress) return face;
+  // the level's frame, over the picture and round it: the box clips what is inside it, not what stands round it
+  const framed = (
+    <View style={[styles.fill, onPress ? undefined : style]}>
+      {face}
+      {found && w > 0 && <LevelFrame level={level} glow={tb} width={w} height={h} round={arcade.rButton} rim={0} basis={Math.min(w, h)} />}
+    </View>
+  );
+  if (!onPress) return framed;
   return (
     <Pressable
       accessibilityRole="button"
@@ -121,7 +129,7 @@ export const Portrait = memo(function Portrait({ player, level, onPress, style }
         onPress();
       }}
       style={({ pressed }) => [styles.fill, pressed && styles.pressed, style]}>
-      {face}
+      {framed}
     </Pressable>
   );
 });

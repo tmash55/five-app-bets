@@ -1,7 +1,7 @@
 import { PLAYERS, mustPlayer, playerOverall } from '@/data/roster';
 import { RARITIES } from '@/data/types';
 import { RATING_KEYS } from '@/game/sim/ratings';
-import { bestRarity, bestStats, cardNumber, demoResult, gainLabel, parseDemo, planPack, teamCount } from '../plan';
+import { bestRarity, bestStats, cardNumber, demoResult, gainLabel, lampPlan, parseDemo, parseHave, planCard, planPack, teamCount } from '../plan';
 import { ARRIVE, REVEAL_TIMES, TEAR, tearLength } from '../times';
 
 const first = PLAYERS[0];
@@ -93,6 +93,60 @@ describe('the demo pack', () => {
   it('takes the next player when a rarity is asked for twice', () => {
     const res = demoResult(['rare', 'rare'], {});
     expect(res.cards[0].playerId).not.toBe(res.cards[1].playerId);
+  });
+
+  it('reads how many copies of each card were held, 0 for the rest', () => {
+    expect(parseHave('0,5,10', 3)).toEqual([0, 5, 10]);
+    expect(parseHave('3', 3)).toEqual([3, 0, 0]);
+    expect(parseHave('x,-2,4.7', 3)).toEqual([0, 0, 4]);
+    expect(parseHave(undefined, 2)).toEqual([0, 0]);
+  });
+
+  it('makes a card held already one more copy, which can level the player up', () => {
+    const res = demoResult(['common', 'epic', 'rare'], {}, [5, 10, 0]);
+    expect(res.cards[0]).toMatchObject({ isNew: false, levelBefore: 3, levelAfter: 3, coins: 0 });
+    expect(res.cards[1]).toMatchObject({ isNew: false, levelBefore: 4, levelAfter: 5, coins: 0 });
+    expect(res.cards[2]).toMatchObject({ isNew: true });
+    expect(res.owned[res.cards[0].playerId]).toBe(6);
+    expect(res.owned[res.cards[1].playerId]).toBe(11);
+    expect(res.coins).toBe(0);
+  });
+});
+
+describe('planning a copy', () => {
+  const [copy, up] = planPack(demoResult(['common', 'epic'], {}, [5, 10]));
+
+  it('keeps the level and fills the copies bar for a copy that does not level up', () => {
+    expect(copy.kind).toBe('copy');
+    expect(copy.levelBefore).toBe(copy.level);
+    expect(copy.overallBefore).toBe(copy.overall);
+    expect(copy.progressBefore).toMatchObject({ level: 3, have: 1, need: 3 });
+    expect(copy.progress).toMatchObject({ level: 3, have: 2, need: 3 });
+    expect(lampPlan(copy).gained).toBe(0);
+  });
+
+  it('starts a level up from the level before, and counts the gold lamps it lights', () => {
+    expect(up.kind).toBe('levelUp');
+    expect(up.levelBefore).toBe(4);
+    expect(up.level).toBe(5);
+    expect(up.overallBefore).toBe(playerOverall(up.player, 4));
+    expect(up.overall).toBe(playerOverall(up.player, 5));
+    expect(up.progressBefore).toMatchObject({ level: 4, have: 3, need: 4 });
+    const lp = lampPlan(up);
+    up.lamps.forEach((l, i) => {
+      expect(l.lit).toBeGreaterThanOrEqual(l.before);
+      expect(l.before).toBeGreaterThanOrEqual(l.levelFrom);
+      expect(lp.each[i] + lp.gain[i]).toBe(l.lit);
+    });
+    expect(lp.gained).toBe(up.lamps.reduce((n, l) => n + l.lit - l.before, 0));
+  });
+
+  it('treats a new player as already at its level', () => {
+    const fresh = planCard({ playerId: PLAYERS[0].id, isNew: true, levelBefore: 0, levelAfter: 1, coins: 0 }, { [PLAYERS[0].id]: 1 });
+    expect(fresh.kind).toBe('new');
+    expect(fresh.levelBefore).toBe(1);
+    expect(lampPlan(fresh).gained).toBe(0);
+    fresh.lamps.forEach((l) => expect(l.levelFrom).toBe(l.lit));
   });
 });
 

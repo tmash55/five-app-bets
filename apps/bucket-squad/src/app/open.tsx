@@ -8,7 +8,12 @@
  * tap once it is finished goes on.
  *
  * Development builds only: `/open?pack=allstar&demo=common,rare,epic,legend` plays those reveals with the first
- * player of each rarity, all new, without opening a pack or touching the save. It is how they are filmed.
+ * player of each rarity, all new, without opening a pack or touching the save. It is how they are filmed. Add
+ * `&have=0,3,1,0` to pretend that many copies of each were held already, to film the copies' beats and level ups.
+ *
+ * A copy of a player already held gets a beat once its words are in: its copies bar lights one more lamp, and a
+ * copy that fills the bar levels the player up: the card's frame upgrades in place, the level's gold rating lamps
+ * light one by one and the overall counts up, with the level-up sound. A tap during it jumps to its end.
  */
 
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -20,17 +25,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { duckMusic, playSfx, warmSounds, type SfxName } from '@/audio/sound';
 import { buzz } from '@/fx/feedback';
 import { REVEAL_SOUNDS, revealFor, type Cue, type Pulse, type Reveal } from '@/fx/reveal';
-import { CardInfo, lampPlan } from '@/fx/reveal/CardInfo';
+import { CardInfo, lampPlan, type Beat } from '@/fx/reveal/CardInfo';
 import { openLayout } from '@/fx/reveal/layout';
 import { flashAt } from '@/fx/reveal/motion';
-import { bestRarity, demoResult, parseDemo, planPack, type CardPlan } from '@/fx/reveal/plan';
+import { bestRarity, demoResult, parseDemo, parseHave, planPack, type CardPlan } from '@/fx/reveal/plan';
 import { preloadArt } from '@/fx/reveal/preload';
 import { Sealed } from '@/fx/reveal/Sealed';
 import { Slots, type SlotState } from '@/fx/reveal/Slots';
 import { STAGE_SETS, StageOver, StagePoint, StageRoom, parkStage, useStageValues, type StageRole, type StageValues } from '@/fx/reveal/Stage';
 import { Summary } from '@/fx/reveal/Summary';
 import { Tear, landings } from '@/fx/reveal/Tear';
-import { ARRIVE, GLIDE, INFO, LEAVE, TEAR, tearLength } from '@/fx/reveal/times';
+import { ARRIVE, BEAT, GLIDE, INFO, LEAVE, TEAR, tearLength } from '@/fx/reveal/times';
 import { packById, type PackDef, type PackResult } from '@/meta/packs';
 import { useSave } from '@/state/save';
 import { night, rarityPaint, tube } from '@/theme/arcade';
@@ -72,7 +77,7 @@ function fire(cue: Cue): void {
 }
 
 export default function OpenPack() {
-  const params = useLocalSearchParams<{ pack?: string; first?: string; demo?: string }>();
+  const params = useLocalSearchParams<{ pack?: string; first?: string; demo?: string; have?: string }>();
   const packId = params.pack ?? 'playground';
   const first = params.first === '1';
   // a store build ignores the demo entirely
@@ -97,6 +102,10 @@ export default function OpenPack() {
   const [lamps, setLamps] = useState(0);
   const [pips, setPips] = useState(0);
   const [counting, setCounting] = useState(false);
+  const [beat, setBeat] = useState<Beat>(0);
+  const [gained, setGained] = useState(0);
+  /** the card whose level-up sound has played: a tap past the beat still plays it, once */
+  const leveled = useRef<number | null>(null);
   const [leaving, setLeaving] = useState<number | null>(null);
   const [paid, setPaid] = useState(true);
   /** the cards whose reveals are on the stage: the one playing, the next two waiting hidden, and one going back to the row */
@@ -170,6 +179,8 @@ export default function OpenPack() {
     setLamps(0);
     setPips(0);
     setCounting(false);
+    setBeat(0);
+    setGained(0);
     duckMusic(1);
     infoAlpha.set(1);
     if (!reduced) valuesOf(i).glide.set(withTiming(1, { duration: GLIDE, easing: Easing.inOut(Easing.cubic) }));
@@ -180,7 +191,6 @@ export default function OpenPack() {
     after(INFO.tag, () => {
       if (!ok()) return;
       if (p.gain.coins > 0) playSfx('coins');
-      else if (!p.gain.isNew && p.gain.levelAfter > p.gain.levelBefore) playSfx('levelUp');
     });
     after(INFO.sign, () => ok() && playSfx('neonOn', 0.6));
     after(INFO.ovr, () => ok() && setCounting(true));
@@ -199,7 +209,40 @@ export default function OpenPack() {
         playSfx('lampTick');
       });
     }
-    after(pipsAt + p.team.have * INFO.pipGap, () => {
+    // a copy's beat: one more lamp on its copies bar, and a level up when that fills it
+    const beatAt = pipsAt + p.team.have * INFO.pipGap + BEAT.wait;
+    let readyAt = pipsAt + p.team.have * INFO.pipGap;
+    if (p.kind === 'copy' || p.kind === 'levelUp') {
+      after(beatAt, () => {
+        if (!ok()) return;
+        setBeat(1);
+        playSfx('lampTick');
+        if (p.kind === 'copy') playSfx('sparkle', 0.55);
+        buzz('light');
+      });
+      readyAt = beatAt + BEAT.copy;
+    }
+    if (p.kind === 'levelUp') {
+      const upAt = beatAt + BEAT.fill;
+      after(upAt, () => {
+        if (!ok()) return;
+        setBeat(2);
+        leveled.current = i;
+        playSfx('levelUp');
+        buzz('success');
+        // with less motion asked for, the new frame only fades in (LevelFrame keeps it still), and it still plays
+        valuesOf(i).levelUp.set(withTiming(1, { duration: BEAT.frame, easing: Easing.out(Easing.cubic), reduceMotion: ReduceMotion.Never }));
+      });
+      for (let k = 1; k <= lp.gained; k++) {
+        after(upAt + BEAT.lamps + (k - 1) * BEAT.lampGap, () => {
+          if (!ok()) return;
+          setGained(k);
+          playSfx('lampTick', 0.6 + (0.4 * k) / lp.gained);
+        });
+      }
+      readyAt = upAt + BEAT.lamps + lp.gained * BEAT.lampGap + BEAT.hold;
+    }
+    after(readyAt, () => {
       if (!ok()) return;
       setStep('ready');
       prepare(i + 1, plans.length);
@@ -286,9 +329,21 @@ export default function OpenPack() {
     ++run.current;
     info.set(INFO_END);
     valuesOf(s.index).glide.set(1);
-    setLamps(lampPlan(s.plan).total);
+    const lp = lampPlan(s.plan);
+    setLamps(lp.total);
     setPips(s.plan.team.have);
     setCounting(true);
+    // a copy's beat to its end: the copies lamp lit, and a level up's frame, lamps and sound
+    if (s.plan.kind === 'copy') setBeat(1);
+    if (s.plan.kind === 'levelUp') {
+      setBeat(2);
+      setGained(lp.gained);
+      valuesOf(s.index).levelUp.set(1);
+      if (leveled.current !== s.index) {
+        leveled.current = s.index;
+        playSfx('levelUp');
+      }
+    }
     setStep('ready');
     prepare(s.index + 1, plans.length);
   };
@@ -351,9 +406,10 @@ export default function OpenPack() {
 
   const tear = () => {
     if (available <= 0) return;
-    const res = demo ? demoResult(demo, owned) : openPack(packId);
+    const res = demo ? demoResult(demo, owned, parseHave(params.have, demo.length)) : openPack(packId);
     if (!res || res.cards.length === 0) return;
     const list = planPack(res);
+    leveled.current = null;
     setResult(res);
     setPaid(res.coins === 0 || !!demo);
     setInfoFor(null);
@@ -485,7 +541,7 @@ export default function OpenPack() {
           {stage === 'sealed' && <Sealed def={def} lay={lay} count={available} onShop={() => router.dismissTo('/packs')} />}
           {stage === 'cards' && shownInfo && infoFor !== null && (
             <Animated.View pointerEvents="box-none" style={[styles.info, { left: lay.info.left, top: lay.info.top, width: lay.info.width, height: lay.info.height }, infoStyle]}>
-              <CardInfo key={infoFor} plan={shownInfo} clock={info} lamps={lamps} pips={pips} counting={counting} last={infoFor + 1 >= plans.length} onNext={onNext} width={lay.info.width} />
+              <CardInfo key={infoFor} plan={shownInfo} clock={info} lamps={lamps} pips={pips} counting={counting} beat={beat} gained={gained} last={infoFor + 1 >= plans.length} onNext={onNext} width={lay.info.width} />
             </Animated.View>
           )}
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.flash, flashStyle]} />
