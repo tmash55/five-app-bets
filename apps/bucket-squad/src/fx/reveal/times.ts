@@ -56,6 +56,12 @@ export function tearLength(cards: number): number {
 /** with reduced motion the pack fades away and the cards are simply there */
 export const TEAR_FADE = 500;
 
+/**
+ * A copy's beat, once what it says is in: a pause, its copies lamp lighting, and for a level up the bar filling,
+ * the frame upgrading, then the level's gold rating lamps one by one and a moment to see it.
+ */
+export const BEAT = { wait: 160, copy: 420, fill: 300, frame: 560, lamps: 380, lampGap: 110, hold: 360 } as const;
+
 /** the right-hand side coming in, piece by piece, once a card is face-up */
 export const INFO = {
   tag: 120,

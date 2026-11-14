@@ -3,6 +3,10 @@
  * level up), the rarity as a sign that flickers on, the card's number, the name and overall, the team and
  * role, the blurb, the three best ratings as lamps that light one at a time, how much of the team the child
  * now has, and the yellow button on to the next card.
+ *
+ * A copy of a player the child already had gets a beat of its own once everything is in: its copies bar lights one
+ * more lamp, and when that fills the bar the player levels up: the level lamp lights, the card's frame upgrades,
+ * the rating lamps the level lit come on in gold one by one and the overall counts up to its new number.
  */
 
 import { memo, useState } from 'react';
@@ -10,18 +14,21 @@ import { StyleSheet, View, type LayoutChangeEvent, type StyleProp, type ViewStyl
 import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 
 import { RARITIES, RARITY_LABEL } from '@/data/types';
-import { neonText, rarityPaint, track, tube } from '@/theme/arcade';
+import { MAX_LEVEL } from '@/data/roster';
+import { levelPaint, neonText, rarityPaint, track, tube } from '@/theme/arcade';
 import { px } from '@/theme/tokens';
 import { useCountUp } from '@/ui/Bits';
 import { GoldButton } from '@/ui/arcade/Buttons';
 import { Gems } from '@/ui/arcade/Card';
 import { Coin } from '@/ui/arcade/LineIcon';
 import { MIN_FIT_LABEL, fitPerson, fitTo, widthOf } from '@/ui/arcade/measure';
-import { Pips, SegBar, StatRow, lampsFor } from '@/ui/arcade/SegBar';
+import type { Beat } from '@/ui/arcade/levels';
+import { Bump } from '@/ui/arcade/Motion';
+import { Pips, SegBar, StatRow } from '@/ui/arcade/SegBar';
 import { Chip, OvrBox, Tag } from '@/ui/arcade/Surface';
 import { Glow, Print } from '@/ui/arcade/Type';
 import { backOut, easeOut, flicker, span } from './motion';
-import type { CardPlan } from './plan';
+import { lampPlan, type CardPlan } from './plan';
 import { INFO } from './times';
 
 /**
@@ -117,16 +124,47 @@ function signSize(plan: CardPlan, number: string, width: number, sides: { tag: n
 const OVR_W = px(62);
 const GAP = px(12);
 
-/** How many lamps each of the three ratings lights, and where each row's lamps start in the count. */
-export function lampPlan(plan: CardPlan): { each: number[]; from: number[]; total: number } {
-  const each = plan.stats.map((s) => lampsFor(s.value));
-  const from: number[] = [];
-  let n = 0;
-  for (const k of each) {
-    from.push(n);
-    n += k;
-  }
-  return { each, from, total: n };
+export { lampPlan, type LampPlan } from './plan';
+export type { Beat } from '@/ui/arcade/levels';
+
+const LEVEL_TUBE = tube[levelPaint.tube];
+const LEVEL_PIP = px(8);
+
+/**
+ * The side under the overall for a copy of a player the child had: the level as five gold lamps and the copies bar
+ * toward the next one. The beat lights the bar's new lamp; a level up then lights the next level lamp and the bar
+ * starts again, empty, toward the level after.
+ */
+function CopySide({ plan, beat }: { plan: CardPlan; beat: Beat }) {
+  const up = plan.kind === 'levelUp';
+  const leveled = up && beat >= 2;
+  const level = leveled ? plan.level : plan.levelBefore;
+  const bar = leveled ? plan.progress : plan.progressBefore;
+  const lit = leveled ? 0 : Math.min(bar.need, bar.have + (beat >= 1 ? 1 : 0));
+  const maxed = leveled ? plan.progress.maxed : bar.maxed;
+  const say = leveled ? `Level up! Level ${plan.level}` : `${lit} of ${bar.need} copies to level ${level + 1}`;
+  return (
+    <View accessible accessibilityLabel={say} style={styles.level}>
+      <Bump beat={leveled ? 1 : 0} amount={0.3}>
+        {leveled ? (
+          <Glow face="bold" size="micro" tube={levelPaint.tube} track="wider">{`LV ${level}`}</Glow>
+        ) : (
+          <Print face="bold" size="micro" color="textDim" track="wider">{`LV ${level}`}</Print>
+        )}
+      </Bump>
+      <Pips have={level} of={MAX_LEVEL} tube={levelPaint.tube} size={LEVEL_PIP} style={styles.levelPips} />
+      {maxed ? (
+        <Print face="bold" size="micro" color={LEVEL_TUBE.glass} track="normal" room={OVR_W} least={MIN_FIT_LABEL}>
+          TOP LEVEL
+        </Print>
+      ) : (
+        <Bump beat={beat >= 1 ? 1 : 0} amount={0.18} style={styles.levelBarBox}>
+          <SegBar lamps={bar.need} lit={lit} tube="green" small style={styles.levelBar} />
+          <Print face="bold" size="micro" color={beat >= 1 && !leveled ? tube.green.soft : 'textDim'} track="normal">{`${lit} OF ${bar.need}`}</Print>
+        </Bump>
+      )}
+    </View>
+  );
 }
 
 export interface CardInfoProps {
@@ -139,18 +177,23 @@ export interface CardInfoProps {
   pips: number;
   /** the overall rating has started counting up */
   counting: boolean;
+  /** a copy's beat: its copies lamp, then a level up */
+  beat: Beat;
+  /** the gold lamps a level up has lit so far, counted across the three rows */
+  gained: number;
   last: boolean;
   onNext: () => void;
   width: number;
 }
 
-export const CardInfo = memo(function CardInfo({ plan, clock, lamps, pips, counting, last, onNext, width }: CardInfoProps) {
+export const CardInfo = memo(function CardInfo({ plan, clock, lamps, pips, counting, beat, gained, last, onNext, width }: CardInfoProps) {
   const { player, rarity, gain } = plan;
   const tb = rarityPaint[rarity].tube;
   // a little air between the name and the rating box, so a long name never seems to touch it
   const room = width - OVR_W - GAP - px(8);
   const name = fitPerson(player.name.toUpperCase(), 'display', px(37), room, track.close, player.short?.toUpperCase());
-  const shownOvr = useCountUp(counting ? plan.overall : 0, 700);
+  // a level up counts to the old overall first, then on to the new one in its beat
+  const shownOvr = useCountUp(counting ? (plan.kind === 'levelUp' && beat < 2 ? plan.overallBefore : plan.overall) : 0, 700);
   const lp = lampPlan(plan);
   const nick = player.nickname ? ` · “${player.nickname.toUpperCase()}”` : '';
   const copy = !gain.isNew;
@@ -208,10 +251,7 @@ export const CardInfo = memo(function CardInfo({ plan, clock, lamps, pips, count
                   <Print face="bold" size="small" color={tube.gold.glass} track="normal">{`+${gain.coins}`}</Print>
                 </View>
               ) : (
-                <>
-                  <Print face="bold" size="micro" color="textDim" track="wider">{`LV ${plan.level}`}</Print>
-                  {!plan.progress.maxed && <SegBar lamps={plan.progress.need} lit={plan.progress.have} tube="green" small style={styles.levelBar} />}
-                </>
+                <CopySide plan={plan} beat={beat} />
               )}
             </Piece>
           )}
@@ -220,9 +260,14 @@ export const CardInfo = memo(function CardInfo({ plan, clock, lamps, pips, count
 
       <Piece clock={clock} at={INFO.stats} style={styles.stats}>
         {plan.stats.map((s, i) => {
-          const lit = Math.max(0, Math.min(lp.each[i], lamps - lp.from[i]));
-          const full = lit >= lp.each[i];
-          return <StatRow key={s.key} label={s.label} value={s.value} lit={lit} shown={full ? s.value : Math.round((s.value * lit) / Math.max(1, lp.each[i]))} />;
+          const row = plan.lamps[i];
+          const first = Math.max(0, Math.min(lp.each[i], lamps - lp.from[i]));
+          const more = Math.max(0, Math.min(lp.gain[i], gained - lp.gainFrom[i]));
+          const full = first >= lp.each[i];
+          // the number reaches the old rating with the first lamps, and its new one once the level up's lamps are in
+          const done = full && (plan.kind !== 'levelUp' || (beat >= 2 && more >= lp.gain[i]));
+          const shown = done ? s.value : full ? row.valueBefore : Math.round((row.valueBefore * first) / Math.max(1, lp.each[i]));
+          return <StatRow key={s.key} label={s.label} value={s.value} lit={first + more} levelFrom={row.levelFrom} bonus={s.value - plan.player.ratings[s.key]} shown={shown} />;
         })}
       </Piece>
 
@@ -289,6 +334,13 @@ const styles = StyleSheet.create({
   },
   levelBar: {
     width: OVR_W,
+  },
+  levelBarBox: {
+    alignItems: 'center',
+    gap: px(2),
+  },
+  levelPips: {
+    gap: px(4),
   },
   coins: {
     flexDirection: 'row',
