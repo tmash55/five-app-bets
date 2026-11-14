@@ -4,18 +4,19 @@ import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { MAX_LEVEL, boosted, levelBonus, playerById, teamById } from '@/data/roster';
+import { MAX_LEVEL, playerById, teamById } from '@/data/roster';
 import { RARITY_LABEL, type PlayerDef } from '@/data/types';
 import { RATING_KEYS } from '@/game/sim/ratings';
 import { levelProgress } from '@/meta/collection';
 import { useSave } from '@/state/save';
-import { arcade, blend, neonText, night, rarityPaint, track, tube as tubes, type Tube } from '@/theme/arcade';
+import { arcade, blend, levelPaint, neonText, night, rarityPaint, track, tube as tubes, type Tube } from '@/theme/arcade';
 import { px, size as sizes, space } from '@/theme/tokens';
 import { ArcadeScreen, useArcadeBody } from '@/ui/arcade/ArcadeScreen';
 import { GhostButton, GoldButton } from '@/ui/arcade/Buttons';
 import { ArcadeCard, Gems } from '@/ui/arcade/Card';
 import { LineIcon, type LineIconName } from '@/ui/arcade/LineIcon';
-import { SPARE } from '@/ui/arcade/fitText';
+import { SPARE, firstThatFits } from '@/ui/arcade/fitText';
+import { allRatingLamps, copyWords, frameTier, nextLevel } from '@/ui/arcade/levels';
 import { fitPerson, widthOf } from '@/ui/arcade/measure';
 import { Bloom, Rays } from '@/ui/arcade/Room';
 import { SegBar, StatRow } from '@/ui/arcade/SegBar';
@@ -36,6 +37,26 @@ const ROOMY_COLUMN = px(210);
 /** A team's colour as a tube, so its name can be lit like the rest of the room. */
 function teamTube(color: string): Tube {
   return { glass: color, tint: blend(color, night.white, 0.86), soft: blend(color, night.white, 0.45) };
+}
+
+const LEVEL = tubes[levelPaint.tube];
+/** the room a top-level card's crest takes above it */
+const CREST_ROOM = px(22);
+/** the box beside the level and copies rows that says what the next level brings */
+const NEXT_GAP = px(12);
+
+/** What the next level brings, in two short lines: the piece of frame it adds and the overall it lifts to. */
+function NextBox({ lines, width }: { lines: readonly [string, string]; width: number }) {
+  return (
+    <View style={[styles.next, { width }]}>
+      <Print face="bold" size="tiny" color={LEVEL.glass} track="normal" lines={1}>
+        {lines[0]}
+      </Print>
+      <Print face="bold" size="tiny" color="textDim" track="normal" lines={1}>
+        {lines[1]}
+      </Print>
+    </View>
+  );
 }
 
 /** One way to find a player still missing: an icon and a line. */
@@ -61,16 +82,21 @@ function Detail({ player }: { player: PlayerDef }) {
   const have = copies > 0;
   const rp = rarityPaint[player.rarity];
   const tb = tubes[rp.tube];
-  const ratings = boosted(player.ratings, levelBonus(Math.max(1, prog.level)));
-  const best = RATING_KEYS.reduce((a, k) => (ratings[k] > ratings[a] ? k : a), RATING_KEYS[0]);
+  // each rating's lamps: the ones the player was found with, the gold ones levelling up lit, and the next level's outlines
+  const lamps = allRatingLamps(player.ratings, Math.max(1, prog.level));
+  const best = RATING_KEYS.reduce((a, k) => (lamps[k].value > lamps[a].value ? k : a), RATING_KEYS[0]);
+  const words = copyWords(copies);
+  const coming = nextLevel(player, prog.level);
   const stop = have ? null : tourStop(player.id);
 
   useEffect(() => {
     markSeen(player.id);
   }, [markSeen, player.id]);
 
-  // the card as tall as the page lets it be, and never more than about a third of the width
-  const cardW = Math.floor(Math.min(px(300), body.width * 0.36, (body.height - px(18)) / sizes.cardRatio));
+  // the card as tall as the page lets it be, and never more than about a third of the width; a top-level card keeps
+  // room above it for its crest
+  const crest = have && frameTier(prog.level).crest ? CREST_ROOM : 0;
+  const cardW = Math.floor(Math.min(px(300), body.width * 0.36, (body.height - px(18) - crest) / sizes.cardRatio));
   const cardH = Math.round(cardW * sizes.cardRatio);
   const panelW = Math.min(PANEL_MOST, body.width - cardW - SPLIT);
   const inside = panelW - PAD * 2 - arcade.outline * 2;
@@ -78,17 +104,30 @@ function Detail({ player }: { player: PlayerDef }) {
   const small = columnW < ROOMY_COLUMN;
   const nameSize = Math.min(px(30), Math.max(px(20), Math.round(panelW * 0.066)));
   const name = fitPerson(player.name.toUpperCase(), 'display', nameSize, inside, 0, player.short?.toUpperCase());
-  const left = prog.need - prog.have;
   const raysSize = cardH * 1.7;
-  // the level box's columns: the names on the left, the words on the right, and the bars sharing what is between
-  const copiesWords = `${left} MORE ${left === 1 ? 'COPY' : 'COPIES'}`;
+  // the level box's columns: the names on the left, the words on the right, and the bars sharing what is between;
+  // beside them, what the next level brings, in as few words as the room asks for
+  const wellInside = inside - px(14) * 2;
+  const nextW = (t: readonly string[]) => Math.ceil(Math.max(...t.map((x) => widthOf(x, 'bold', neonText.tiny, track.normal))) / SPARE);
+  const nextChoices: (readonly [string, string])[] = coming
+    ? [
+        [`LV ${coming.level} · ${coming.frame.name}`, `OVR ${coming.overallNow} → ${coming.overall} · +${coming.bonus} ALL`],
+        [`LV ${coming.level} · ${coming.frame.name}`, `OVR ${coming.overallNow} → ${coming.overall}`],
+        [`NEXT: LV ${coming.level}`, `OVR ${coming.overall}`],
+      ]
+    : [];
   const levelLabelW = Math.ceil(Math.max(widthOf('LEVEL', 'bold', neonText.tiny, track.wide), widthOf('COPIES', 'bold', neonText.tiny, track.wide)) / SPARE);
-  const levelWordsW = Math.ceil(Math.max(widthOf(`${MAX_LEVEL} OF ${MAX_LEVEL}`, 'display', neonText.body), prog.maxed ? 0 : widthOf(copiesWords, 'bold', neonText.tiny, track.normal)) / SPARE);
+  const copiesText = firstThatFits([words.left, `${prog.need - prog.have} MORE`, words.count], 'bold', neonText.tiny, wellInside * 0.22, 'normal');
+  const levelWordsW = Math.ceil(Math.max(widthOf(`${MAX_LEVEL} OF ${MAX_LEVEL}`, 'display', neonText.body), prog.maxed ? 0 : widthOf(copiesText, 'bold', neonText.tiny, track.normal)) / SPARE);
+  // the level rows keep at least this much bar; the next level's box takes what is left, or its shorter words
+  const barLeast = px(70);
+  const nextRoom = wellInside - levelLabelW - levelWordsW - barLeast - px(12) * 2 - NEXT_GAP;
+  const nextLines = nextChoices.find((c) => nextW(c) <= nextRoom) ?? null;
 
   return (
     <ArcadeScreen title={team.name.toUpperCase()} tube={teamTube(teamLine(team))}>
       <View style={styles.row}>
-        <View style={[styles.stage, { width: cardW, height: cardH }]}>
+        <View style={[styles.stage, { width: cardW, height: cardH, marginTop: crest }]}>
           {/* the card's own light on the wall behind it, and rays fanning out from it like a prize machine's back */}
           <Bloom size={raysSize} color={have ? tb.glass : night.lineLit} alpha={have ? 0.42 : 0.2} style={{ position: 'absolute', left: cardW / 2 - raysSize / 2, top: cardH / 2 - raysSize / 2 }} />
           <Rays size={raysSize} color={have ? tb.soft : night.lineLit} alpha={have ? 0.3 : 0.12} count={24} fadeAt={[0.42, 1]} style={{ position: 'absolute', left: cardW / 2 - raysSize / 2, top: cardH / 2 - raysSize / 2 }} />
@@ -121,11 +160,24 @@ function Detail({ player }: { player: PlayerDef }) {
               </Print>
               <View style={[styles.ratings, { columnGap: space.lg }]}>
                 {RATING_KEYS.map((k) => (
-                  <StatRow key={k} label={ratingLabel(k, small)} value={ratings[k]} tube={k === best ? 'pink' : 'cyan'} small={small} style={{ width: columnW }} />
+                  <StatRow
+                    key={k}
+                    label={ratingLabel(k, small)}
+                    value={lamps[k].value}
+                    lit={lamps[k].lit}
+                    levelFrom={lamps[k].levelFrom}
+                    next={lamps[k].next}
+                    bonus={lamps[k].bonus}
+                    tube={k === best ? 'pink' : 'cyan'}
+                    small={small}
+                    style={{ width: columnW }}
+                  />
                 ))}
               </View>
-              {/* two rows on one grid: the level as five lamps and the copies to the next one, their bars starting and ending together */}
-              <Well style={styles.level}>
+              {/* two rows on one grid: the level as five lamps and the copies to the next one, their bars starting and ending
+                  together; beside them what the next level brings (its gold outlines are on the rating lamps above) */}
+              <Well style={styles.levelWell}>
+                <View style={styles.level}>
                 <View accessible accessibilityLabel={`Level ${prog.level} of ${MAX_LEVEL}`} style={styles.levelRow}>
                   <Print face="bold" size="tiny" color="textDim" track="wide" style={{ width: levelLabelW }}>
                     LEVEL
@@ -140,14 +192,20 @@ function Detail({ player }: { player: PlayerDef }) {
                     Top level! Extra copies turn into coins.
                   </Print>
                 ) : (
-                  <View accessible accessibilityLabel={`${left} more ${left === 1 ? 'copy' : 'copies'} to level ${prog.level + 1}`} style={styles.levelRow}>
+                  <View accessible accessibilityLabel={words.say} style={styles.levelRow}>
                     <Print face="bold" size="tiny" color="textDim" track="wide" style={{ width: levelLabelW }}>
                       COPIES
                     </Print>
                     <SegBar lit={prog.have} lamps={prog.need} tube="cyan" small style={styles.grow} />
                     <Print face="bold" size="tiny" color="textDim" track="normal" right style={{ width: levelWordsW }}>
-                      {copiesWords}
+                      {copiesText}
                     </Print>
+                  </View>
+                )}
+                </View>
+                {coming && nextLines && (
+                  <View accessible accessibilityLabel={`Level ${coming.level} adds ${coming.frame.name.toLowerCase()} and ${coming.bonus} to every rating: ${coming.overall} overall`} style={styles.nextWrap}>
+                    <NextBox lines={nextLines} width={nextW(nextLines)} />
                   </View>
                 )}
               </Well>
@@ -225,9 +283,25 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     rowGap: px(6),
   },
-  level: {
-    gap: px(6),
+  levelWell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: NEXT_GAP,
     paddingVertical: px(8),
+  },
+  level: {
+    flex: 1,
+    gap: px(6),
+  },
+  nextWrap: {
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+    paddingLeft: NEXT_GAP,
+    borderLeftWidth: arcade.hairline,
+    borderLeftColor: night.line,
+  },
+  next: {
+    gap: px(2),
   },
   levelRow: {
     flexDirection: 'row',

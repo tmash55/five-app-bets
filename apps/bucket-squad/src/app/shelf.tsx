@@ -8,7 +8,7 @@ import { useRouter } from 'expo-router';
 import { Fragment, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { LEAGUES, MAX_LEVEL, PLAYERS, boosted, byValue, leagueOf, leagueTeams, levelBonus, playerOverall, teamById } from '@/data/roster';
+import { LEAGUES, MAX_LEVEL, PLAYERS, byValue, leagueOf, leagueTeams, playerOverall, teamById } from '@/data/roster';
 import type { PlayerDef, TeamDef } from '@/data/types';
 import { RATING_KEYS } from '@/game/sim/ratings';
 import { SHELF_SORTS, countOwned, levelOf, levelProgress, sortShelf, type Owned, type ShelfSort } from '@/meta/collection';
@@ -27,6 +27,7 @@ import { MIN_FIT_LABEL, fitPerson, widthOf } from '@/ui/arcade/measure';
 import { Portrait } from '@/ui/arcade/Portrait';
 import { Meter, Pips, StatRow } from '@/ui/arcade/SegBar';
 import { Chip, NeonPanel, Well, teamLine } from '@/ui/arcade/Surface';
+import { allRatingLamps } from '@/ui/arcade/levels';
 import { ratingLabel } from '@/ui/arcade/ratingLabel';
 import { Print } from '@/ui/arcade/Type';
 import { UniformsButton } from '@/ui/arcade/UniformLinks';
@@ -156,8 +157,9 @@ function Detail({ player, width, height }: { player: PlayerDef; width: number; h
   const inside = width - PANEL_PAD * 2 - arcade.outline * 2;
   const nameSize = Math.min(px(26), Math.max(px(17), Math.round(width * 0.086)));
   const name = fitPerson(player.name.toUpperCase(), 'display', nameSize, inside, 0, player.short?.toUpperCase());
-  const ratings = boosted(player.ratings, levelBonus(Math.max(1, level)));
-  const best = RATING_KEYS.reduce((a, k) => (ratings[k] > ratings[a] ? k : a), RATING_KEYS[0]);
+  // the lamps levelling up lit are gold
+  const lamps = allRatingLamps(player.ratings, Math.max(1, level));
+  const best = RATING_KEYS.reduce((a, k) => (lamps[k].value > lamps[a].value ? k : a), RATING_KEYS[0]);
   const stop = found ? null : tourStop(player.id);
   const teamWords = fitText(`${team.name} · ${player.role}`.toUpperCase(), 'bold', small ? neonText.tiny : neonText.small, inside, 'wide');
   const open = () => router.push({ pathname: '/player/[id]', params: { id: player.id } });
@@ -176,7 +178,17 @@ function Detail({ player, width, height }: { player: PlayerDef; width: number; h
       {found ? (
         <View style={[styles.stats, !small && styles.statsWide]}>
           {RATING_KEYS.map((k) => (
-            <StatRow key={k} label={ratingLabel(k, small)} value={ratings[k]} tube={k === best ? 'pink' : 'cyan'} small={small} style={{ height: small ? ROW_SMALL : ROW }} />
+            <StatRow
+              key={k}
+              label={ratingLabel(k, small)}
+              value={lamps[k].value}
+              lit={lamps[k].lit}
+              levelFrom={lamps[k].levelFrom}
+              bonus={lamps[k].bonus}
+              tube={k === best ? 'pink' : 'cyan'}
+              small={small}
+              style={{ height: small ? ROW_SMALL : ROW }}
+            />
           ))}
           <LevelLine copies={copies} small={small} inside={inside} />
         </View>

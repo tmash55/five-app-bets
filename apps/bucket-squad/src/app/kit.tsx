@@ -161,6 +161,38 @@ function SmallCards() {
   );
 }
 
+/** every level's frame: big, as a small card, and as a cell in the collection grid */
+function Levels() {
+  const levels = [1, 2, 3, 4, 5];
+  return (
+    <View style={styles.sheet}>
+      <View style={styles.cardRow}>
+        {levels.map((l) => (
+          <ArcadeCard key={l} player={best(RARITIES[(l - 1) % RARITIES.length])} level={l} width={px(132)} />
+        ))}
+      </View>
+      <View style={styles.packRow}>
+        {levels.map((l) => (
+          <ArcadeCard key={l} player={best('rare')} level={l} width={px(64)} />
+        ))}
+        <View style={styles.levelCells}>
+          {RARITIES.map((r) => (
+            <View key={r} style={styles.levelCellRow}>
+              {levels.map((l) => (
+                <HeadCell key={l} player={best(r)} level={l} />
+              ))}
+            </View>
+          ))}
+        </View>
+      </View>
+      <View style={styles.stats}>
+        <StatRow label="SHOT" value={78} levelFrom={7} lit={8} next={1} />
+        <StatRow label="DUNK" value={92} levelFrom={8} lit={9} />
+      </View>
+    </View>
+  );
+}
+
 function Room() {
   return (
     <View style={styles.columns}>
@@ -203,7 +235,7 @@ export default function KitScreen() {
   if (!__DEV__) return <Redirect href="/" />;
   return (
     <ArcadeScreen title={`KIT ${MARK}`} tube="green" style={styles.body}>
-      {page === '2' ? <Cards /> : page === '3' ? <Room /> : page === '4' ? <SmallCards /> : <Lettering />}
+      {page === '2' ? <Cards /> : page === '3' ? <Room /> : page === '4' ? <SmallCards /> : page === '5' ? <Levels /> : <Lettering />}
     </ArcadeScreen>
   );
 }
@@ -252,6 +284,13 @@ const styles = StyleSheet.create({
   stats: {
     gap: space.sm,
     width: px(300),
+  },
+  levelCells: {
+    gap: px(8),
+  },
+  levelCellRow: {
+    flexDirection: 'row',
+    gap: px(6),
   },
   tile: {
     flex: 1,
