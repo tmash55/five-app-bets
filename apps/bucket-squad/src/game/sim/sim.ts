@@ -44,6 +44,7 @@ import {
 import { handling, handlingAt, pushShare } from './feel';
 import { cool, defenseBoost, fireOut, heatUp, onFire, speedBoost, stack, stepFire } from './fire';
 import { approach, approachAngle, clamp, clamp01, hypot2, lerp, rngNext, smooth } from './math';
+import { assistOf, bandOf, isControlled, isHuman, seatOf } from './seats';
 import type {
   BallSim,
   DunkStyle,
@@ -54,8 +55,10 @@ import type {
   PadInput,
   PlayerSim,
   PlayerStats,
+  Seat,
   ShotGrade,
   SimEvent,
+  TeamFrames,
   TeamId,
 } from './types';
 
@@ -196,6 +199,7 @@ export function createMatch(cfg: MatchConfig): MatchState {
     padB: false,
     padSw: false,
     ctrlKey: '',
+    second: { control: -1, padA: false, padB: false, padSw: false, ctrlKey: '' },
     time: 0,
   };
   setupInbound(m, 0);
@@ -279,10 +283,16 @@ function setupInbound(m: MatchState, team: TeamId): void {
   b.z = tmp.z;
   m.possession = team;
   m.shotClock = RULES.shotClock;
-  m.ctrlKey = '';
-  if (m.cfg.userTeam >= 0) {
-    m.control = team === m.cfg.userTeam ? handler.idx : nearestTo(m, m.cfg.userTeam as TeamId, handler.x, handler.z, -1);
+  // each person starts with the ball handler, or the defender nearest to them
+  for (let t = 0 as TeamId; t < 2; t = (t + 1) as TeamId) {
+    const seat = seatOf(m, t);
+    if (seat) {
+      seat.ctrlKey = '';
+      seat.control = team === t ? handler.idx : nearestTo(m, t, handler.x, handler.z, -1);
+    }
+    if (t === 1) break;
   }
+  m.ctrlKey = '';
 }
 
 function nearestTo(m: MatchState, team: TeamId, x: number, z: number, skip: number): number {
@@ -493,7 +503,7 @@ function stumble(m: MatchState, p: PlayerSim, kind: PlayerSim['stumbleKind'], du
 }
 
 function gradeOf(m: MatchState, p: PlayerSim, err: number): ShotGrade {
-  const win = p.idx === m.control ? m.cfg.timingAssist : 1;
+  const win = isControlled(m, p) ? assistOf(m, p.team) : 1;
   const a = Math.abs(err);
   if (a <= SHOT.perfectWin * win) return 'perfect';
   if (a <= SHOT.goodWin * win) return 'good';
@@ -520,7 +530,7 @@ function tryBlock(m: MatchState, p: PlayerSim, ballY: number, base: number): Pla
     if (o.vy < -5.5) continue; // already well on the way down
     let pr = base + 0.5 * o.attrs.block - 0.1 * p.attrs.shot;
     pr += defenseBoost(m, o, 0.12, FIRE.blockBonus);
-    if (o.idx === m.control) pr += 0.1;
+    if (isControlled(m, o)) pr += 0.1;
     pr *= clamp01(1.25 - d / 1.4);
     if (rngNext(m) < clamp(pr, 0.03, 0.85)) return o;
   }
@@ -674,7 +684,7 @@ function startShot(m: MatchState, p: PlayerSim): void {
   enter(p, 'shoot');
   p.autoRelease = false;
   p.vy = 0;
-  if (p.idx !== m.control) {
+  if (!isControlled(m, p)) {
     // computer players pick their release time up front
     p.ai.releaseAt = shotApexTime() + p.ai.releaseAt;
   }
@@ -800,7 +810,7 @@ function releaseLayup(m: MatchState, p: PlayerSim): void {
   let prob = 0.76 + 0.2 * (0.6 * p.attrs.dunk + 0.4 * p.attrs.shot) - contest * 0.33;
   prob += stack(hypeOn(m, p.team) ? 0.08 : 0, onFire(p) ? FIRE.shotBonus * 0.8 : 0, FIRE.shotCap);
   const diff = clamp(m.score[p.team] - m.score[1 - p.team], -12, 12) / 12;
-  prob -= diff * 0.05 * m.cfg.rubberBand;
+  prob -= diff * 0.05 * bandOf(m, p.team, diff);
   const made = rngNext(m) < clamp(prob, 0.08, 0.97);
   launchShot(m, p, made, false, false, 'layup', 0.36);
 }
@@ -824,7 +834,7 @@ function resolveDunk(m: MatchState, p: PlayerSim): void {
     let pr = 0.16 + 0.5 * o.attrs.block - 0.3 * p.attrs.dunk;
     pr -= stack(hypeOn(m, p.team) ? 0.1 : 0, onFire(p) ? FIRE.blockBonus : 0, FIRE.defenseCap);
     pr += onFire(o) ? FIRE.blockBonus : 0;
-    if (o.idx === m.control) pr += 0.12;
+    if (isControlled(m, o)) pr += 0.12;
     if (rngNext(m) < clamp(pr, 0.02, 0.5)) {
       m.stats[p.idx].fga++;
       heldBallPos(m, p, tmp);
@@ -912,7 +922,7 @@ function releasePass(m: MatchState, p: PlayerSim): void {
   b.y = tmp.y;
   b.z = tmp.z;
   const dist = hypot2(r.x - p.x, r.z - p.z);
-  const lobOop = oopReady(m, r) && rngNext(m) < (p.idx === m.control || r.idx === m.control ? 1 : 0.75);
+  const lobOop = oopReady(m, r) && rngNext(m) < (isControlled(m, p) || isControlled(m, r) ? 1 : 0.75);
   if (lobOop) {
     const dur = clamp(dist / 10.5, 0.5, 0.82);
     b.passDur = dur;
@@ -1014,9 +1024,9 @@ function stealCheck(m: MatchState, p: PlayerSim): void {
   if (h.state === 'shoot' && h.t < SHOT.crouch + 0.08) pr += 0.12;
   if (h.sprinting) pr += 0.04;
   pr += defenseBoost(m, p, 0.1);
-  if (p.idx === m.control) pr += 0.07;
+  if (isControlled(m, p)) pr += 0.07;
   const diff = clamp(m.score[p.team] - m.score[1 - p.team], -12, 12) / 12;
-  pr -= diff * 0.05 * m.cfg.rubberBand;
+  pr -= diff * 0.05 * bandOf(m, p.team, diff);
   if (rngNext(m) >= clamp(pr, 0.04, 0.72)) {
     h.safeT = STEAL.immunity;
     return;
@@ -1064,7 +1074,7 @@ const liftedFeel: Handling = handlingAt(0, 0, 0);
 /** How this player moves right now: the person's own player is never less agile than `MOVE.controlAgility`. */
 function feelOf(m: MatchState, p: PlayerSim): Handling {
   const f = p.feel;
-  if (p.idx !== m.control || f.agility >= MOVE.controlAgility) return f;
+  if (!isControlled(m, p) || f.agility >= MOVE.controlAgility) return f;
   return handlingAt(MOVE.controlAgility, f.weight, p.attrs.handle, liftedFeel);
 }
 
@@ -1180,8 +1190,8 @@ function jukeCheck(m: MatchState, p: PlayerSim, it: Intent): void {
         const wrong = os > 1.8 && (o.vx * it.mx + o.vz * it.mz) / (os * l) < 0.1;
         if (wrong) {
           let pr = 0.08 + 0.5 * p.attrs.handle - 0.3 * o.attrs.steal;
-          if (o.idx === m.control) pr *= 0.4;
-          if (p.idx !== m.control) pr *= 0.6;
+          if (isControlled(m, o)) pr *= 0.4;
+          if (!isControlled(m, p)) pr *= 0.6;
           if (hypeOn(m, p.team)) pr += 0.15;
           if (rngNext(m) < clamp(pr, 0.03, 0.7)) {
             stumble(m, o, 'ankle', 0.95);
@@ -1488,7 +1498,7 @@ function stepPass(m: MatchState): void {
       b.checked[o.idx] = true;
       let pr: number;
       if (active) pr = 0.5 + 0.42 * o.attrs.steal;
-      else if (o.idx === m.control) pr = 0.34 + 0.36 * o.attrs.steal;
+      else if (isControlled(m, o)) pr = 0.34 + 0.36 * o.attrs.steal;
       else pr = lerp(0.04, 0.26, m.cfg.difficulty) * (0.5 + o.attrs.steal);
       pr += defenseBoost(m, o, 0.1);
       if (rngNext(m) < clamp(pr, 0, 0.95)) {
@@ -1715,14 +1725,10 @@ function stepBall(m: MatchState, live: boolean): void {
 // Control and the main step
 // ---------------------------------------------------------------------------
 
-function updateControl(m: MatchState, pad: PadInput): void {
-  const ut = m.cfg.userTeam;
-  if (ut === -1) {
-    m.control = -1;
-    return;
-  }
+/** Who `seat` (the person playing `ut`) controls this tick: the ball handler, a pass's receiver, or by switching. */
+function updateControl(m: MatchState, seat: Seat, ut: TeamId, pad: PadInput): void {
   const b = m.ball;
-  let want = m.control;
+  let want = seat.control;
   if (want < 0 || m.players[want].team !== ut) want = nearestTo(m, ut, b.x, b.z, -1);
   if (b.state === 'held' && m.players[b.holder].team === ut) {
     want = b.holder;
@@ -1739,10 +1745,10 @@ function updateControl(m: MatchState, pad: PadInput): void {
     }
     const cur = m.players[want];
     const key = `${b.state}:${b.state === 'held' ? b.holder : b.state === 'pass' ? b.to : -1}`;
-    if (pad.sw && !m.padSw) {
+    if (pad.sw && !seat.padSw) {
       const n = nearestTo(m, ut, tx, tz, want);
       if (n >= 0) want = n;
-    } else if (key !== m.ctrlKey && m.cfg.autoSwitch && (cur.state === 'free' || cur.state === 'recover' || cur.state === 'stumble')) {
+    } else if (key !== seat.ctrlKey && m.cfg.autoSwitch && (cur.state === 'free' || cur.state === 'recover' || cur.state === 'stumble')) {
       const n = nearestTo(m, ut, tx, tz, -1);
       if (n >= 0 && n !== want) {
         const dc = hypot2(cur.x - tx, cur.z - tz);
@@ -1750,18 +1756,18 @@ function updateControl(m: MatchState, pad: PadInput): void {
         if (dc - dn > 0.9 || cur.state === 'stumble') want = n;
       }
     }
-    m.ctrlKey = key;
+    seat.ctrlKey = key;
   }
-  m.control = want;
+  seat.control = want;
 }
 
-function padToIntent(m: MatchState, p: PlayerSim, pad: PadInput, it: Intent): void {
+function padToIntent(m: MatchState, seat: Seat, p: PlayerSim, pad: PadInput, it: Intent): void {
   resetIntent(it);
   it.mx = pad.mx;
   it.mz = pad.mz;
   it.turbo = pad.turbo;
-  const aEdge = pad.a && !m.padA;
-  const bEdge = pad.b && !m.padB;
+  const aEdge = pad.a && !seat.padA;
+  const bEdge = pad.b && !seat.padB;
   if (p.hasBall) {
     it.shootPress = aEdge;
     it.shoot = pad.a;
@@ -1772,17 +1778,41 @@ function padToIntent(m: MatchState, p: PlayerSim, pad: PadInput, it: Intent): vo
   }
 }
 
-function stepLive(m: MatchState, pad: PadInput): void {
-  updateControl(m, pad);
+const STILL: PadInput = Object.freeze({ mx: 0, mz: 0, turbo: false, a: false, b: false, sw: false });
+
+/** The frame `team` plays this tick: its own, or a still pad when none came. */
+function frameOf(frames: TeamFrames, team: TeamId): PadInput {
+  return frames[team] ?? STILL;
+}
+
+function stepLive(m: MatchState, frames: TeamFrames): void {
+  const ut = m.cfg.userTeam;
+  if (ut === -1) m.control = -1;
+  // the first person's seat first, then the second's: the order never changes the play, only who is picked
+  if (ut !== -1 && isHuman(m, ut)) updateControl(m, m, ut, frameOf(frames, ut));
+  else if (ut !== -1) m.control = -1;
+  const ot = (ut === 1 ? 0 : 1) as TeamId;
+  const second = ot !== ut && isHuman(m, ot) ? m.second : null;
+  if (second) updateControl(m, second, ot, frameOf(frames, ot));
+  else m.second.control = -1;
+  const demo = m.cfg.demo === true;
   for (const p of m.players) {
-    if (p.idx === m.control && !m.cfg.demo) padToIntent(m, p, pad, scratchIntent);
+    if (!demo && p.idx === m.control) padToIntent(m, m, p, frameOf(frames, ut as TeamId), scratchIntent);
+    else if (!demo && second && p.idx === second.control) padToIntent(m, second, p, frameOf(frames, ot), scratchIntent);
     else aiIntent(m, p, scratchIntent);
     stepPlayer(m, p, scratchIntent, true);
     if (m.phase !== 'live') break;
   }
-  m.padA = pad.a;
-  m.padB = pad.b;
-  m.padSw = pad.sw;
+  const own = ut !== -1 ? frameOf(frames, ut) : frameOf(frames, 0);
+  m.padA = own.a;
+  m.padB = own.b;
+  m.padSw = own.sw;
+  if (second) {
+    const f = frameOf(frames, ot);
+    second.padA = f.a;
+    second.padB = f.b;
+    second.padSw = f.sw;
+  }
   if (m.phase !== 'live') return;
   separatePlayers(m);
   stepBall(m, true);
@@ -1839,7 +1869,31 @@ function stepIdle(m: MatchState): void {
   stepBall(m, false);
 }
 
-export function stepMatch(m: MatchState, pad: PadInput): void {
+/** Remember the buttons each person holds as play starts, so a button held through a stoppage does not fire. */
+function holdButtons(m: MatchState, frames: TeamFrames): void {
+  const ut = m.cfg.userTeam;
+  const own = frameOf(frames, ut === -1 ? 0 : ut);
+  m.padA = own.a;
+  m.padB = own.b;
+  const ot = (ut === 1 ? 0 : 1) as TeamId;
+  if (ot !== ut && isHuman(m, ot)) {
+    const f = frameOf(frames, ot);
+    m.second.padA = f.a;
+    m.second.padB = f.b;
+  }
+}
+
+/** The frames for a tick from one pad: it belongs to the person's team (`cfg.userTeam`). */
+function framesFor(m: MatchState, pad: PadInput): TeamFrames {
+  return m.cfg.userTeam === 1 ? [null, pad] : [pad, null];
+}
+
+/**
+ * Advance the match one tick. `input` is either the one person's pad (a one-player game) or a frame for each team
+ * (`TeamFrames`, home first), which is how a two-player game, or a frame that came over a network, goes in.
+ */
+export function stepMatch(m: MatchState, input: PadInput | TeamFrames): void {
+  const frames: TeamFrames = Array.isArray(input) ? (input as TeamFrames) : framesFor(m, input as PadInput);
   m.events.length = 0;
   m.tick++;
   m.time += DT;
@@ -1856,15 +1910,14 @@ export function stepMatch(m: MatchState, pad: PadInput): void {
       if (m.phaseT >= RULES.countdown) {
         m.phase = 'live';
         m.phaseT = 0;
-        m.padA = pad.a;
-        m.padB = pad.b;
+        holdButtons(m, frames);
         emit(m, { type: 'period', quarter: m.quarter, start: true, overtime: m.overtime });
       }
       return;
     }
     case 'live':
       m.phaseT += DT;
-      stepLive(m, pad);
+      stepLive(m, frames);
       return;
     case 'scored':
     case 'whistle': {
@@ -1884,8 +1937,7 @@ export function stepMatch(m: MatchState, pad: PadInput): void {
       if (m.phaseT >= RULES.inboundPause) {
         m.phase = 'live';
         m.phaseT = 0;
-        m.padA = pad.a;
-        m.padB = pad.b;
+        holdButtons(m, frames);
       }
       return;
     }

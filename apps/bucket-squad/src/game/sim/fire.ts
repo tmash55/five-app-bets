@@ -9,6 +9,7 @@
 
 import { DT, FIRE, HYPE, MOVE } from './constants';
 import { clamp01, lerp } from './math';
+import { anyHuman, isHuman } from './seats';
 import type { MatchState, PlayerSim, TeamId } from './types';
 
 export function onFire(p: PlayerSim): boolean {
@@ -25,13 +26,12 @@ export function stack(a: number, b: number, cap: number): number {
 }
 
 /**
- * How fast this player's meter fills. The person's players fill at the full rate; a computer opponent fills slower
+ * How fast this player's meter fills. A person's players fill at the full rate (both sides, with two people); a computer opponent fills slower
  * at the easy levels and at about the same rate at All-Star. The score plays no part: the rubber band that keeps
  * games close never hands the team that is behind a quicker fire.
  */
 export function heatScale(m: MatchState, p: PlayerSim): number {
-  const user = m.cfg.userTeam;
-  if (user < 0 || p.team === user) return 1;
+  if (!anyHuman(m) || isHuman(m, p.team)) return 1;
   return lerp(FIRE.cpuMin, 1, clamp01((m.cfg.difficulty - FIRE.cpuEasy) / (FIRE.cpuHard - FIRE.cpuEasy)));
 }
 

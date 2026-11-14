@@ -9,8 +9,41 @@ import { perfAdd, perfFrame, perfHud, perfOn, perfReport, perfReset, perfStep } 
 import { MatchRenderer, type MatchVisuals } from './render/renderer';
 import { DT, FIRE, RULES } from './sim/constants';
 import { ignite } from './sim/fire';
+import { emptyFrame } from './sim/input';
+import { isHuman } from './sim/seats';
 import { createMatch, stepMatch } from './sim/sim';
-import type { MatchConfig, MatchState, PadInput, Phase, SimEvent } from './sim/types';
+import type { InputFrame, MatchConfig, MatchState, PadInput, Phase, SimEvent, TeamId } from './sim/types';
+
+/**
+ * Where one team's input comes from, a frame for every tick. The pad on this screen is one (`LocalPad`); a later
+ * network peer is another: it hands out the frames the other machine sent, tick by tick, and says it is not ready
+ * while the frame for the next tick has not arrived, so the match waits for it instead of guessing.
+ */
+export interface InputSource {
+  /** the frame `team` plays on the tick about to be stepped (`m.tick + 1`) */
+  frame(tick: number, team: TeamId): InputFrame | null;
+  /** false while the frame for `tick` is not here yet; left out, always ready */
+  ready?(tick: number): boolean;
+}
+
+/** A pad on this screen: the controls write into `pad`, and every tick plays what it holds. */
+export class LocalPad implements InputSource {
+  constructor(readonly pad: PadInput) {}
+
+  frame(): InputFrame {
+    return this.pad;
+  }
+}
+
+/** What the HUD needs about the second person in a two-player game. */
+export interface SeatHud {
+  /** sprint energy of their player, in twentieths */
+  turbo: number;
+  /** their team has the ball in hand */
+  offense: boolean;
+  /** their controlled player, -1 when none */
+  control: number;
+}
 
 /** What the heads-up display needs, sampled a few times a second. */
 export interface HudState {
@@ -34,6 +67,8 @@ export interface HudState {
   offense: boolean;
   /** index of the controlled player, -1 when watching */
   control: number;
+  /** the second person in a two-player game, null otherwise */
+  second: SeatHud | null;
 }
 
 export interface GLContextLike extends WebGL2RenderingContext {
@@ -60,13 +95,17 @@ export interface RunnerHooks {
 }
 
 function hudKey(h: HudState): string {
-  return `${h.score[0]},${h.score[1]},${h.quarter},${h.overtime ? 1 : 0},${h.clock},${h.shotClock},${h.phase},${h.countdown},${h.turbo},${h.hype[0]},${h.hype[1]},${h.fire.join('.')},${h.offense ? 1 : 0},${h.control}`;
+  return `${h.score[0]},${h.score[1]},${h.quarter},${h.overtime ? 1 : 0},${h.clock},${h.shotClock},${h.phase},${h.countdown},${h.turbo},${h.hype[0]},${h.hype[1]},${h.fire.join('.')},${h.offense ? 1 : 0},${h.control},${h.second ? `${h.second.turbo},${h.second.offense ? 1 : 0},${h.second.control}` : '-'}`;
 }
 
 export class MatchRunner {
   readonly m: MatchState;
-  /** written by the controls, read once per simulation tick */
-  readonly pad: PadInput = { mx: 0, mz: 0, turbo: false, a: false, b: false, sw: false };
+  /** each team's pad on this screen, home first: written by the controls, read once per simulation tick */
+  readonly pads: [PadInput, PadInput] = [emptyFrame(), emptyFrame()];
+  /** where each team's frames come from: this screen's pad for a team a person plays here, nothing for the computer's */
+  private readonly sources: [InputSource | null, InputSource | null];
+  /** the frames of the tick being stepped, reused */
+  private readonly frames: [InputFrame | null, InputFrame | null] = [null, null];
   /** when true the display loop only draws; time moves through `advance` (used by tests and tooling) */
   manual = false;
 
@@ -85,6 +124,18 @@ export class MatchRunner {
     this.m = createMatch(config);
     this.visuals = visuals;
     this.hooks = hooks;
+    const local = (t: TeamId) => (isHuman(this.m, t) || (t === 0 && config.userTeam === -1) ? new LocalPad(this.pads[t]) : null);
+    this.sources = [local(0), local(1)];
+  }
+
+  /** The pad of the person on this screen (the first person's in a two-player game). */
+  get pad(): PadInput {
+    return this.pads[this.m.cfg.userTeam === 1 ? 1 : 0];
+  }
+
+  /** Feed a team from somewhere else, such as a network peer. Null hands the team's frames back to nobody. */
+  setSource(team: TeamId, source: InputSource | null): void {
+    this.sources[team] = source;
   }
 
   /** Choose who hears about the match. Replaces any earlier listeners. */
@@ -98,13 +149,14 @@ export class MatchRunner {
     this.paused = paused;
     if (paused) {
       // drop whatever was held so nothing fires the moment play resumes
-      const p = this.pad;
-      p.mx = 0;
-      p.mz = 0;
-      p.turbo = false;
-      p.a = false;
-      p.b = false;
-      p.sw = false;
+      for (const p of this.pads) {
+        p.mx = 0;
+        p.mz = 0;
+        p.turbo = false;
+        p.a = false;
+        p.b = false;
+        p.sw = false;
+      }
     }
   }
 
@@ -144,11 +196,22 @@ export class MatchRunner {
     return true;
   }
 
+  /** Every team's source has its frame for the next tick. */
+  private ready(): boolean {
+    const next = this.m.tick + 1;
+    for (const s of this.sources) if (s?.ready && !s.ready(next)) return false;
+    return true;
+  }
+
   private tick(): void {
     const m = this.m;
     const r = this.renderer;
     if (r) r.beforeStep(m);
-    stepMatch(m, this.pad);
+    const next = m.tick + 1;
+    const [home, away] = this.sources;
+    this.frames[0] = home ? home.frame(next, 0) : null;
+    this.frames[1] = away ? away.frame(next, 1) : null;
+    stepMatch(m, this.frames);
     if (r) r.afterStep(m);
     if (perfOn()) perfStep(m.events.map((e) => e.type));
     const onEvent = this.hooks.onEvent;
@@ -184,7 +247,7 @@ export class MatchRunner {
     if (running) {
       this.acc += dt * r.timeScale;
       let steps = 0;
-      while (this.acc >= DT && steps < 6) {
+      while (this.acc >= DT && steps < 6 && this.ready()) {
         this.tick();
         this.acc -= DT;
         steps++;
@@ -266,7 +329,16 @@ export class MatchRunner {
       fire: m.players.map((p) => (p.fireT > 0 ? 21 : Math.min(20, Math.floor((p.heat / FIRE.max) * 20)))),
       offense: c >= 0 ? m.possession === m.players[c].team && (b === 'held' || b === 'pass' || b === 'dead') : false,
       control: c,
+      second: null,
     };
+    const c2 = m.second.control;
+    if (c2 >= 0) {
+      hud.second = {
+        turbo: Math.round(m.players[c2].turbo * 20),
+        offense: m.possession === m.players[c2].team && (b === 'held' || b === 'pass' || b === 'dead'),
+        control: c2,
+      };
+    }
     const key = hudKey(hud);
     if (key === this.lastHud) return;
     this.lastHud = key;

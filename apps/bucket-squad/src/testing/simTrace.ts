@@ -4,7 +4,7 @@
  */
 
 import { createMatch, stepMatch } from '@/game/sim/sim';
-import type { Attrs, MatchConfig, MatchState, PadInput } from '@/game/sim/types';
+import type { Attrs, MatchConfig, MatchState, PadInput, TeamFrames } from '@/game/sim/types';
 
 function attrs(v: Partial<Attrs> = {}): Attrs {
   return { speed: 0.6, shot: 0.6, dunk: 0.6, handle: 0.6, steal: 0.5, block: 0.5, ...v };
@@ -109,6 +109,8 @@ export function foldState(h: number, m: MatchState): number {
     h = mix(h, p.state.length * 31 + p.state.charCodeAt(0));
   }
   h = mix(h, m.control + 3);
+  // a second person only plays in two-player games: one-player fingerprints stay as they were recorded
+  if (m.second.control >= 0) h = mix(h, m.second.control + 11);
   return h;
 }
 
@@ -123,14 +125,16 @@ export interface Trace {
 
 /**
  * Play a whole game (up to `maxTicks`). `thumb` drives the person's pad every tick; left out the pad stays still.
+ * `frames` instead hands the match a frame for each team every tick (two-player games).
  */
-export function traceGame(cfg: MatchConfig, input?: { thumb?: ScriptedThumb }, maxTicks = 60 * 60 * 8): Trace {
+export function traceGame(cfg: MatchConfig, input?: { thumb?: ScriptedThumb; frames?: (m: MatchState) => TeamFrames }, maxTicks = 60 * 60 * 8): Trace {
   const m = createMatch(cfg);
   const still: PadInput = { mx: 0, mz: 0, turbo: false, a: false, b: false, sw: false };
   let h = 2166136261;
   let events = 0;
   while (m.phase !== 'final' && m.tick < maxTicks) {
-    stepMatch(m, input?.thumb ? input.thumb.step() : still);
+    if (input?.frames) stepMatch(m, input.frames(m));
+    else stepMatch(m, input?.thumb ? input.thumb.step() : still);
     events += m.events.length;
     for (const e of m.events) h = mix(h, e.type.length * 131 + e.type.charCodeAt(0) + e.type.charCodeAt(e.type.length - 1));
     h = foldState(h, m);

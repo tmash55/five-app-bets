@@ -3,6 +3,7 @@
 import { BALL_R, COURT, DEEP, DRIBBLE_H, DUNK, G_JUMP, SHOT } from './constants';
 import { rangeBoost, reachBoost, shotBoost } from './fire';
 import { clamp, clamp01, distToSegment, hypot2, lerp, smooth } from './math';
+import { assistOf, bandOf } from './seats';
 import type { Intent, MatchState, PlayerSim, ShotGrade, TeamId } from './types';
 
 /** +1 when the team attacks the +X hoop. */
@@ -168,7 +169,7 @@ export function makeProb(
   // Hype and fire, together never more than FIRE.shotCap
   base += shotBoost(m, p);
   const diff = clamp(m.score[p.team] - m.score[1 - p.team], -12, 12) / 12;
-  base -= diff * 0.07 * m.cfg.rubberBand;
+  base -= diff * 0.07 * bandOf(m, p.team, diff);
   base -= Math.min(0.07, moving * 0.011);
   const chance = clamp(base, 0.02, 0.96);
   return three && isHeave(d, s, extra) ? Math.min(chance, DEEP.heaveMin + DEEP.heaveBest * s) : chance;
@@ -297,15 +298,16 @@ function heldBallSpot(m: MatchState, p: PlayerSim, out: { x: number; y: number; 
   }
 }
 
-/** 0..1+ progress of the shot meter for the controlled player (1 = perfect), or -1 when hidden. */
-export function shotMeter(m: MatchState): { value: number; perfect: number; good: number } | null {
-  if (m.control < 0) return null;
-  const p = m.players[m.control];
+/** 0..1+ progress of the shot meter for a controlled player (1 = perfect), or null when hidden. `control` is the first person's player unless given. */
+export function shotMeter(m: MatchState, control: number = m.control): { value: number; perfect: number; good: number } | null {
+  if (control < 0) return null;
+  const p = m.players[control];
   if (p.state !== 'shoot' || p.released) return null;
   const tA = shotApexTime();
+  const assist = assistOf(m, p.team);
   return {
     value: p.t / tA,
-    perfect: (SHOT.perfectWin * m.cfg.timingAssist) / tA,
-    good: (SHOT.goodWin * m.cfg.timingAssist) / tA,
+    perfect: (SHOT.perfectWin * assist) / tA,
+    good: (SHOT.goodWin * assist) / tA,
   };
 }

@@ -5,6 +5,7 @@
 
 import { playSfx, type SfxName } from '@/audio/sound';
 import { buzz } from '@/fx/feedback';
+import { isControlled, twoHumans } from '@/game/sim/seats';
 import type { MatchState, SimEvent } from '@/game/sim/types';
 
 /** every sound a match can play, in the order a match first needs them, so they can be made ready before tip-off */
@@ -100,7 +101,9 @@ export class MatchDirector {
     }
     const user = m.cfg.userTeam;
     const side = (team: number): CalloutTone => (team === 0 ? 'home' : 'away');
-    const ours = (team: number) => user < 0 || team === user;
+    // with two people on the court every team is somebody's
+    const two = twoHumans(m);
+    const ours = (team: number) => user < 0 || two || team === user;
     switch (e.type) {
       case 'tick': {
         if (m.phase === 'countdown') {
@@ -130,6 +133,11 @@ export class MatchDirector {
       }
       case 'final': {
         playSfx('buzzer');
+        if (two) {
+          this.say(e.winner === 0 ? 'P1 WINS!' : 'P2 WINS!', 'gold', 2.6, 'FINAL', true);
+          playSfx('cheerBig');
+          break;
+        }
         const won = user >= 0 && e.winner === user;
         this.say(user < 0 ? 'FINAL' : won ? 'YOU WIN!' : 'FINAL', won ? 'gold' : 'white', 2.6, undefined, true);
         if (won) playSfx('cheerBig');
@@ -139,7 +147,7 @@ export class MatchDirector {
         playSfx('shoot');
         if (m.players[e.by].fireT > 0) playSfx('fireShot');
         this.shot = { team: m.players[e.by].team, rim: false };
-        if (e.by === m.control) {
+        if (isControlled(m, e.by)) {
           const err = m.players[e.by].relErr;
           const label = e.grade === 'perfect' ? 'PERFECT!' : e.grade === 'good' ? 'GOOD' : err < 0 ? 'EARLY' : 'LATE';
           const tone: CalloutTone = e.grade === 'perfect' ? 'perfect' : e.grade === 'good' ? 'good' : e.grade === 'ok' ? 'okay' : 'bad';
@@ -313,7 +321,7 @@ export class MatchDirector {
       // how much of the speed the player had, in the direction they had it, is gone (more than all of it on a turn back)
       const old = Math.hypot(ox, oz);
       const lost = old > 0.01 ? old - (p.vx * ox + p.vz * oz) / old : 0;
-      if (i === m.control) {
+      if (isControlled(m, i)) {
         if (lost < CUT_LOSS || m.time - this.lastCut < CUT_REST) continue;
         this.lastCut = m.time;
         playSfx('scuff', Math.min(1, 0.55 + (lost - CUT_LOSS) * 0.15));

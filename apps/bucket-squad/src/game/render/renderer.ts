@@ -12,6 +12,7 @@ import { hexToRgb, type Look } from '../kit/look';
 import { BALL_R, COURT, DT, RULES } from '../sim/constants';
 import { attackSign, shotApexTime, shotMeter } from '../sim/core';
 import { clamp, clamp01, lerp, smooth } from '../sim/math';
+import { isControlled, isHuman, twoHumans } from '../sim/seats';
 import type { MatchState } from '../sim/types';
 import { color, hot, party, sparkle } from '../../theme/tokens';
 import { buildCourt, type CourtId, type CourtMeshes } from './court';
@@ -35,6 +36,18 @@ import {
   WIPE_FRAG,
   WIPE_VERT,
 } from './shaders';
+
+/** One person's marks in the world: their shot meter and the arrow over their player. */
+interface SeatMarks {
+  meter: THREE.Mesh;
+  meterU: Record<string, THREE.IUniform>;
+  arrow: THREE.Mesh;
+  arrowU: Record<string, THREE.IUniform>;
+  /** seconds the last shot's graded meter stays up */
+  hold: number;
+  value: number;
+  grade: Rgb;
+}
 
 export interface MatchVisuals {
   court: CourtId;
@@ -116,10 +129,8 @@ export class MatchRenderer {
   private readonly boardGroups: THREE.Group[] = [];
   private readonly rimSpring = [new Spring(520, 9), new Spring(520, 9)];
   private readonly boardSpring = [new Spring(900, 14), new Spring(900, 14)];
-  private readonly meter: THREE.Mesh;
-  private readonly meterU: Record<string, THREE.IUniform>;
-  private readonly arrow: THREE.Mesh;
-  private readonly arrowU: Record<string, THREE.IUniform>;
+  /** the shot meter and the arrow over each person's player: the first person's, then a second person's */
+  private readonly marks: SeatMarks[] = [];
   private readonly wipe: THREE.Mesh;
   private readonly wipeU: Record<string, THREE.IUniform>;
   private readonly teamRgb: [Rgb, Rgb];
@@ -130,10 +141,6 @@ export class MatchRenderer {
   private height = 1;
   private time = 0;
   private cheer = 0;
-  // meter
-  private meterHold = 0;
-  private meterValue = 0;
-  private meterGrade: Rgb = WHITE;
   private trailT = 0;
   private hotTrailT = 0;
   private stepT = new Float32Array(8);
@@ -303,44 +310,49 @@ export class MatchRenderer {
     // --- overlays in the world: shot meter and the "you" arrow
     const quad = new THREE.PlaneGeometry(1, 1);
     this.disposables.push(quad);
-    this.meterU = {
-      uValue: { value: 0 },
-      uPerfect: { value: 0.15 },
-      uGood: { value: 0.3 },
-      uInk: { value: hexV3(color.ink) },
-      uFill: { value: hexV3(color.white) },
-      uPerfectCol: { value: hexV3(color.perfect) },
-      uGoodCol: { value: hexV3(color.good) },
-    };
-    const meterMat = new THREE.RawShaderMaterial({
-      glslVersion: THREE.GLSL3,
-      vertexShader: UNLIT_VERT,
-      fragmentShader: METER_FRAG,
-      uniforms: this.meterU,
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-    });
-    this.meter = new THREE.Mesh(quad, meterMat);
-    this.meter.renderOrder = 20;
-    this.meter.visible = false;
-    this.meter.frustumCulled = false;
-    this.scene.add(this.meter);
-    this.arrowU = { uColor: { value: hexV3(color.sun) }, uInk: { value: hexV3(color.ink) } };
-    const arrowMat = new THREE.RawShaderMaterial({
-      glslVersion: THREE.GLSL3,
-      vertexShader: UNLIT_VERT,
-      fragmentShader: ARROW_FRAG,
-      uniforms: this.arrowU,
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-    });
-    this.arrow = new THREE.Mesh(quad, arrowMat);
-    this.arrow.renderOrder = 19;
-    this.arrow.visible = false;
-    this.arrow.frustumCulled = false;
-    this.scene.add(this.arrow);
+    // one set for each person who can play: built now, so a two-player game builds nothing new mid-game
+    for (let seat = 0; seat < 2; seat++) {
+      const meterU: Record<string, THREE.IUniform> = {
+        uValue: { value: 0 },
+        uPerfect: { value: 0.15 },
+        uGood: { value: 0.3 },
+        uInk: { value: hexV3(color.ink) },
+        uFill: { value: hexV3(color.white) },
+        uPerfectCol: { value: hexV3(color.perfect) },
+        uGoodCol: { value: hexV3(color.good) },
+      };
+      const meterMat = new THREE.RawShaderMaterial({
+        glslVersion: THREE.GLSL3,
+        vertexShader: UNLIT_VERT,
+        fragmentShader: METER_FRAG,
+        uniforms: meterU,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      });
+      const meter = new THREE.Mesh(quad, meterMat);
+      meter.renderOrder = 20;
+      meter.visible = false;
+      meter.frustumCulled = false;
+      this.scene.add(meter);
+      const arrowU: Record<string, THREE.IUniform> = { uColor: { value: hexV3(color.sun) }, uInk: { value: hexV3(color.ink) } };
+      const arrowMat = new THREE.RawShaderMaterial({
+        glslVersion: THREE.GLSL3,
+        vertexShader: UNLIT_VERT,
+        fragmentShader: ARROW_FRAG,
+        uniforms: arrowU,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      });
+      const arrow = new THREE.Mesh(quad, arrowMat);
+      arrow.renderOrder = 19;
+      arrow.visible = false;
+      arrow.frustumCulled = false;
+      this.scene.add(arrow);
+      this.disposables.push(meterMat, arrowMat);
+      this.marks.push({ meter, meterU, arrow, arrowU, hold: 0, value: 0, grade: WHITE });
+    }
 
     // --- wipe between plays
     const tri = new THREE.BufferGeometry();
@@ -366,7 +378,7 @@ export class MatchRenderer {
     this.wipe.frustumCulled = false;
     this.wipe.visible = false;
     this.scene.add(this.wipe);
-    this.disposables.push(tri, meterMat, arrowMat, wipeMat);
+    this.disposables.push(tri, wipeMat);
 
     this.resize(w, h);
     // every shader the match can ever use is built and queried now, never mid-game
@@ -440,11 +452,12 @@ export class MatchRenderer {
           this.boardSpring[e.hoop > 0 ? 1 : 0].kick(clamp(e.speed * 0.12, 0.2, 1));
           break;
         case 'shot':
-          if (e.by === m.control) {
+          if (e.by === m.control || e.by === m.second.control) {
             const p = m.players[e.by];
-            this.meterHold = 0.55;
-            this.meterValue = 1 + p.relErr / shotApexTime();
-            this.meterGrade = GRADE[e.grade];
+            const mk = this.marks[e.by === m.control ? 0 : 1];
+            mk.hold = 0.55;
+            mk.value = 1 + p.relErr / shotApexTime();
+            mk.grade = GRADE[e.grade];
           }
           if (e.grade === 'perfect') {
             const p = m.players[e.by];
@@ -579,7 +592,6 @@ export class MatchRenderer {
     const sun = this.lights.uSunDir.value;
     const sox = -sun.x / Math.max(0.3, sun.y);
     const soz = -sun.z / Math.max(0.3, sun.y);
-    const userTeam = m.cfg.userTeam;
     for (const p of m.players) {
       const i = p.idx;
       const o = i * 4;
@@ -621,8 +633,8 @@ export class MatchRenderer {
       shadows[o + 2] = 0.66 * an.sx * an.shadow * (1 + y * 0.1);
       shadows[o + 3] = 0.8 * fade;
       // ring for the person's own team
-      const mine = userTeam >= 0 && p.team === userTeam;
-      const you = i === m.control;
+      const mine = isHuman(m, p.team);
+      const you = isControlled(m, i);
       rings[o] = x;
       rings[o + 1] = z;
       rings[o + 2] = you ? 0.62 + 0.03 * Math.sin(this.time * 7) : 0.52;
@@ -730,43 +742,12 @@ export class MatchRenderer {
       this.netU[i].uTime.value = this.time;
     }
 
-    // --- shot meter beside the shooter, arrow over the controlled player
-    this.meterHold = Math.max(0, this.meterHold - dt);
-    const sm = shotMeter(m);
-    const ctrl = m.control >= 0 ? m.players[m.control] : null;
-    if (ctrl && (sm || this.meterHold > 0)) {
-      const px = mo.x[ctrl.idx];
-      const py = mo.y[ctrl.idx];
-      const pz = mo.z[ctrl.idx];
-      this.meter.visible = true;
-      this.tmpV.set(1, 0, 0).applyQuaternion(cam.quaternion);
-      const sideSign = attackSign(ctrl.team) > 0 ? -1 : 1;
-      this.meter.position.set(px + this.tmpV.x * 0.95 * sideSign, py + 1.0, pz + this.tmpV.z * 0.95 * sideSign);
-      this.meter.quaternion.copy(cam.quaternion);
-      const pop = this.meterHold > 0 && !sm ? 1 + 0.25 * smooth((this.meterHold - 0.4) / 0.15) : 1;
-      this.meter.scale.set(0.26 * pop, 1.04 * pop, 1);
-      if (sm) {
-        this.meterU.uValue.value = sm.value;
-        this.meterU.uPerfect.value = sm.perfect;
-        this.meterU.uGood.value = sm.good;
-        (this.meterU.uFill.value as THREE.Vector3).set(1, 1, 1);
-      } else {
-        this.meterU.uValue.value = this.meterValue;
-        (this.meterU.uFill.value as THREE.Vector3).fromArray(this.meterGrade as unknown as number[]);
-      }
-    } else {
-      this.meter.visible = false;
-    }
-    if (ctrl && m.phase !== 'final') {
-      const px = mo.x[ctrl.idx];
-      const py = mo.y[ctrl.idx];
-      const pz = mo.z[ctrl.idx];
-      this.arrow.visible = true;
-      this.arrow.position.set(px, py + 1.95 * mo.anims[ctrl.idx].sy + 0.06 * Math.sin(this.time * 6), pz);
-      this.arrow.quaternion.copy(cam.quaternion);
-      this.arrow.scale.set(0.42, 0.42, 1);
-    } else {
-      this.arrow.visible = false;
+    // --- shot meter beside the shooter, arrow over the controlled player: one of each per person
+    const two = twoHumans(m);
+    for (let seat = 0; seat < 2; seat++) {
+      const mk = this.marks[seat];
+      const c = seat === 0 ? m.control : m.second.control;
+      this.drawMarks(m, mk, c >= 0 ? m.players[c] : null, two, dt, cam);
     }
 
     // --- wipe between plays
@@ -791,6 +772,53 @@ export class MatchRenderer {
     this.sky.position.copy(cam.position);
     this.sky.updateMatrix();
     if (draw) this.three.render(this.scene, cam);
+  }
+
+  /**
+   * One person's shot meter and arrow. With one person they are drawn as always (a white meter, a sun-yellow
+   * arrow); with two, each person's are in their own team's colour so nobody reads the other's.
+   */
+  private drawMarks(m: MatchState, mk: SeatMarks, ctrl: MatchState['players'][number] | null, two: boolean, dt: number, cam: THREE.Camera): void {
+    const mo = this.motion;
+    mk.hold = Math.max(0, mk.hold - dt);
+    const sm = ctrl ? shotMeter(m, ctrl.idx) : null;
+    const tc = ctrl ? this.teamRgb[ctrl.team] : WHITE;
+    if (ctrl && (sm || mk.hold > 0)) {
+      const px = mo.x[ctrl.idx];
+      const py = mo.y[ctrl.idx];
+      const pz = mo.z[ctrl.idx];
+      mk.meter.visible = true;
+      this.tmpV.set(1, 0, 0).applyQuaternion(cam.quaternion);
+      const sideSign = attackSign(ctrl.team) > 0 ? -1 : 1;
+      mk.meter.position.set(px + this.tmpV.x * 0.95 * sideSign, py + 1.0, pz + this.tmpV.z * 0.95 * sideSign);
+      mk.meter.quaternion.copy(cam.quaternion);
+      const pop = mk.hold > 0 && !sm ? 1 + 0.25 * smooth((mk.hold - 0.4) / 0.15) : 1;
+      mk.meter.scale.set(0.26 * pop, 1.04 * pop, 1);
+      if (sm) {
+        mk.meterU.uValue.value = sm.value;
+        mk.meterU.uPerfect.value = sm.perfect;
+        mk.meterU.uGood.value = sm.good;
+        if (two) (mk.meterU.uFill.value as THREE.Vector3).set(tc[0], tc[1], tc[2]);
+        else (mk.meterU.uFill.value as THREE.Vector3).set(1, 1, 1);
+      } else {
+        mk.meterU.uValue.value = mk.value;
+        (mk.meterU.uFill.value as THREE.Vector3).fromArray(mk.grade as unknown as number[]);
+      }
+    } else {
+      mk.meter.visible = false;
+    }
+    if (ctrl && m.phase !== 'final') {
+      const px = mo.x[ctrl.idx];
+      const py = mo.y[ctrl.idx];
+      const pz = mo.z[ctrl.idx];
+      mk.arrow.visible = true;
+      if (two) (mk.arrowU.uColor.value as THREE.Vector3).set(tc[0], tc[1], tc[2]);
+      mk.arrow.position.set(px, py + 1.95 * mo.anims[ctrl.idx].sy + 0.06 * Math.sin(this.time * 6), pz);
+      mk.arrow.quaternion.copy(cam.quaternion);
+      mk.arrow.scale.set(0.42, 0.42, 1);
+    } else {
+      mk.arrow.visible = false;
+    }
   }
 
   /** Screen position (0..1 from the top left) of a point in the world, for callouts drawn by the HUD. */
