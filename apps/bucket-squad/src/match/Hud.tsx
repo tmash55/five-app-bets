@@ -95,6 +95,31 @@ export const Scoreboard = memo(function Scoreboard({ hud, names, colors }: { hud
   );
 });
 
+/**
+ * A small word over the court while an online game waits for the other device's moves, so a held-up game never
+ * looks frozen. It breathes, so it reads as "working on it".
+ */
+export const NetHint = memo(function NetHint({ text }: { text: string }) {
+  const insets = useSafeAreaInsets();
+  const beat = useSharedValue(0);
+  useEffect(() => {
+    beat.set(withRepeat(withTiming(1, { duration: duration.slow, easing: Easing.inOut(Easing.quad) }), -1, true));
+  }, [beat]);
+  const style = useAnimatedStyle(() => ({ opacity: 1 - 0.35 * beat.value }));
+  return (
+    <View pointerEvents="none" style={[styles.top, { bottom: Math.max(insets.bottom, space.sm) + sizes.avatar + space.xl }]} accessibilityLiveRegion="polite">
+      <Animated.View style={style}>
+        <Sticker fill="paper" round="lg" raise="low" border={stroke.thin} face={styles.hint}>
+          <Icon name="bolt" size={sizes.iconSmall} color="sunDeep" />
+          <Txt font="display" size="small" color="ink">
+            {text}
+          </Txt>
+        </Sticker>
+      </Animated.View>
+    </View>
+  );
+});
+
 /** a flame meter is full at this many steps (the HUD gets one more while the player is on fire) */
 const HEAT_STEPS = 20;
 
@@ -255,6 +280,13 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     zIndex: layer.hud,
+  },
+  hint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    paddingHorizontal: space.md,
+    paddingVertical: space.xs,
   },
   board: {
     flexDirection: 'row',

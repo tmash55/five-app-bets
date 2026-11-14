@@ -14,8 +14,11 @@ import { toAttrs } from '@/game/sim/ratings';
 import type { MatchConfig, MatchState, PlayerStats } from '@/game/sim/types';
 import { hexToRgb } from '@/game/kit/look';
 
-/** `duo`: two people on one screen, the device's squad (P1, home) against a team the second person picks (P2) */
-export type Mode = 'quick' | 'tour' | 'ladder' | 'duo';
+/**
+ * `duo`: two people on one screen, the device's squad (P1, home) against a team the second person picks (P2).
+ * `online`: two people on two devices, the host's squad (P1, home) against the guest's (P2).
+ */
+export type Mode = 'quick' | 'tour' | 'ladder' | 'duo' | 'online';
 
 /** What a two-player game sets per person, home (P1) first. */
 export interface DuoRules {
@@ -63,7 +66,7 @@ export interface MatchSetup {
   spectate?: boolean;
   /** your squad plays itself with the full HUD on, for trailers and screenshots */
   demo?: boolean;
-  /** two people on one screen: the away side is played by the second person (mode `duo`) */
+  /** two people: the away side is played by the second person, on this screen (mode `duo`) or another device (`online`) */
   duo?: DuoRules;
 }
 
@@ -228,5 +231,21 @@ export function summarize(m: MatchState, setup: MatchSetup, buzzerBeater: boolea
     difficulty: setup.difficulty,
     names: [setup.home.name, setup.away.name],
     tour: setup.tour,
+  };
+}
+
+/**
+ * The summary as the person playing `team` sees it: their side first. An online game's guest plays the away side,
+ * and everything after the match (the headline, the coins) reads the person's side as the first.
+ */
+export function seenBy(s: MatchSummary, team: 0 | 1): MatchSummary {
+  if (team === 0) return s;
+  return {
+    ...s,
+    won: s.score[1] > s.score[0],
+    score: [s.score[1], s.score[0]],
+    totals: [s.totals[1], s.totals[0]],
+    players: s.players.map((p) => ({ ...p, team: p.team === 0 ? 1 : 0 })),
+    names: [s.names[1], s.names[0]],
   };
 }

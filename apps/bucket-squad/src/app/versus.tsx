@@ -14,15 +14,18 @@ import { TIERS, tierIndex } from '@/meta/ladder';
 import { chemistry, sideWear, type MatchSetup, type Side } from '@/meta/match';
 import { DIFFICULTY_NAMES, sideOverall } from '@/meta/setups';
 import { tourById } from '@/meta/tour';
+import { problemWords } from '@/net/words';
+import { useOnline } from '@/state/online';
 import { useSave } from '@/state/save';
 import { useSession } from '@/state/session';
 import { arcade, fade, halo, night, tube as tubes, type Tube } from '@/theme/arcade';
 import { px, size as sizes, space } from '@/theme/tokens';
 import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
-import { GoldButton } from '@/ui/arcade/Buttons';
+import { GhostButton, GoldButton } from '@/ui/arcade/Buttons';
 import { ArcadeCard } from '@/ui/arcade/Card';
 import { LineIcon } from '@/ui/arcade/LineIcon';
 import { Breathe } from '@/ui/arcade/Motion';
+import { Popup } from '@/ui/arcade/Popup';
 import { Bulbs } from '@/ui/arcade/Room';
 import { ChemChip, OvrMeter } from '@/ui/arcade/Strength';
 import { Chip, TeamMark } from '@/ui/arcade/Surface';
@@ -40,6 +43,7 @@ function modeLine(setup: MatchSetup, ladderPoints: number, homeTeam: string | nu
   }
   if (setup.mode === 'ladder') return `LADDER  ·  ${TIERS[tierIndex(ladderPoints)].name.toUpperCase()}`;
   if (setup.mode === 'duo') return `2 PLAYERS  ·  ${setup.perTeam} ON ${setup.perTeam}`;
+  if (setup.mode === 'online') return `TWO DEVICES  ·  ${setup.perTeam} ON ${setup.perTeam}`;
   const level = setup.difficulty < 0.4 ? 0 : setup.difficulty < 0.7 ? 1 : 2;
   return `QUICK GAME  ·  ${DIFFICULTY_NAMES[level].toUpperCase()}`;
 }
@@ -73,7 +77,7 @@ const SLASH_INSET = px(14);
 /** the P1 / P2 badge before a side's name in a two-player game */
 const TAG_W = px(44);
 
-function SideColumn({ side, perTeam, cardW, mine, from, tube: tb, tag }: { side: Side; perTeam: number; cardW: number; mine: boolean; from: -1 | 1; tube: Tube; tag?: string }) {
+function SideColumn({ side, perTeam, cardW, mine, from, tube: tb, tag, you }: { side: Side; perTeam: number; cardW: number; mine: boolean; from: -1 | 1; tube: Tube; tag?: string; you?: boolean }) {
   const players = side.players.slice(0, perTeam);
   const team = teamById(side.kitTeam);
   // a two-player game: both sides are somebody's, and both show their chemistry
@@ -96,7 +100,8 @@ function SideColumn({ side, perTeam, cardW, mine, from, tube: tb, tag }: { side:
         {/* your own squad needs no badge: its name says whose it is */}
         {!mine && <TeamMark team={team} small />}
         <Glow face="display" size="title" tube={tb} track="close" room={cardW * perTeam - (tag !== undefined ? TAG_W + space.sm : 0)}>
-          {side.name.toUpperCase()}
+          {/* two devices: the side played on this one is yours */}
+          {you ? 'YOU' : side.name.toUpperCase()}
         </Glow>
       </View>
       <View style={styles.cards}>
@@ -147,7 +152,13 @@ function Matchup({ setup }: { setup: MatchSetup }) {
   const ladderPoints = useSave((s) => s.ladder.points);
   const homeTeam = useSave((s) => s.homeTeam);
   const court = COURTS[setup.court];
-  const duo = setup.mode === 'duo';
+  const online = setup.mode === 'online';
+  const duo = setup.mode === 'duo' || online;
+  const view = useOnline((s) => s.view);
+  const onlineRoom = useOnline((s) => s.room);
+  const leave = useOnline((s) => s.leave);
+  // an online game's guest plays the away side
+  const local = online && view?.role === 'guest' ? 1 : 0;
   // your side is lit in the colours it wears
   const homeTube = teamTube(sideWear(setup.home));
   const awayTube = teamTube(teamById(setup.away.kitTeam));
@@ -171,15 +182,36 @@ function Matchup({ setup }: { setup: MatchSetup }) {
   const byHeight = Math.floor((room - FRAME_IN_H - AROUND_CARDS) / sizes.cardRatio);
   const cardW = Math.min(CARD_MAX, byWidth, byHeight);
   const stageH = Math.min(room - FRAME_IN_H, Math.round(cardW * sizes.cardRatio) + AROUND_CARDS + STAGE_AIR);
-  const ready = area.width > 0 && footH > 0 && cardW > 0;
+  const laidOut = area.width > 0 && footH > 0 && cardW > 0;
+
+  const phase = view?.phase;
+  // both devices pressed TIP-OFF: off to the match together
+  useEffect(() => {
+    if (online && phase === 'playing') {
+      playSfx('whistle');
+      router.replace('/match');
+    }
+  }, [online, phase, router]);
 
   const tipOff = () => {
+    if (online) {
+      playSfx('tap');
+      onlineRoom?.ready();
+      return;
+    }
     playSfx('whistle');
     router.replace('/match');
   };
+  const goHome = () => {
+    leave();
+    router.dismissTo('/');
+  };
+  const waitingForFriend = online && view?.meReady === true;
+  const failed = online && view?.phase === 'failed' && view.problem ? problemWords(view.problem) : null;
 
   return (
-    <ArcadeScreen title={modeLine(setup, ladderPoints, homeTeam)} tube="gold" coins={false} style={styles.body}>
+    <View style={styles.root}>
+    <ArcadeScreen title={modeLine(setup, ladderPoints, homeTeam)} tube="gold" coins={false} onBack={online ? goHome : undefined} style={styles.body}>
       <View
         style={styles.area}
         onLayout={(e) => {
@@ -187,7 +219,7 @@ function Matchup({ setup }: { setup: MatchSetup }) {
           const height = Math.round(e.nativeEvent.layout.height);
           if (width !== area.width || height !== area.height) setArea({ width, height });
         }}>
-        {ready && (
+        {laidOut && (
           <View style={styles.marquee}>
             <ChaseBulbs width={stageW} />
             <View style={[styles.stage, { height: stageH }]}>
@@ -196,13 +228,13 @@ function Matchup({ setup }: { setup: MatchSetup }) {
               <LinearGradient colors={[fade(awayTube.glass, 0), fade(awayTube.glass, 0.24)]} start={ACROSS_A} end={ACROSS_B} style={[styles.wash, styles.washRight]} />
               <Slash width={stageW} height={stageH} />
               <View style={styles.row}>
-                <SideColumn side={setup.home} perTeam={n} cardW={cardW} mine from={-1} tube={homeTube} tag={duo ? 'P1' : undefined} />
+                <SideColumn side={setup.home} perTeam={n} cardW={cardW} mine={!online || local === 0} from={-1} tube={homeTube} tag={duo ? 'P1' : undefined} you={online && local === 0} />
                 <Animated.View style={[styles.middle, vs]}>
                   <Glow face="display" size={px(50)} tube="pink" track="close">
                     VS
                   </Glow>
                 </Animated.View>
-                <SideColumn side={setup.away} perTeam={n} cardW={cardW} mine={false} from={1} tube={awayTube} tag={duo ? 'P2' : undefined} />
+                <SideColumn side={setup.away} perTeam={n} cardW={cardW} mine={online && local === 1} from={1} tube={awayTube} tag={duo ? 'P2' : undefined} you={online && local === 1} />
               </View>
             </View>
             <ChaseBulbs width={stageW} />
@@ -221,8 +253,22 @@ function Matchup({ setup }: { setup: MatchSetup }) {
                 {court.name}
               </Print>
             </Chip>
+            {online && view?.friendReady && !view.meReady && (
+              <Chip small>
+                <LineIcon name="check" size={px(14)} tube="green" />
+                <Print face="bold" size="small" color={tubes.green.tint} lines={1}>
+                  Your friend is ready!
+                </Print>
+              </Chip>
+            )}
           </View>
-          <GoldButton label="TIP-OFF!" icon="ball" quiet onPress={tipOff} style={styles.go} />
+          {waitingForFriend ? (
+            <Breathe depth={0.4} ms={800} style={styles.go}>
+              <GhostButton tall label="WAITING FOR FRIEND…" tube="gold" disabled />
+            </Breathe>
+          ) : (
+            <GoldButton label="TIP-OFF!" icon="ball" quiet onPress={tipOff} style={styles.go} />
+          )}
           <View style={[styles.footInfo, styles.footRight]}>
             <Chip small>
               <LineIcon name="buzz" size={px(14)} tube="gold" />
@@ -233,6 +279,18 @@ function Matchup({ setup }: { setup: MatchSetup }) {
       </View>
 
     </ArcadeScreen>
+    {failed && (
+      <Popup tube="red" width={px(420)} style={styles.problem}>
+        <Glow face="display" size="title" tube="red" track="close" center>
+          {failed.title}
+        </Glow>
+        <Print face="medium" size="body" color="textSoft" center>
+          {failed.text}
+        </Print>
+        <GoldButton label="HOME" icon="home" size="small" onPress={goHome} />
+      </Popup>
+    )}
+    </View>
   );
 }
 
@@ -246,6 +304,13 @@ const ACROSS_A = { x: 0, y: 0 } as const;
 const ACROSS_B = { x: 1, y: 0 } as const;
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  problem: {
+    alignItems: 'center',
+    gap: space.md,
+  },
   body: {
     paddingTop: space.sm,
     paddingBottom: space.xs,

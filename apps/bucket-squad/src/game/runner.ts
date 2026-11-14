@@ -128,9 +128,20 @@ export class MatchRunner {
     this.sources = [local(0), local(1)];
   }
 
+  /** the team the person on this screen plays, when it is not the match's own idea of it (an online game's guest) */
+  private localTeam: TeamId | null = null;
+
   /** The pad of the person on this screen (the first person's in a two-player game). */
   get pad(): PadInput {
-    return this.pads[this.m.cfg.userTeam === 1 ? 1 : 0];
+    return this.pads[this.localTeam ?? (this.m.cfg.userTeam === 1 ? 1 : 0)];
+  }
+
+  /**
+   * Online, both devices run the very same match, so `cfg.userTeam` cannot say whose screen this is: the guest's
+   * device plays the away team. The on-screen pad then writes that team's pad.
+   */
+  setLocalTeam(team: TeamId | null): void {
+    this.localTeam = team;
   }
 
   /** Feed a team from somewhere else, such as a network peer. Null hands the team's frames back to nobody. */

@@ -1,6 +1,7 @@
-/** Pick a way to play: the Tour, the Ladder, a quick game, or two players on one screen. */
+/** Pick a way to play: the Tour, the Ladder, a quick game, or two players (on one screen or on two devices). */
 
 import { useRouter, type Href } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { leagueOf } from '@/data/roster';
@@ -12,12 +13,13 @@ import { useSave } from '@/state/save';
 import { arcade, halo, inner, night, tube as tubes, type TubeName } from '@/theme/arcade';
 import { px, space } from '@/theme/tokens';
 import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
-import { useWidth } from '@/ui/arcade/Buttons';
+import { GhostButton, GoldButton, useWidth } from '@/ui/arcade/Buttons';
 import { Star } from '@/ui/arcade/Controls';
 import { LineIcon, type LineIconName } from '@/ui/arcade/LineIcon';
 import { TierMedal, tierTube } from '@/ui/arcade/Medal';
 import { Arrive } from '@/ui/arcade/Motion';
 import { Bloom, Rays } from '@/ui/arcade/Room';
+import { Popup } from '@/ui/arcade/Popup';
 import { Meter, Pips, SegBar } from '@/ui/arcade/SegBar';
 import { TeamMark, Well } from '@/ui/arcade/Surface';
 import { Glow, Print } from '@/ui/arcade/Type';
@@ -89,6 +91,11 @@ export default function Play() {
   const homeTeam = useSave((s) => s.homeTeam);
   const tours = toursFor(homeTeam);
   const go = (href: Href) => () => router.push(href);
+  const [two, setTwo] = useState(false);
+  const goTwo = (href: Href) => () => {
+    setTwo(false);
+    router.push(href);
+  };
 
   let have = 0;
   let all = 0;
@@ -105,6 +112,7 @@ export default function Play() {
   const nextTube = tp.next ? tierTube(tp.index + 1) : tierTube(tp.index);
 
   return (
+    <View style={styles.root}>
     <ArcadeScreen title="PLAY" tube="gold" style={styles.body}>
       <View style={styles.row}>
         <ModeSign title="TOUR" text="Beat each court and win its star." icon="flag" tube="orange" delay={40} onPress={go('/tour')}>
@@ -172,7 +180,7 @@ export default function Play() {
           )}
         </ModeSign>
 
-        <ModeSign title="2 PLAYERS" text="Play a friend on one screen." icon="duo" tube="pink" delay={250} onPress={go('/duo')}>
+        <ModeSign title="2 PLAYERS" text="Play a friend, here or on two devices." icon="duo" tube="pink" delay={250} onPress={() => setTwo(true)}>
           {() => (
             <>
               <View style={styles.line}>
@@ -197,10 +205,45 @@ export default function Play() {
         </ModeSign>
       </View>
     </ArcadeScreen>
+    {two && (
+      <Popup tube="pink" width={px(560)} onDismiss={() => setTwo(false)} style={styles.two}>
+        <Glow face="display" size="title" tube="pink" track="close">
+          2 PLAYERS
+        </Glow>
+        <View style={styles.twoRow}>
+          <View style={styles.twoWay}>
+            <Print face="display" size="large" color={tubes.cyan.tint} glow={tubes.cyan.glass} track="wide">
+              SAME SCREEN
+            </Print>
+            <Print face="medium" size="small" color="textMuted" center lines={2} style={styles.text}>
+              Share one phone or iPad.
+            </Print>
+            <GoldButton label="PLAY HERE" icon="duo" size="small" onPress={goTwo('/duo')} style={styles.twoButton} />
+          </View>
+          <View style={styles.twoLine} />
+          <View style={styles.twoWay}>
+            <Print face="display" size="large" color={tubes.pink.tint} glow={tubes.pink.glass} track="wide">
+              TWO DEVICES
+            </Print>
+            <Print face="medium" size="small" color="textMuted" center lines={2} style={styles.text}>
+              Each on your own phone or iPad.
+            </Print>
+            <View style={styles.twoButtons}>
+              <GhostButton label="HOST" icon="home" tube="pink" onPress={goTwo('/host')} style={styles.grow} />
+              <GhostButton label="JOIN" icon="plus" tube="pink" onPress={goTwo('/join')} style={styles.grow} />
+            </View>
+          </View>
+        </View>
+      </Popup>
+    )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
   body: {
     paddingTop: space.md,
     paddingBottom: space.xs,
@@ -265,6 +308,33 @@ const styles = StyleSheet.create({
     minHeight: FOOT_ROW,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: space.sm,
+  },
+  two: {
+    alignItems: 'center',
+    gap: space.md,
+  },
+  twoRow: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
+    gap: space.lg,
+  },
+  twoWay: {
+    flex: 1,
+    alignItems: 'center',
+    gap: space.sm,
+  },
+  twoLine: {
+    width: arcade.hairline,
+    alignSelf: 'stretch',
+    backgroundColor: night.line,
+  },
+  twoButton: {
+    alignSelf: 'stretch',
+  },
+  twoButtons: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
     gap: space.sm,
   },
   bar: {

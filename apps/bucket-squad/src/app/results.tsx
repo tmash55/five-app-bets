@@ -16,6 +16,7 @@ import { packById } from '@/meta/packs';
 import { dayKey } from '@/meta/rng';
 import { nextTourGame, tourById, type Tour } from '@/meta/tour';
 import type { MatchOutcome } from '@/state/logic';
+import { useOnline } from '@/state/online';
 import { startNext } from '@/state/play';
 import { useSave } from '@/state/save';
 import { useSession } from '@/state/session';
@@ -97,14 +98,14 @@ function statLine(p: PlayerLine): string {
 
 /** What the yellow button at the bottom says: what it does, the game it starts, and its picture. */
 function goNext(setup: MatchSetup, won: boolean, tour: Tour | null, nextStop: { stage: number; game: number } | null): { label: string; sub: string; icon: LineIconName } {
-  const label = setup.mode === 'duo' ? 'REMATCH' : nextStop ? 'NEXT GAME' : won ? 'PLAY AGAIN' : 'TRY AGAIN';
+  const label = setup.mode === 'duo' ? 'REMATCH' : setup.mode === 'online' ? 'NEW GAME' : nextStop ? 'NEXT GAME' : won ? 'PLAY AGAIN' : 'TRY AGAIN';
   const icon: LineIconName = nextStop ? 'play' : 'again';
   const at = nextStop ?? (setup.tour ? { stage: setup.tour.stage, game: setup.tour.game } : null);
   const stop = tour && at ? tour.stages[at.stage] : undefined;
   const game = stop?.games[at?.game ?? 0];
   if (stop && game) return { label, icon, sub: `${stop.team.name} · ${game.title}`.toUpperCase() };
   const size = `${setup.perTeam} ON ${setup.perTeam}`;
-  return { label, icon, sub: setup.mode === 'ladder' ? `LADDER · ${size}` : setup.mode === 'duo' ? `2 PLAYERS · ${size}` : `QUICK GAME · ${size}` };
+  return { label, icon, sub: setup.mode === 'ladder' ? `LADDER · ${size}` : setup.mode === 'duo' ? `2 PLAYERS · ${size}` : setup.mode === 'online' ? `TWO DEVICES · ${size}` : `QUICK GAME · ${size}` };
 }
 
 /** A two-player game: which of the two won (the home side, P1, is the device's squad). */
@@ -310,8 +311,15 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
   const owed = lines.reduce((a, l) => a + l.coins, 0) - landed;
   const mvp = summary.players.find((p) => p.id === summary.mvp) ?? summary.players[0];
   const mvpDef = mustPlayer(mvp.id);
-  const away = teamById(setup.away.kitTeam);
+  const online = summary.mode === 'online';
+  // online, the summary is this device's: its side first, and the guest's side is the match's away side
+  const guest = online && summary.names[0] === setup.away.name;
+  const away = teamById(guest ? setup.home.kitTeam : setup.away.kitTeam);
   const duo = summary.mode === 'duo';
+  const onlineRole = useOnline((s) => s.room?.role ?? null);
+  const leaveRoom = useOnline((s) => s.leave);
+  // the room has done its job once the results are up; leaving the page closes it (the host's code goes with it)
+  useEffect(() => (online ? () => leaveRoom() : undefined), [online, leaveRoom]);
   const packIds = Object.keys(packs).filter((id) => packs[id] > 0);
   // today's free pack counts as one waiting to open: it is collected in the shop, where it sits first
   const freePack = freePackDay !== dayKey();
@@ -326,6 +334,12 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
   const hasPrizes = wonPacks.length > 0 || outcome.missionsDone.length > 0 || unlock !== undefined;
 
   const again = () => {
+    if (online) {
+      const role = onlineRole ?? (guest ? 'guest' : 'host');
+      leaveRoom();
+      router.replace(role === 'guest' ? '/join' : '/host');
+      return;
+    }
     if (startNext()) router.replace('/versus');
     else router.dismissTo('/');
   };
@@ -346,9 +360,9 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
           <View style={styles.left}>
             <Arrive onLayout={measureBoard}>
               <Well style={styles.board}>
-                <ScoreSide name={duo ? `P1 · ${summary.names[0]}` : summary.names[0]} score={summary.score[0]} lit={duo ? duoWinner(summary) === 0 : summary.won} />
+                <ScoreSide name={duo ? `P1 · ${summary.names[0]}` : online ? `YOU · ${guest ? 'P2' : 'P1'}` : summary.names[0]} score={summary.score[0]} lit={duo ? duoWinner(summary) === 0 : summary.won} />
                 <View style={styles.dash} />
-                <ScoreSide name={duo ? `P2 · ${summary.names[1]}` : summary.names[1]} score={summary.score[1]} lit={duo ? duoWinner(summary) === 1 : !summary.won} mark={<TeamMark team={away} small />} />
+                <ScoreSide name={duo ? `P2 · ${summary.names[1]}` : online ? `FRIEND · ${guest ? 'P1' : 'P2'}` : summary.names[1]} score={summary.score[1]} lit={duo ? duoWinner(summary) === 1 : !summary.won} mark={<TeamMark team={away} small />} />
               </Well>
             </Arrive>
             {summary.overtime && <Tag label="OVERTIME" tube="red" small style={styles.centerSelf} />}

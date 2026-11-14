@@ -274,3 +274,51 @@ export function duoSetup(prefs: Prefs, o: DuoOptions, rng: Rng = Math.random): M
     duo: rules,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Two players on two devices
+// ---------------------------------------------------------------------------
+
+/** What each device brings to an online game: its own squad, the uniform it wears, and its shot window. */
+export interface OnlineSquad {
+  squad: readonly SidePlayer[];
+  uniform: string | null;
+  easyShots: boolean;
+}
+
+/** the names each side goes by on both screens (never a person's own name: it would travel to the other device) */
+export const ONLINE_NAMES = ['Player 1', 'Player 2'] as const;
+
+/**
+ * Two people on two devices: the host's squad is P1 (home), the guest's is P2 (away), each played by its own person
+ * with their own cards and levels. The host builds this once and sends it; the guest plays exactly what it is sent.
+ * The court is P1's home court; each person keeps their own shot window; no rubber band between two people.
+ */
+export function onlineSetup(host: OnlineSquad, guest: OnlineSquad, perTeam: 2 | 3, quarterSeconds: number, rng: Rng = Math.random): MatchSetup {
+  if (host.squad.length < perTeam || guest.squad.length < perTeam) throw new Error('a squad is short of players');
+  const side = (s: OnlineSquad, i: 0 | 1): Side => {
+    const players = s.squad.slice(0, 3).map((p) => ({ id: mustPlayer(p.id).id, level: Math.max(1, Math.min(MAX_LEVEL, Math.round(p.level))) }));
+    const kitTeam = mustPlayer(players[0].id).team;
+    // the away side always plays in its own colours against the home side's (see buildMatch), so only P1's uniform counts
+    const uniform = i === 0 && typeof s.uniform === 'string' && s.uniform !== '' ? { uniform: s.uniform } : {};
+    return { name: ONLINE_NAMES[i], short: i === 0 ? 'P1' : 'P2', kitTeam, players, ...uniform };
+  };
+  const home = side(host, 0);
+  const away = side(guest, 1);
+  const assist = (s: OnlineSquad) => (s.easyShots ? TIMING_EASY : TIMING_STANDARD);
+  const rules: DuoRules = { teamAssist: [assist(host), assist(guest)], catchUp: [0, 0], help: 0 };
+  return {
+    mode: 'online',
+    perTeam,
+    home,
+    away,
+    court: teamById(home.kitTeam).court,
+    difficulty: DUO_DIFFICULTY,
+    quarters: QUARTERS,
+    quarterSeconds,
+    seed: newSeed(rng),
+    timingAssist: rules.teamAssist[0],
+    rubberBand: 0,
+    duo: rules,
+  };
+}

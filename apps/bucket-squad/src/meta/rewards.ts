@@ -18,6 +18,8 @@ const BASE: Record<Mode, { win: number; loss: number }> = {
   ladder: { win: 70, loss: 25 },
   // two people on one screen pay what a quick game pays
   duo: { win: 50, loss: 20 },
+  // two people on two devices: each device is paid exactly what a game on one screen pays
+  online: { win: 50, loss: 20 },
 };
 
 /** bonus per highlight and the most of each that pays out */
@@ -44,8 +46,8 @@ export function matchRewards(s: MatchSummary, firstWinToday: boolean): Rewards {
   if (s.won && s.score[0] - s.score[1] >= 10) lines.push({ label: 'Big win', coins: 10 });
   if (s.won && s.buzzerBeater) lines.push({ label: 'Buzzer beater', coins: 15 });
   if (s.won && s.overtime) lines.push({ label: 'Overtime thriller', coins: 10 });
-  // a two-player game: the quick-game pay for the device's squad (P1), and nothing that rides on beating the computer
-  if (s.mode === 'duo') return { lines, total: lines.reduce((a, l) => a + l.coins, 0) };
+  // a two-player game: the quick-game pay for the device's squad, and nothing that rides on beating the computer
+  if (s.mode === 'duo' || s.mode === 'online') return { lines, total: lines.reduce((a, l) => a + l.coins, 0) };
   // tougher opponents pay better
   const bonus = Math.round(lines.reduce((a, l) => a + l.coins, 0) * Math.max(0, s.difficulty - 0.3) * 0.6);
   if (bonus > 0) lines.push({ label: 'Tough opponent', coins: bonus });
