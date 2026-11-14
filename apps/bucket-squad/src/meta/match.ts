@@ -14,7 +14,18 @@ import { toAttrs } from '@/game/sim/ratings';
 import type { MatchConfig, MatchState, PlayerStats } from '@/game/sim/types';
 import { hexToRgb } from '@/game/kit/look';
 
-export type Mode = 'quick' | 'tour' | 'ladder';
+/** `duo`: two people on one screen, the device's squad (P1, home) against a team the second person picks (P2) */
+export type Mode = 'quick' | 'tour' | 'ladder' | 'duo';
+
+/** What a two-player game sets per person, home (P1) first. */
+export interface DuoRules {
+  /** each person's shot timing window */
+  teamAssist: [number, number];
+  /** each person's help while behind (a handicap); [0, 0] keeps the game straight */
+  catchUp: [number, number];
+  /** who gets a helping hand: nobody, P1 or P2 */
+  help: 0 | 1 | 2;
+}
 
 export interface SidePlayer {
   id: string;
@@ -52,6 +63,8 @@ export interface MatchSetup {
   spectate?: boolean;
   /** your squad plays itself with the full HUD on, for trailers and screenshots */
   demo?: boolean;
+  /** two people on one screen: the away side is played by the second person (mode `duo`) */
+  duo?: DuoRules;
 }
 
 /** Rating points a squad gains when its players are real teammates. */
@@ -121,6 +134,7 @@ export function buildMatch(setup: MatchSetup): BuiltMatch {
     seed: setup.seed,
     teams,
     userTeam: setup.spectate ? -1 : 0,
+    ...(setup.duo && !setup.spectate ? { humans: [true, true] as [boolean, boolean], teamAssist: setup.duo.teamAssist, catchUp: setup.duo.catchUp } : {}),
     quarters: setup.quarters,
     quarterSeconds: setup.quarterSeconds,
     difficulty: setup.difficulty,

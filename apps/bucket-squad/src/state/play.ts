@@ -1,6 +1,6 @@
 /** Starting games from the menus: turns the save file into a match setup and hands it to the match screen. */
 
-import { ladderSetup, quickSetup, tourSetup, type Prefs, type QuickOptions } from '@/meta/setups';
+import { duoSetup, ladderSetup, quickSetup, tourSetup, type DuoOptions, type Prefs, type QuickOptions } from '@/meta/setups';
 import { nextTourGame, tourById } from '@/meta/tour';
 import { squadLevels, type SaveData } from './logic';
 import { useSave } from './save';
@@ -13,6 +13,12 @@ export function prefsFrom(data: SaveData): Prefs {
 export function startQuick(options: QuickOptions): void {
   const data = useSave.getState();
   useSession.getState().begin(quickSetup(prefsFrom(data), options), options);
+}
+
+/** Two people on one screen: the device's squad against the team the second person picked. */
+export function startDuo(options: DuoOptions): void {
+  const data = useSave.getState();
+  useSession.getState().begin(duoSetup(prefsFrom(data), options), undefined, options);
 }
 
 export function startLadder(): void {
@@ -35,6 +41,11 @@ export function startNext(): boolean {
   if (!last) return false;
   if (last.mode === 'ladder') {
     startLadder();
+    return true;
+  }
+  if (last.mode === 'duo') {
+    if (!session.duo) return false;
+    startDuo(session.duo);
     return true;
   }
   if (last.mode === 'tour' && last.tour) {

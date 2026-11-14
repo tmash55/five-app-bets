@@ -10,7 +10,7 @@ import { teamWear, uniformById, uniformNeed, wearOf, type UniformDef, type Wear 
 import { MAX_COPIES, addCopy, levelOf, type Gain, type Owned } from '@/meta/collection';
 import { TIERS, ladderResult, tierIndex, type Tier } from '@/meta/ladder';
 import type { MatchSummary } from '@/meta/match';
-import { ALL_DONE_PACK, currentMissions, missionDone, missionsAfterMatch, missionsAfterPack, type Mission, type MissionDay } from '@/meta/missions';
+import { ALL_DONE_PACK, currentMissions, missionDone, missionsAfterDuo, missionsAfterMatch, missionsAfterPack, type Mission, type MissionDay } from '@/meta/missions';
 import { openPack, packById, type PackResult } from '@/meta/packs';
 import { matchRewards, type Rewards } from '@/meta/rewards';
 import type { Rng } from '@/meta/rng';
@@ -359,6 +359,7 @@ export interface MatchOutcome {
 }
 
 export function finishMatch(data: SaveData, summary: MatchSummary, day: string): { data: SaveData; outcome: MatchOutcome } {
+  if (summary.mode === 'duo') return finishDuo(data, summary, day);
   const firstWin = summary.won && data.firstWinDay !== day;
   const rewards = matchRewards(summary, firstWin);
   let coins = data.coins + rewards.total;
@@ -455,6 +456,22 @@ export function finishMatch(data: SaveData, summary: MatchSummary, day: string):
       starPacks,
       firstWinDay: summary.won ? day : data.firstWinDay,
     },
+  };
+}
+
+/**
+ * A two-player game on one screen. The device's save gets the quick-game coins for its squad (P1); it is a game
+ * against a person, not the computer, so it moves no ladder, tour, career record or first win of the day. Of the
+ * missions only "Play N games" counts it: that one is plainly about playing.
+ */
+function finishDuo(data: SaveData, summary: MatchSummary, day: string): { data: SaveData; outcome: MatchOutcome } {
+  const rewards = matchRewards(summary, false);
+  const before = currentMissions(data.missions, day);
+  const missions = missionsAfterDuo(before);
+  const missionsDone = missions.missions.filter((m, i) => missionDone(m) && !missionDone(before.missions[i]));
+  return {
+    outcome: { rewards, missionsDone },
+    data: { ...data, coins: data.coins + rewards.total, missions },
   };
 }
 

@@ -41,8 +41,13 @@ export interface TeamSetup {
 export interface MatchConfig {
   seed: number;
   teams: [TeamSetup, TeamSetup];
-  /** which team the person controls, -1 for a computer-only match */
+  /** which team the person controls, -1 for a computer-only match (in a two-player game: the first player's team) */
   userTeam: -1 | TeamId;
+  /**
+   * Which teams people play, home first. Left out, only `userTeam` is played by a person. A second human team gets
+   * its own controlled player and pad (see `MatchState.second`); its other players stay computer controlled.
+   */
+  humans?: [boolean, boolean];
   quarters: number;
   quarterSeconds: number;
   /** 0..1 skill of the computer opponents */
@@ -51,8 +56,15 @@ export interface MatchConfig {
   mateSkill: number;
   /** widens the perfect-release window for the person (1 = standard) */
   timingAssist: number;
+  /** per team, in place of `timingAssist`, for a team a person plays (two-player games) */
+  teamAssist?: [number, number];
   /** keep matches close: 0 none, 1 strong */
   rubberBand: number;
+  /**
+   * per team, in place of `rubberBand`: how much help that team gets while it is behind (a handicap). The side ahead
+   * is held back only by the other side's number, so [0, 0] is no rubber band at all and [r, r] is `rubberBand: r`.
+   */
+  catchUp?: [number, number];
   autoSwitch: boolean;
   /** the person's team plays itself while the camera, rings and HUD behave as if someone were playing (trailers and screenshots) */
   demo?: boolean;
@@ -68,6 +80,27 @@ export interface PadInput {
   b: boolean;
   /** switch defender */
   sw: boolean;
+}
+
+/**
+ * One team's controls for one tick: the stick (each axis -1..1, screen right and down) and the buttons held. Plain
+ * data with nothing else in it, so a network layer can send it as it is (see `input.ts` for a compact form).
+ */
+export type InputFrame = PadInput;
+
+/** What one tick of the match reads: a frame for each team, home first; null for a team nobody plays. */
+export type TeamFrames = readonly [InputFrame | null, InputFrame | null];
+
+/** A person's seat at the match: their controlled player and what their buttons did last tick. */
+export interface Seat {
+  /** index of the player this person controls, -1 when none */
+  control: number;
+  /** pad buttons last tick, for edge detection */
+  padA: boolean;
+  padB: boolean;
+  padSw: boolean;
+  /** changes whenever the ball changes hands or state, drives defender auto switch */
+  ctrlKey: string;
 }
 
 export type PState =
@@ -324,5 +357,10 @@ export interface MatchState {
   padSw: boolean;
   /** changes whenever the ball changes hands or state, drives defender auto switch */
   ctrlKey: string;
+  /**
+   * The second person in a two-player game: the human team that is not `cfg.userTeam`. The match itself is the
+   * first person's seat (`control`, `padA` and the rest above); `second.control` is -1 when nobody else plays.
+   */
+  second: Seat;
   time: number;
 }

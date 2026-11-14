@@ -212,6 +212,8 @@ export const pad = {
       buttonSmall: 62,
       /** gap between the pad and the screen edge */
       inset: 22,
+      /** a two-player game: how far one person's cluster (stick and buttons) reaches in from its end of the screen */
+      cluster: 320,
       /** lettering on the big, middle and small buttons */
       label: 16,
       labelMid: 13,

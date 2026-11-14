@@ -32,18 +32,20 @@ interface Props {
   enabled: boolean;
 }
 
-function PadButton({ spot, pressed, fill, label, icon }: { spot: ButtonSpot; pressed: SharedValue<number>; fill: string; label: string; icon?: IconName }) {
+/** One round pad button. `ring` (two-player games) draws a band of that colour round it, so everyone can see whose it is. */
+export function PadButton({ spot, pressed, fill, label, icon, ring, scale = 1 }: { spot: ButtonSpot; pressed: SharedValue<number>; fill: string; label: string; icon?: IconName; ring?: string; scale?: number }) {
   const style = useAnimatedStyle(() => ({
     transform: [{ scale: 1 - 0.09 * pressed.value }],
     opacity: IDLE + (1 - IDLE) * pressed.value,
   }));
   const d = spot.r * 2;
   // the lettering follows the pad, not the rest of the screen, so it always fits its button
-  const letters = spot.r >= pad.button / 2 ? pad.label : spot.r >= pad.buttonMid / 2 ? pad.labelMid : pad.labelSmall;
+  const r = spot.r / scale;
+  const letters = (r >= pad.button / 2 ? pad.label : r >= pad.buttonMid / 2 ? pad.labelMid : pad.labelSmall) * scale;
   return (
     <Animated.View
       pointerEvents="none"
-      style={[styles.button, { left: spot.x - spot.r, top: spot.y - spot.r, width: d, height: d, borderRadius: spot.r, backgroundColor: fill }, style]}>
+      style={[styles.button, { left: spot.x - spot.r, top: spot.y - spot.r, width: d, height: d, borderRadius: spot.r, backgroundColor: fill }, ring !== undefined && { outlineColor: ring, outlineWidth: stroke.regular, outlineStyle: 'solid' }, style]}>
       {icon && <Icon name={icon} size={Math.round(spot.r * 0.62)} color="white" />}
       <Txt font="display" color="white" shadow style={{ fontSize: letters, lineHeight: Math.round(letters * 1.12) }}>
         {label}
@@ -53,7 +55,7 @@ function PadButton({ spot, pressed, fill, label, icon }: { spot: ButtonSpot; pre
 }
 
 /** Sprint energy, drawn as a ring around the TURBO button. */
-const TurboRing = memo(function TurboRing({ spot, value }: { spot: ButtonSpot; value: number }) {
+export const TurboRing = memo(function TurboRing({ spot, value }: { spot: ButtonSpot; value: number }) {
   const r = spot.r + RING_WIDTH - 1;
   const box = r * 2 + RING_WIDTH + 2;
   const c = 2 * Math.PI * r;
@@ -78,7 +80,7 @@ const TurboRing = memo(function TurboRing({ spot, value }: { spot: ButtonSpot; v
   );
 });
 
-function touchesOf(e: GestureResponderEvent): PadTouch[] {
+export function touchesOf(e: GestureResponderEvent): PadTouch[] {
   const out: PadTouch[] = [];
   for (const t of e.nativeEvent.changedTouches) out.push({ id: t.identifier, x: t.pageX, y: t.pageY });
   return out;

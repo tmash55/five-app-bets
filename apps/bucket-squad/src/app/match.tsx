@@ -11,6 +11,7 @@ import { shortName } from '@/data/roster';
 import { MatchView } from '@/game/MatchView';
 import { MatchRunner, type HudState } from '@/game/runner';
 import { Controls } from '@/match/Controls';
+import { DuoControls, type DuoSeat } from '@/match/DuoControls';
 import { MATCH_SOUNDS, MatchDirector } from '@/match/director';
 import { HowToOverlay } from '@/match/HowTo';
 import { CalloutLayer, ControlPlate, Scoreboard, SquadHeat, type CalloutHandle } from '@/match/Hud';
@@ -32,7 +33,9 @@ function Match({ setup }: { setup: MatchSetup }) {
   const [hud, setHud] = useState<HudState | null>(null);
   const [paused, setPaused] = useState(false);
   const firstGame = useSave((s) => !s.tips[HOW_TO_TIP]);
-  const [howTo, setHowTo] = useState(firstGame && !setup.spectate);
+  // two people on one screen: a cluster of controls each, and either of them can pause
+  const duo = setup.mode === 'duo' && setup.duo !== undefined && !setup.spectate;
+  const [howTo, setHowTo] = useState(firstGame && !setup.spectate && !duo);
   const callouts = useRef<CalloutHandle>(null);
   const lefty = useSave((s) => s.settings.lefty);
   const finishMatch = useSave((s) => s.finishMatch);
@@ -67,6 +70,7 @@ function Match({ setup }: { setup: MatchSetup }) {
         router.replace('/results');
       },
     });
+    // tooling: `__bs.pads[0]` and `__bs.pads[1]` are each team's input frame, for driving a two-player game by script
     if (__DEV__) (globalThis as Record<string, unknown>).__bs = runner;
     return () => runner.listen({});
   }, [runner, built, setup, router, finish, finishMatch]);
@@ -107,19 +111,25 @@ function Match({ setup }: { setup: MatchSetup }) {
   const over = hud?.phase === 'final';
   const controlled = hud && hud.control >= 0 ? built.lineup[hud.control] : null;
   // the person's own players (always the first side), each with their flame meter
-  const squad = hud && !setup.spectate ? built.lineup.flatMap((l, i) => (l.team === 0 ? [{ id: l.def.id, fire: hud.fire[i] ?? 0, you: i === hud.control }] : [])) : [];
+  const squad = hud && !setup.spectate && !duo ? built.lineup.flatMap((l, i) => (l.team === 0 ? [{ id: l.def.id, fire: hud.fire[i] ?? 0, you: i === hud.control }] : [])) : [];
 
   return (
     <View style={styles.root}>
       <MatchView runner={runner} />
       {hud && <Scoreboard hud={hud} names={names} colors={built.colors} />}
       <CalloutLayer ref={callouts} colors={built.colors} />
-      {hud && !setup.spectate && !over && <Controls runner={runner} offense={hud.offense} lefty={lefty} turbo={hud.turbo} enabled={!stopped} />}
+      {hud && !setup.spectate && !over && !duo && <Controls runner={runner} offense={hud.offense} lefty={lefty} turbo={hud.turbo} enabled={!stopped} />}
+      {hud && duo && !over && <DuoControls runner={runner} seats={duoSeats(hud)} colors={built.colors} enabled={!stopped} />}
       {squad.length > 0 && !over && <SquadHeat players={squad} fill={built.colors[0]} />}
-      {controlled && !over && <ControlPlate playerId={controlled.def.id} name={shortName(controlled.def)} fill={built.colors[0]} hyped={hud !== null && hud.hype[0] > 20} onFire={hud !== null && (hud.fire[hud.control] ?? 0) > 20} />}
+      {controlled && !over && !duo && <ControlPlate playerId={controlled.def.id} name={shortName(controlled.def)} fill={built.colors[0]} hyped={hud !== null && hud.hype[0] > 20} onFire={hud !== null && (hud.fire[hud.control] ?? 0) > 20} />}
       {!over && (
         <View style={[styles.pause, { top: Math.max(insets.top, space.sm), left: Math.max(insets.left, space.md) }]}>
-          <IconButton name="pause" label="Pause" onPress={() => setPaused(true)} />
+          <IconButton name="pause" label={duo ? 'Pause, Player 1' : 'Pause'} onPress={() => setPaused(true)} />
+        </View>
+      )}
+      {!over && duo && (
+        <View style={[styles.pause, { top: Math.max(insets.top, space.sm), right: Math.max(insets.right, space.md) }]}>
+          <IconButton name="pause" label="Pause, Player 2" onPress={() => setPaused(true)} />
         </View>
       )}
       {paused && !howTo && hud && (
@@ -128,12 +138,22 @@ function Match({ setup }: { setup: MatchSetup }) {
           onResume={() => setPaused(false)}
           onHowTo={() => setHowTo(true)}
           onQuit={quit}
-          quitNote={setup.mode === 'quick' ? 'This game will not count.' : 'This game will not count, and you will not win anything for it.'}
+          lefty={!duo}
+          quitNote={setup.mode === 'quick' || setup.mode === 'duo' ? 'This game will not count.' : 'This game will not count, and you will not win anything for it.'}
         />
       )}
       {howTo && <HowToOverlay onClose={closeHowTo} closeLabel={paused ? 'BACK' : "LET'S PLAY!"} />}
     </View>
   );
+}
+
+/** Each person's side of the pad in a two-player game, from the HUD. */
+function duoSeats(hud: HudState): [DuoSeat, DuoSeat] {
+  const second = hud.second;
+  return [
+    { offense: hud.offense, turbo: hud.turbo },
+    second ? { offense: second.offense, turbo: second.turbo } : { offense: false, turbo: 0 },
+  ];
 }
 
 export default function MatchScreen() {

@@ -20,6 +20,7 @@ import {
   shotContest,
 } from './core';
 import { clamp, clamp01, hypot2, lerp, rngNext } from './math';
+import { isHuman } from './seats';
 import type { AiMemory, Intent, MatchState, PlayerSim, TeamId } from './types';
 
 /** Places to stand on offense: [distance out from the hoop along the court, across]. */
@@ -71,7 +72,8 @@ export function aiReset(p: PlayerSim): void {
 }
 
 function skillOf(m: MatchState, p: PlayerSim): number {
-  return m.cfg.userTeam >= 0 && p.team === m.cfg.userTeam ? m.cfg.mateSkill : m.cfg.difficulty;
+  // a person's teammates play at their own level, the computer's teams at the difficulty
+  return isHuman(m, p.team) ? m.cfg.mateSkill : m.cfg.difficulty;
 }
 
 function moveTo(p: PlayerSim, it: Intent, tx: number, tz: number, slowR: number, turbo: boolean): number {

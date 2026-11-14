@@ -97,17 +97,23 @@ function statLine(p: PlayerLine): string {
 
 /** What the yellow button at the bottom says: what it does, the game it starts, and its picture. */
 function goNext(setup: MatchSetup, won: boolean, tour: Tour | null, nextStop: { stage: number; game: number } | null): { label: string; sub: string; icon: LineIconName } {
-  const label = nextStop ? 'NEXT GAME' : won ? 'PLAY AGAIN' : 'TRY AGAIN';
+  const label = setup.mode === 'duo' ? 'REMATCH' : nextStop ? 'NEXT GAME' : won ? 'PLAY AGAIN' : 'TRY AGAIN';
   const icon: LineIconName = nextStop ? 'play' : 'again';
   const at = nextStop ?? (setup.tour ? { stage: setup.tour.stage, game: setup.tour.game } : null);
   const stop = tour && at ? tour.stages[at.stage] : undefined;
   const game = stop?.games[at?.game ?? 0];
   if (stop && game) return { label, icon, sub: `${stop.team.name} · ${game.title}`.toUpperCase() };
   const size = `${setup.perTeam} ON ${setup.perTeam}`;
-  return { label, icon, sub: setup.mode === 'ladder' ? `LADDER · ${size}` : `QUICK GAME · ${size}` };
+  return { label, icon, sub: setup.mode === 'ladder' ? `LADDER · ${size}` : setup.mode === 'duo' ? `2 PLAYERS · ${size}` : `QUICK GAME · ${size}` };
+}
+
+/** A two-player game: which of the two won (the home side, P1, is the device's squad). */
+function duoWinner(s: MatchSummary): 0 | 1 {
+  return s.score[0] > s.score[1] ? 0 : 1;
 }
 
 function headline(s: MatchSummary): string {
+  if (s.mode === 'duo') return duoWinner(s) === 0 ? 'P1 WINS!' : 'P2 WINS!';
   if (s.won) return s.buzzerBeater ? 'AT THE BUZZER!' : s.score[0] - s.score[1] >= 10 ? 'BIG WIN!' : 'YOU WIN!';
   return s.score[1] - s.score[0] <= 3 ? 'SO CLOSE!' : 'GOOD GAME!';
 }
@@ -249,10 +255,12 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
     if (y > 0) list.current?.scrollTo({ y, animated: false });
   }, [shown]);
 
+  // with two people somebody always won, so the win is always celebrated
+  const cheer = summary.won || summary.mode === 'duo';
   useEffect(() => {
     setMusic(null);
-    playSfx(summary.won ? 'win' : 'lose');
-    if (summary.won) {
+    playSfx(cheer ? 'win' : 'lose');
+    if (cheer) {
       after(200, () => {
         setBurst(1);
         playSfx('cheer');
@@ -293,7 +301,7 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
     after(next, () => setSettled(true));
     after(next + 200, () => setMomentsOn(true));
     after(Math.max(2600, next + 300), () => setMusic('menu'));
-  }, [after, lines, summary.won, earnedStars, then]);
+  }, [after, lines, cheer, earnedStars, then]);
 
   const landed = lines.slice(0, shown).reduce((a, l) => a + l.coins, 0);
   const total = useCountUp(landed, LINE_MS);
@@ -303,6 +311,7 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
   const mvp = summary.players.find((p) => p.id === summary.mvp) ?? summary.players[0];
   const mvpDef = mustPlayer(mvp.id);
   const away = teamById(setup.away.kitTeam);
+  const duo = summary.mode === 'duo';
   const packIds = Object.keys(packs).filter((id) => packs[id] > 0);
   // today's free pack counts as one waiting to open: it is collected in the shop, where it sits first
   const freePack = freePackDay !== dayKey();
@@ -323,7 +332,7 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
 
   return (
     <View style={styles.root}>
-      <ArcadeScreen title={headline(summary)} tube={summary.won ? 'gold' : 'cyan'} back={false} music={false} coins={Math.max(0, bank - owed)} style={styles.body}>
+      <ArcadeScreen title={headline(summary)} tube={cheer ? 'gold' : 'cyan'} back={false} music={false} coins={Math.max(0, bank - owed)} style={styles.body}>
         <View style={styles.row}>
           {/* the win burst goes off behind everything on the page, from the scoreboard's edges outward, so it frames
               the score and never crosses it; it stays below the top bar and above the buttons */}
@@ -337,9 +346,9 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
           <View style={styles.left}>
             <Arrive onLayout={measureBoard}>
               <Well style={styles.board}>
-                <ScoreSide name={summary.names[0]} score={summary.score[0]} lit={summary.won} />
+                <ScoreSide name={duo ? `P1 · ${summary.names[0]}` : summary.names[0]} score={summary.score[0]} lit={duo ? duoWinner(summary) === 0 : summary.won} />
                 <View style={styles.dash} />
-                <ScoreSide name={summary.names[1]} score={summary.score[1]} lit={!summary.won} mark={<TeamMark team={away} small />} />
+                <ScoreSide name={duo ? `P2 · ${summary.names[1]}` : summary.names[1]} score={summary.score[1]} lit={duo ? duoWinner(summary) === 1 : !summary.won} mark={<TeamMark team={away} small />} />
               </Well>
             </Arrive>
             {summary.overtime && <Tag label="OVERTIME" tube="red" small style={styles.centerSelf} />}

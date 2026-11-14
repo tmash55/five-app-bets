@@ -39,6 +39,7 @@ function modeLine(setup: MatchSetup, ladderPoints: number, homeTeam: string | nu
     return `TOUR  ·  ${stage.games[setup.tour.game].title.toUpperCase()}`;
   }
   if (setup.mode === 'ladder') return `LADDER  ·  ${TIERS[tierIndex(ladderPoints)].name.toUpperCase()}`;
+  if (setup.mode === 'duo') return `2 PLAYERS  ·  ${setup.perTeam} ON ${setup.perTeam}`;
   const level = setup.difficulty < 0.4 ? 0 : setup.difficulty < 0.7 ? 1 : 2;
   return `QUICK GAME  ·  ${DIFFICULTY_NAMES[level].toUpperCase()}`;
 }
@@ -69,11 +70,14 @@ const FOOT_GAP = space.sm;
 const SIDE_ROOM = px(4);
 /** how far the VS slash's ends stay inside the stage: more than its widest glow */
 const SLASH_INSET = px(14);
+/** the P1 / P2 badge before a side's name in a two-player game */
+const TAG_W = px(44);
 
-function SideColumn({ side, perTeam, cardW, mine, from, tube: tb }: { side: Side; perTeam: number; cardW: number; mine: boolean; from: -1 | 1; tube: Tube }) {
+function SideColumn({ side, perTeam, cardW, mine, from, tube: tb, tag }: { side: Side; perTeam: number; cardW: number; mine: boolean; from: -1 | 1; tube: Tube; tag?: string }) {
   const players = side.players.slice(0, perTeam);
   const team = teamById(side.kitTeam);
-  const chem = mine ? chemistry(players.map((p) => p.id)) : 0;
+  // a two-player game: both sides are somebody's, and both show their chemistry
+  const chem = mine || tag !== undefined ? chemistry(players.map((p) => p.id)) : 0;
   const slide = useSharedValue(0);
   useEffect(() => {
     slide.set(withDelay(80, withSpring(1, { damping: 14, stiffness: 150, mass: 0.9 })));
@@ -82,9 +86,16 @@ function SideColumn({ side, perTeam, cardW, mine, from, tube: tb }: { side: Side
   return (
     <Animated.View style={[styles.side, style]}>
       <View style={styles.sideHead}>
+        {tag !== undefined && (
+          <View style={[styles.tag, { borderColor: tb.glass, boxShadow: [halo(tb.glass, 10, 0.7)] }]}>
+            <Glow face="display" size="large" tube={tb} track="close">
+              {tag}
+            </Glow>
+          </View>
+        )}
         {/* your own squad needs no badge: its name says whose it is */}
         {!mine && <TeamMark team={team} small />}
-        <Glow face="display" size="title" tube={tb} track="close" room={cardW * perTeam}>
+        <Glow face="display" size="title" tube={tb} track="close" room={cardW * perTeam - (tag !== undefined ? TAG_W + space.sm : 0)}>
           {side.name.toUpperCase()}
         </Glow>
       </View>
@@ -136,6 +147,7 @@ function Matchup({ setup }: { setup: MatchSetup }) {
   const ladderPoints = useSave((s) => s.ladder.points);
   const homeTeam = useSave((s) => s.homeTeam);
   const court = COURTS[setup.court];
+  const duo = setup.mode === 'duo';
   // your side is lit in the colours it wears
   const homeTube = teamTube(sideWear(setup.home));
   const awayTube = teamTube(teamById(setup.away.kitTeam));
@@ -184,13 +196,13 @@ function Matchup({ setup }: { setup: MatchSetup }) {
               <LinearGradient colors={[fade(awayTube.glass, 0), fade(awayTube.glass, 0.24)]} start={ACROSS_A} end={ACROSS_B} style={[styles.wash, styles.washRight]} />
               <Slash width={stageW} height={stageH} />
               <View style={styles.row}>
-                <SideColumn side={setup.home} perTeam={n} cardW={cardW} mine from={-1} tube={homeTube} />
+                <SideColumn side={setup.home} perTeam={n} cardW={cardW} mine from={-1} tube={homeTube} tag={duo ? 'P1' : undefined} />
                 <Animated.View style={[styles.middle, vs]}>
                   <Glow face="display" size={px(50)} tube="pink" track="close">
                     VS
                   </Glow>
                 </Animated.View>
-                <SideColumn side={setup.away} perTeam={n} cardW={cardW} mine={false} from={1} tube={awayTube} />
+                <SideColumn side={setup.away} perTeam={n} cardW={cardW} mine={false} from={1} tube={awayTube} tag={duo ? 'P2' : undefined} />
               </View>
             </View>
             <ChaseBulbs width={stageW} />
@@ -283,6 +295,15 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     gap: space.sm,
+  },
+  tag: {
+    width: TAG_W,
+    height: HEAD,
+    borderWidth: arcade.outline,
+    borderRadius: arcade.rButton,
+    backgroundColor: night.pit,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sideHead: {
     height: HEAD,
