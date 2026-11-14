@@ -28,7 +28,7 @@ import { Breathe } from '@/ui/arcade/Motion';
 import { Popup } from '@/ui/arcade/Popup';
 import { Bulbs } from '@/ui/arcade/Room';
 import { ChemChip, OvrMeter } from '@/ui/arcade/Strength';
-import { Chip, Tag, TeamMark } from '@/ui/arcade/Surface';
+import { Chip, TeamMark } from '@/ui/arcade/Surface';
 import { teamTube } from '@/ui/arcade/TeamPick';
 import { Glow, Print } from '@/ui/arcade/Type';
 
@@ -100,7 +100,8 @@ function SideColumn({ side, perTeam, cardW, mine, from, tube: tb, tag, you }: { 
         {/* your own squad needs no badge: its name says whose it is */}
         {!mine && <TeamMark team={team} small />}
         <Glow face="display" size="title" tube={tb} track="close" room={cardW * perTeam - (tag !== undefined ? TAG_W + space.sm : 0)}>
-          {side.name.toUpperCase()}
+          {/* two devices: the side played on this one is yours */}
+          {you ? 'YOU' : side.name.toUpperCase()}
         </Glow>
       </View>
       <View style={styles.cards}>
@@ -109,8 +110,6 @@ function SideColumn({ side, perTeam, cardW, mine, from, tube: tb, tag, you }: { 
         ))}
       </View>
       <View style={styles.meters}>
-        {/* two devices: which side is played on this one */}
-        {you && <Tag label="YOU" tube={tb} />}
         <OvrMeter value={sideOverall(side, perTeam)} tube={tb} />
         {chem > 0 && <ChemChip chemistry={chem} />}
       </View>

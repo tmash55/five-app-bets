@@ -104,10 +104,7 @@ const seed = (team, rngSeed) => `(()=>{
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function main() {
-  const A = await connect(9355);
-  const B = await connect(9356);
-  const both = (fn) => Promise.all([fn(A), fn(B)]);
+async function setUp(A, B, both) {
   // the virtual clock goes into both pages, following real time until the match is filmed
   await both((d) => d.send('Page.addScriptToEvaluateOnNewDocument', { source: fs.readFileSync(path.join(__dirname, 'vt.js'), 'utf8') }));
   await both(async (d) => {
@@ -152,6 +149,15 @@ async function main() {
   await B.shot(`${OUT}/06-versus-guest-waiting.png`);
   await A.tap('TIP-OFF');
   await both((d) => d.until(`!!globalThis.__bs && __online.getState().view.phase==='playing'`, 30000));
+}
+
+async function main() {
+  const A = await connect(9355);
+  const B = await connect(9356);
+  const both = (fn) => Promise.all([fn(A), fn(B)]);
+  // RESUME=1: the two pages are already in the match (a run that stopped part way): play on from there
+  const resume = process.env.RESUME === '1';
+  if (!resume) await setUp(A, B, both);
   // from here the two clocks are stepped by turns
   await both((d) => d.ev(`(()=>{ __vt.auto=false; return 1 })()`));
   const step = async (ms) => {
@@ -178,15 +184,17 @@ async function main() {
   };
   let k = 0;
   // play into the first quarter
-  while ((await ticks())[0] < 60 * 14) {
+  while (!resume && (await ticks())[0] < 60 * 14) {
     await thumbs(k++);
     await step(1000 / 30);
   }
-  const at = await level();
+  const at = resume ? -1 : await level();
   console.log('same moment at tick', at, await ticks());
   await wait(400);
-  await A.shot(`${OUT}/07-moment-host.png`);
-  await B.shot(`${OUT}/08-moment-guest.png`);
+  if (!resume) {
+    await A.shot(`${OUT}/07-moment-host.png`);
+    await B.shot(`${OUT}/08-moment-guest.png`);
+  }
   console.log('hashes', await A.ev('globalThis.__netHash ? __netHash() : 0'), await B.ev('globalThis.__netHash ? __netHash() : 0'));
 
   const film = Number(process.env.FILM || 0);
@@ -202,6 +210,7 @@ async function main() {
     }
   }
 
+  if (process.env.NO_FINISH === '1') process.exit(0);
   // play it out, quickly: big steps, the game runs its six ticks a frame
   for (let i = 0; i < 20000; i++) {
     const [a, b] = await ticks().catch(() => [-1, -1]);
