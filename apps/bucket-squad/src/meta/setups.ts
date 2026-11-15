@@ -3,9 +3,11 @@
 import { MAX_LEVEL, TEAMS, mustPlayer, playerOverall, teamById, teamPlayers } from '@/data/roster';
 import type { TeamDef } from '@/data/types';
 import type { CourtId } from '@/game/render/court';
+import { RANDOM_COURT, resolveCourt, type CourtChoice } from './courts';
 import { TIERS, ladderOpponent, tierIndex } from './ladder';
 import type { DuoRules, MatchSetup, Side, SidePlayer } from './match';
 import { pick, type Rng } from './rng';
+import { DEFAULT_SHORT, nameText, schemeById, shortOf, type TeamName } from './teamName';
 import { tourById } from './tour';
 
 export const DIFFICULTY_NAMES = ['Rookie', 'Pro', 'All-Star'] as const;
@@ -38,6 +40,12 @@ export interface Prefs {
   homeTeam?: string | null;
   /** the uniform the squad wears (data/uniforms); null or left out for the captain's team's */
   uniform?: string | null;
+  /** the squad's own name; null or left out for "Your Squad" */
+  teamName?: TeamName | null;
+  /** the squad's colour scheme (meta/teamName); null or left out for the colours it wears */
+  teamColors?: string | null;
+  /** the court played on last, which a random court is never */
+  lastCourt?: CourtId | null;
 }
 
 function newSeed(rng: Rng): number {
@@ -48,9 +56,40 @@ function newSeed(rng: Rng): number {
  * The person's side. The whole squad wears one uniform so teammates are easy to tell apart: the one picked on the
  * uniforms page, or else the captain's team's.
  */
-export function homeSide(squad: readonly SidePlayer[], uniform?: string | null): Side {
+export function homeSide(squad: readonly SidePlayer[], uniform?: string | null, teamName?: TeamName | null, teamColors?: string | null): Side {
   const captain = mustPlayer(squad[0].id);
-  return { name: 'Your Squad', short: 'YOU', kitTeam: captain.team, players: [...squad], ...(typeof uniform === 'string' && uniform !== '' ? { uniform } : {}) };
+  return {
+    name: nameText(teamName ?? null),
+    short: shortOf(teamName ?? null),
+    kitTeam: captain.team,
+    players: [...squad],
+    ...(typeof uniform === 'string' && uniform !== '' ? { uniform } : {}),
+    ...(schemeById(teamColors) ? { colors: teamColors as string } : {}),
+  };
+}
+
+/** The person's squad as it takes the court: its players, its uniform, its name and its colours. */
+export function squadSide(prefs: Prefs): Side {
+  return homeSide(prefs.squad, prefs.uniform, prefs.teamName, prefs.teamColors);
+}
+
+/**
+ * Playing as a team instead of the squad: the team's strongest side, in its own uniform and under its own name, at the
+ * card level of the squad's players on the court, on average (as the second person's team in a two-player game).
+ */
+export function asTeamSide(team: TeamDef, squad: Side, perTeam: 2 | 3): Side {
+  return teamSide(team, perTeam, 2, duoLevel(squad, perTeam));
+}
+
+/** The team a side is playing as, or null for the person's own squad. */
+function teamPicked(id: string | null | undefined, perTeam: number): TeamDef | null {
+  if (!id) return null;
+  return playableTeams(perTeam).find((t) => t.id === id) ?? null;
+}
+
+/** Two sides with the same three letters: the squad goes by YOU (a team keeps its own). */
+function apart(home: Side, away: Side, squad: boolean): Side {
+  return squad && home.short === away.short ? { ...home, short: DEFAULT_SHORT } : home;
 }
 
 export function sideOverall(side: Side, perTeam: number): number {
@@ -102,8 +141,10 @@ export interface QuickOptions {
   opponent: string | null;
   /** a surprise opponent comes from this league (any league when left out) */
   league?: string | null;
-  /** court, or null for the opponent's home court */
-  court: CourtId | null;
+  /** court, null for the opponent's home court, or `random` */
+  court: CourtChoice;
+  /** play as this team (its own players, colours and name) instead of the squad; null or left out for the squad */
+  team?: string | null;
 }
 
 /**
@@ -121,25 +162,31 @@ export function fairSurprises(teams: readonly TeamDef[], home: Side, perTeam: 2 
 
 export function quickSetup(prefs: Prefs, o: QuickOptions, rng: Rng = Math.random): MatchSetup {
   const lv = QUICK_LEVELS[o.difficulty];
-  const home = homeSide(prefs.squad, prefs.uniform);
+  const squad = squadSide(prefs);
+  const playAs = teamPicked(o.team, o.perTeam);
+  const home = playAs ? asTeamSide(playAs, squad, o.perTeam) : squad;
   const mine = new Set(home.players.map((p) => p.id));
   const sideOf = (t: TeamDef) => teamSide(t, o.perTeam, o.difficulty, lv.level);
-  // a surprise opponent is a team that can field its usual players against you
-  const everyone = playableTeams(o.perTeam);
+  // a surprise opponent is a team that can field its usual players against you, and never the team you play as
+  const everyone = playableTeams(o.perTeam).filter((t) => t.id !== playAs?.id);
   const inLeague = o.league ? everyone.filter((t) => t.league === o.league) : everyone;
   const all = inLeague.length > 0 ? inLeague : everyone;
   const clean = all.filter((t) => !sideOf(t).players.some((p) => mine.has(p.id)));
-  const team = o.opponent ? teamById(o.opponent) : pick(rng, fairSurprises(clean.length > 0 ? clean : all, home, o.perTeam, o.difficulty, sideOf));
+  const named = o.opponent && o.opponent !== playAs?.id ? teamById(o.opponent) : null;
+  const team = named ?? pick(rng, fairSurprises(clean.length > 0 ? clean : all, home, o.perTeam, o.difficulty, sideOf));
+  const away = withoutMirrors(sideOf(team), home);
+  const seed = newSeed(rng);
   return {
     mode: 'quick',
     perTeam: o.perTeam,
-    home,
-    away: withoutMirrors(sideOf(team), home),
-    court: o.court ?? team.court,
+    home: apart(home, away, playAs === null),
+    away,
+    court: resolveCourt(o.court, team.court, seed, prefs.lastCourt),
+    ...(o.court === RANDOM_COURT ? { randomCourt: true } : {}),
     difficulty: lv.difficulty,
     quarters: QUARTERS,
     quarterSeconds: prefs.quarterSeconds,
-    seed: newSeed(rng),
+    seed,
     timingAssist: prefs.easyShots ? TIMING_EASY : TIMING_STANDARD,
     rubberBand: lv.rubberBand,
   };
@@ -147,12 +194,12 @@ export function quickSetup(prefs: Prefs, o: QuickOptions, rng: Rng = Math.random
 
 export function ladderSetup(prefs: Prefs, points: number, perTeam: 2 | 3, rng: Rng = Math.random): MatchSetup {
   const tier = TIERS[tierIndex(points)];
-  const home = homeSide(prefs.squad, prefs.uniform);
-  const away = withoutMirrors(ladderOpponent(points, perTeam, rng, mustPlayer(prefs.squad[0].id).team), home);
+  const squad = squadSide(prefs);
+  const away = withoutMirrors(ladderOpponent(points, perTeam, rng, mustPlayer(prefs.squad[0].id).team), squad);
   return {
     mode: 'ladder',
     perTeam,
-    home,
+    home: apart(squad, away, true),
     away,
     court: teamById(away.kitTeam).court,
     difficulty: tier.difficulty,
@@ -169,12 +216,13 @@ export function tourSetup(prefs: Prefs, tourId: string, stage: number, game: num
   const st = tour.stages[stage];
   const g = st?.games[game];
   if (!st || !g) return null;
-  const home = homeSide(prefs.squad, prefs.uniform);
+  const squad = squadSide(prefs);
+  const away = withoutMirrors({ name: st.team.name, short: st.team.short, kitTeam: st.team.id, players: g.opponents }, squad);
   return {
     mode: 'tour',
     perTeam: g.perTeam,
-    home,
-    away: withoutMirrors({ name: st.team.name, short: st.team.short, kitTeam: st.team.id, players: g.opponents }, home),
+    home: apart(squad, away, true),
+    away,
     court: st.team.court,
     difficulty: g.difficulty,
     quarters: QUARTERS,
@@ -199,10 +247,12 @@ export interface DuoOptions {
   perTeam: 2 | 3;
   /** the team the second person plays, or null for a fair match: the side whose overall is closest to P1's */
   rival: string | null;
-  /** court, or null for P2's team's home court */
-  court: CourtId | null;
+  /** court, null for P2's team's home court, or `random` */
+  court: CourtChoice;
   /** a helping hand (wider shot timing, help while behind): nobody, P1 or P2 */
   help: 0 | 1 | 2;
+  /** P1 plays as this team instead of the device's squad; null or left out for the squad */
+  team?: string | null;
 }
 
 /** The card level P2's team plays at: the level of P1's players on the court, on average, so a picked team is never left behind a squad that has levelled up. */
@@ -221,11 +271,11 @@ export function rivalSide(team: TeamDef, home: Side, perTeam: 2 | 3): Side {
  * A fair match for P1: of every team's sides (weakest to strongest, at every card level) the ones whose overall is
  * closest to P1's squad, one picked at random.
  */
-export function fairRival(home: Side, perTeam: 2 | 3, rng: Rng = Math.random): Side {
+export function fairRival(home: Side, perTeam: 2 | 3, rng: Rng = Math.random, notTeam?: string | null): Side {
   const mine = sideOverall(home, perTeam);
   let best = Infinity;
   let options: Side[] = [];
-  for (const team of playableTeams(perTeam)) {
+  for (const team of playableTeams(perTeam).filter((t) => t.id !== notTeam)) {
     for (const strength of [0, 1, 2] as const) {
       for (let level = 1; level <= MAX_LEVEL; level++) {
         const side = withoutMirrors(teamSide(team, perTeam, strength, level), home);
@@ -255,20 +305,26 @@ export function duoRules(prefs: Prefs, help: DuoOptions['help']): DuoRules {
 
 /** Two people on one screen: the device's squad is P1 (home), the second person plays the team they picked. */
 export function duoSetup(prefs: Prefs, o: DuoOptions, rng: Rng = Math.random): MatchSetup {
-  const home: Side = { ...homeSide(prefs.squad, prefs.uniform), short: 'P1' };
-  const picked = o.rival ? rivalSide(teamById(o.rival), home, o.perTeam) : fairRival(home, o.perTeam, rng);
+  const squad = squadSide(prefs);
+  const playAs = teamPicked(o.team, o.perTeam);
+  const home: Side = { ...(playAs ? asTeamSide(playAs, squad, o.perTeam) : squad), short: 'P1' };
+  // the two people never play the same team
+  const rival = o.rival && o.rival !== playAs?.id ? o.rival : null;
+  const picked = rival ? rivalSide(teamById(rival), home, o.perTeam) : fairRival(home, o.perTeam, rng, playAs?.id);
   const away: Side = { ...picked, short: 'P2' };
   const rules = duoRules(prefs, o.help);
+  const seed = newSeed(rng);
   return {
     mode: 'duo',
     perTeam: o.perTeam,
     home,
     away,
-    court: o.court ?? teamById(away.kitTeam).court,
+    court: resolveCourt(o.court, teamById(away.kitTeam).court, seed, prefs.lastCourt),
+    ...(o.court === RANDOM_COURT ? { randomCourt: true } : {}),
     difficulty: DUO_DIFFICULTY,
     quarters: QUARTERS,
     quarterSeconds: prefs.quarterSeconds,
-    seed: newSeed(rng),
+    seed,
     timingAssist: rules.teamAssist[0],
     rubberBand: 0,
     duo: rules,
@@ -284,6 +340,12 @@ export interface OnlineSquad {
   squad: readonly SidePlayer[];
   uniform: string | null;
   easyShots: boolean;
+  /** the squad's wheel name, if it has one (a typed name never comes here: it stays on its device) */
+  words?: readonly [string, string] | null;
+  /** the squad's colour scheme */
+  colors?: string | null;
+  /** play as this team instead of the squad */
+  team?: string | null;
 }
 
 /** the names each side goes by on both screens (never a person's own name: it would travel to the other device) */
@@ -294,29 +356,41 @@ export const ONLINE_NAMES = ['Player 1', 'Player 2'] as const;
  * with their own cards and levels. The host builds this once and sends it; the guest plays exactly what it is sent.
  * The court is P1's home court; each person keeps their own shot window; no rubber band between two people.
  */
-export function onlineSetup(host: OnlineSquad, guest: OnlineSquad, perTeam: 2 | 3, quarterSeconds: number, rng: Rng = Math.random): MatchSetup {
+export function onlineSetup(host: OnlineSquad, guest: OnlineSquad, perTeam: 2 | 3, quarterSeconds: number, rng: Rng = Math.random, court: CourtChoice = null, lastCourt?: CourtId | null): MatchSetup {
   if (host.squad.length < perTeam || guest.squad.length < perTeam) throw new Error('a squad is short of players');
-  const side = (s: OnlineSquad, i: 0 | 1): Side => {
+  const hostTeam = teamPicked(host.team, perTeam);
+  // both people picked the same team: the guest plays its own squad
+  const guestTeam = teamPicked(guest.team, perTeam)?.id === hostTeam?.id ? null : teamPicked(guest.team, perTeam);
+  const side = (s: OnlineSquad, i: 0 | 1, team: TeamDef | null): Side => {
     const players = s.squad.slice(0, 3).map((p) => ({ id: mustPlayer(p.id).id, level: Math.max(1, Math.min(MAX_LEVEL, Math.round(p.level))) }));
     const kitTeam = mustPlayer(players[0].id).team;
+    const own: Side = { name: ONLINE_NAMES[i], short: i === 0 ? 'P1' : 'P2', kitTeam, players };
+    if (team) return { ...asTeamSide(team, own, perTeam), short: own.short };
     // the away side always plays in its own colours against the home side's (see buildMatch), so only P1's uniform counts
     const uniform = i === 0 && typeof s.uniform === 'string' && s.uniform !== '' ? { uniform: s.uniform } : {};
-    return { name: ONLINE_NAMES[i], short: i === 0 ? 'P1' : 'P2', kitTeam, players, ...uniform };
+    const words = s.words && s.words.length === 2 ? { name: nameText({ words: [s.words[0], s.words[1]] }) } : {};
+    const colors = schemeById(s.colors) ? { colors: s.colors as string } : {};
+    return { ...own, ...uniform, ...words, ...colors };
   };
-  const home = side(host, 0);
-  const away = side(guest, 1);
+  let home = side(host, 0, hostTeam);
+  let away = side(guest, 1, guestTeam);
+  // a team played by one person never shares a player with the other person's side
+  if (hostTeam) home = withoutMirrors(home, away);
+  if (guestTeam) away = withoutMirrors(away, home);
   const assist = (s: OnlineSquad) => (s.easyShots ? TIMING_EASY : TIMING_STANDARD);
   const rules: DuoRules = { teamAssist: [assist(host), assist(guest)], catchUp: [0, 0], help: 0 };
+  const seed = newSeed(rng);
   return {
     mode: 'online',
     perTeam,
     home,
     away,
-    court: teamById(home.kitTeam).court,
+    court: resolveCourt(court, teamById(home.kitTeam).court, seed, lastCourt),
+    ...(court === RANDOM_COURT ? { randomCourt: true } : {}),
     difficulty: DUO_DIFFICULTY,
     quarters: QUARTERS,
     quarterSeconds,
-    seed: newSeed(rng),
+    seed,
     timingAssist: rules.teamAssist[0],
     rubberBand: 0,
     duo: rules,

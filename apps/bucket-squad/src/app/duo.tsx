@@ -8,9 +8,10 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { LEAGUES, leagueOf } from '@/data/roster';
-import { COURT_IDS, type CourtId } from '@/game/render/court';
-import { homeSide, playableTeams, sideOverall, type DuoOptions } from '@/meta/setups';
+import { LEAGUES, leagueOf, teamById } from '@/data/roster';
+import { COURT_IDS } from '@/game/render/court';
+import { RANDOM_COURT } from '@/meta/courts';
+import { asTeamSide, homeSide, playableTeams, sideOverall, type DuoOptions } from '@/meta/setups';
 import { startDuo } from '@/state/play';
 import { squadLevels } from '@/state/logic';
 import { useSave } from '@/state/save';
@@ -23,6 +24,7 @@ import { PickRow, SignHead, Tabs, type Choice } from '@/ui/arcade/Controls';
 import { FadeScroll } from '@/ui/arcade/FadeScroll';
 import { Arrive } from '@/ui/arcade/Motion';
 import { CourtPick, FADE_DOWN, FADE_UP, GLOW_ROOM, GRID_TOP, PANEL_PAD, TEAMS_FRAME, TEAM_GAP, teamGrid } from '@/ui/arcade/Pickers';
+import { PlayAsButton, PlayAsPopup } from '@/ui/arcade/PlayAs';
 import { OvrMeter } from '@/ui/arcade/Strength';
 import { NeonPanel } from '@/ui/arcade/Surface';
 import { TeamPick } from '@/ui/arcade/TeamPick';
@@ -61,13 +63,24 @@ export default function Duo() {
   const homeTeam = useSave((s) => s.homeTeam);
   const last = useSession((s) => s.duo);
   const [rival, setRival] = useState<string | null>(last?.rival ?? null);
-  const [court, setCourt] = useState<CourtId | null>(last?.court ?? null);
+  // the court is remembered from game to game, and is a random one until something else is picked
+  const court = useSave((s) => s.settings.duoCourt);
+  const setCourt = (v: typeof court) => setSetting('duoCourt', v);
   const [help, setHelp] = useState<DuoOptions['help']>(last?.help ?? 0);
+  // P1 plays the squad on this device, or any team
+  const [playAs, setPlayAs] = useState<string | null>(last?.team ?? null);
+  const [choosing, setChoosing] = useState(false);
+  const team = playAs !== null && playableTeams(format).some((t) => t.id === playAs) ? playAs : null;
   const [league, setLeague] = useState(() => (rival !== null ? leagueOf(rival) : leagueOf(homeTeam)));
-  const teams = playableTeams(format).filter((t) => t.league === league);
+  // the two people never play the same team
+  const teams = playableTeams(format).filter((t) => t.league === league && t.id !== team);
   const picked = rival !== null && teams.some((t) => t.id === rival) ? rival : null;
-  // P1's squad as it takes the court, for the fair match and the meter
-  const mine = useSave((s) => sideOverall(homeSide(squadLevels(s)), format));
+  // P1's side as it takes the court, for the fair match and the meter
+  const squadOvr = useSave((s) => sideOverall(homeSide(squadLevels(s)), format));
+  // a team plays at the level of the squad's players on the court, on average
+  const teamOvr = useSave((s) => (team !== null ? sideOverall(asTeamSide(teamById(team), homeSide(squadLevels(s)), format), format) : 0));
+  const mine = team !== null ? teamOvr : squadOvr;
+  const [p1W, setP1W] = useState(0);
   const [gridW, setGridW] = useState(0);
   const [columnH, setColumnH] = useState(0);
   const [headH, setHeadH] = useState(0);
@@ -79,11 +92,12 @@ export default function Duo() {
   const fadeAt = fadeH > 0 && grid ? ([0, (TEAM_GAP + grid.tileH * 0.1) / fadeH, (TEAM_GAP + grid.tileH * 0.21) / fadeH] as const) : undefined;
 
   const play = () => {
-    startDuo({ perTeam: format, rival: picked, court, help });
+    startDuo({ perTeam: format, rival: picked, court, help, team });
     router.push('/versus');
   };
 
   return (
+    <View style={styles.root}>
     <ArcadeScreen title="2 PLAYERS" tube="pink" style={styles.body} right={LEAGUES.length > 1 ? <Tabs options={LEAGUE_TABS} value={league} onChange={setLeague} tube="pink" /> : undefined}>
       <View style={styles.row}>
         <Arrive delay={40} from="left" style={styles.left}>
@@ -93,13 +107,13 @@ export default function Duo() {
               <Glow face="display" size="title" tube="cyan" track="close">
                 P1
               </Glow>
-              <View style={styles.grow}>
-                <Print face="bold" size="body" color="text" lines={1}>
-                  Your Squad
-                </Print>
-                <Print face="medium" size="tiny" color="textDim" lines={1}>
-                  plays on the left
-                </Print>
+              <View
+                style={styles.grow}
+                onLayout={(e) => {
+                  const w = Math.floor(e.nativeEvent.layout.width);
+                  if (w !== p1W) setP1W(w);
+                }}>
+                {p1W > 0 && <PlayAsButton team={team} room={p1W} onPress={() => setChoosing(true)} />}
               </View>
               <OvrMeter value={mine} tube="cyan" />
             </View>
@@ -111,7 +125,8 @@ export default function Duo() {
             </Option>
             <Option label="COURT">
               <FadeScroll horizontal showsHorizontalScrollIndicator={false} reach={px(30)} style={styles.courtsBox} contentContainerStyle={styles.courts}>
-                <CourtPick id={null} selected={court === null} onPress={() => setCourt(null)} tube="pink" />
+                <CourtPick id={RANDOM_COURT} selected={court === RANDOM_COURT} onPress={() => setCourt(RANDOM_COURT)} tube="pink" />
+                <CourtPick id={null} selected={court === null} onPress={() => setCourt(null)} tube="pink" homeLabel="P2’s court" />
                 {COURT_IDS.map((id) => (
                   <CourtPick key={id} id={id} selected={court === id} onPress={() => setCourt(id)} tube="pink" />
                 ))}
@@ -161,10 +176,26 @@ export default function Duo() {
         </Arrive>
       </View>
     </ArcadeScreen>
+    {choosing && (
+      <PlayAsPopup
+        team={team}
+        perTeam={format}
+        tube="pink"
+        onClose={() => setChoosing(false)}
+        onPick={(id) => {
+          setPlayAs(id);
+          if (id !== null && id === rival) setRival(null);
+        }}
+      />
+    )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
   body: {
     paddingTop: space.md,
   },

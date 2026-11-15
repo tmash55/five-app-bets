@@ -4,7 +4,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { tapFeedback } from '@/fx/feedback';
-import { COURTS, type CourtId } from '@/game/render/court';
+import { COURTS } from '@/game/render/court';
+import { RANDOM_COURT, type CourtChoice } from '@/meta/courts';
 import { arcade, fade, halo, inner, night, tube as tubes, type TubeName } from '@/theme/arcade';
 import { px, size as sizes, space } from '@/theme/tokens';
 import { LineIcon } from './LineIcon';
@@ -60,11 +61,14 @@ export function teamGrid(n: number, w: number, h: number): TeamGrid {
   return { cols: fit, tileW, tileH, window: GRID_TOP + whole * (tileH + TEAM_GAP) + Math.round(tileH / 2) };
 }
 
-/** A court you can pick, drawn as a little picture of its sky and floor, with its name under it. */
-export function CourtPick({ id, selected, onPress, tube: t = 'cyan' }: { id: CourtId | null; selected: boolean; onPress: () => void; tube?: TubeName }) {
+/**
+ * A court you can pick, drawn as a little picture of its sky and floor, with its name under it. `null` is the other
+ * team's own court (`homeLabel` names it), `random` a die: any of the courts.
+ */
+export function CourtPick({ id, selected, onPress, tube: t = 'cyan', homeLabel = 'Their court' }: { id: CourtChoice; selected: boolean; onPress: () => void; tube?: TubeName; homeLabel?: string }) {
   const TUBE = tubes[t];
-  const court = id !== null ? COURTS[id] : null;
-  const name = court ? court.name : 'Their court';
+  const court = id !== null && id !== RANDOM_COURT ? COURTS[id] : null;
+  const name = court ? court.name : id === RANDOM_COURT ? 'Random' : homeLabel;
   return (
     <Pressable
       accessibilityRole="button"
@@ -83,9 +87,9 @@ export function CourtPick({ id, selected, onPress, tube: t = 'cyan' }: { id: Cou
           </View>
         </View>
       ) : (
-        // the other team's own court: we only find out which when the game starts
-        <View style={[styles.scene, styles.sceneHome]}>
-          <LineIcon name="home" size={px(20)} tube={selected ? TUBE : undefined} color={selected ? undefined : night.textFaint} />
+        // the other team's own court, or any court at all: we only find out which when the game starts
+        <View style={[styles.scene, styles.sceneHome, id === RANDOM_COURT && selected && { backgroundColor: night.tile }]}>
+          <LineIcon name={id === RANDOM_COURT ? 'dice' : 'home'} size={px(20)} tube={selected ? (id === RANDOM_COURT ? tubes.gold : TUBE) : undefined} color={selected ? undefined : night.textFaint} />
         </View>
       )}
       <Print face="bold" size="tiny" color={selected ? 'text' : 'textDim'} center lines={1} room={COURT_NAME_ROOM} least={0.6} style={styles.courtName}>

@@ -8,6 +8,7 @@ import { TEAMS, byValue, mustPlayer, playerById, playerOverall, teamById, teamPl
 import type { PlayerDef, TeamDef } from '@/data/types';
 import { teamWear, uniformById, uniformNeed, wearOf, type UniformDef, type Wear } from '@/data/uniforms';
 import { MAX_COPIES, addCopy, levelOf, type Gain, type Owned } from '@/meta/collection';
+import { courtChoiceOr, type CourtChoice } from '@/meta/courts';
 import { TIERS, ladderResult, tierIndex, type Tier } from '@/meta/ladder';
 import type { MatchSummary } from '@/meta/match';
 import { ALL_DONE_PACK, currentMissions, missionDone, missionsAfterDuo, missionsAfterMatch, missionsAfterPack, type Mission, type MissionDay } from '@/meta/missions';
@@ -15,6 +16,7 @@ import { openPack, packById, type PackResult } from '@/meta/packs';
 import { matchRewards, type Rewards } from '@/meta/rewards';
 import type { Rng } from '@/meta/rng';
 import { coins as coinPrice, pay, shopDay, shopSlots, type ShopDay, type ShopSlot } from '@/meta/shop';
+import { repairName, schemeById, type TeamName } from '@/meta/teamName';
 import { STARS_PER_GAME, gameKey, stageStars, starsFor, tourById, type TourProgress } from '@/meta/tour';
 
 export const SAVE_VERSION = 1;
@@ -32,6 +34,10 @@ export interface Settings {
   format: 2 | 3;
   /** extra-wide shot timing */
   easyShots: boolean;
+  /** the court last picked for a quick game, a two-player game and a hosted online game (see meta/courts) */
+  quickCourt: CourtChoice;
+  duoCourt: CourtChoice;
+  hostCourt: CourtChoice;
 }
 
 export interface Stats {
@@ -76,6 +82,10 @@ export interface SaveData {
   uniform: string | null;
   /** the Daily Shop as last opened: the day, its deals and what was bought (null until it is first opened) */
   shop: ShopDay | null;
+  /** the squad's own name, or null for "Your Squad" (a typed one never leaves the device: see `forAccount`) */
+  teamName: TeamName | null;
+  /** the squad's colour scheme (meta/teamName), or null for the colours it wears */
+  teamColors: string | null;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -87,6 +97,9 @@ export const DEFAULT_SETTINGS: Settings = {
   quarterSeconds: 60,
   format: 2,
   easyShots: true,
+  quickCourt: 'random',
+  duoCourt: 'random',
+  hostCourt: null,
 };
 
 export const STARTING_COINS = 300;
@@ -114,6 +127,8 @@ export function newSave(): SaveData {
     uniforms: [],
     uniform: null,
     shop: null,
+    teamName: null,
+    teamColors: null,
   };
 }
 
@@ -211,7 +226,7 @@ export function markSeen(data: SaveData, playerId: string): SaveData {
   return { ...data, fresh: data.fresh.filter((id) => id !== playerId) };
 }
 
-export function squadLevels(data: SaveData): { id: string; level: number }[] {
+export function squadLevels(data: Pick<SaveData, 'squad' | 'owned'>): { id: string; level: number }[] {
   return data.squad.map((id) => ({ id, level: Math.max(1, levelOf(data.owned[id] ?? 1)) }));
 }
 
@@ -272,6 +287,30 @@ export function buyUniform(data: SaveData, id: string): SaveData | null {
 export function wearUniform(data: SaveData, id: string | null): SaveData | null {
   if (id !== null && !hasUniform(data, id)) return null;
   return { ...data, uniform: id };
+}
+
+// ---------------------------------------------------------------------------
+// The squad's name and colours
+// ---------------------------------------------------------------------------
+
+/** Name the squad: a wheel name or a typed one, cleaned; null (or a name that is no good) goes back to "Your Squad". */
+export function nameTeam(data: SaveData, name: TeamName | null): SaveData {
+  return { ...data, teamName: repairName(name) };
+}
+
+/** Light the squad's badge in a colour scheme, or (null, or one this build does not have) in the colours it wears. */
+export function colorTeam(data: SaveData, id: string | null): SaveData {
+  return { ...data, teamColors: schemeById(id) ? id : null };
+}
+
+/** The save as the account keeps it: a typed name stays on the device, so it goes as "Your Squad". */
+export function forAccount(data: SaveData): SaveData {
+  return data.teamName && 'typed' in data.teamName ? { ...data, teamName: null } : data;
+}
+
+/** A save from the account over this device's: the account never has a typed name, so the device's own is kept. */
+export function fromAccount(incoming: SaveData, device: Pick<SaveData, 'teamName'>): SaveData {
+  return incoming.teamName === null && device.teamName && 'typed' in device.teamName ? { ...incoming, teamName: device.teamName } : incoming;
 }
 
 // ---------------------------------------------------------------------------
@@ -589,6 +628,9 @@ export function repairSave(raw: unknown): SaveData {
       quarterSeconds: oneOf(st.quarterSeconds, [45, 60, 90] as const, base.settings.quarterSeconds),
       format: oneOf(st.format, [2, 3] as const, base.settings.format),
       easyShots: flag(st.easyShots, base.settings.easyShots),
+      quickCourt: courtChoiceOr(st.quickCourt, base.settings.quickCourt),
+      duoCourt: courtChoiceOr(st.duoCourt, base.settings.duoCourt),
+      hostCourt: courtChoiceOr(st.hostCourt, base.settings.hostCourt),
     },
     tips: { ...(r.tips ?? {}) },
     // bought uniforms are kept even when this build does not know one: the coins were spent
@@ -596,6 +638,9 @@ export function repairSave(raw: unknown): SaveData {
     // a uniform this build cannot find is worn as the captain's colours (see meta/match `sideWear`), not thrown away
     uniform: typeof r.uniform === 'string' && r.uniform !== '' ? r.uniform : null,
     shop: repairShop(r.shop),
+    // a save from before names: "Your Squad" in the colours it wears
+    teamName: repairName(r.teamName),
+    teamColors: typeof r.teamColors === 'string' && schemeById(r.teamColors) ? r.teamColors : null,
   };
 }
 

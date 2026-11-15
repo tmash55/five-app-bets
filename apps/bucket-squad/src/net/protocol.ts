@@ -1,16 +1,24 @@
 /**
- * What two devices say to each other. Only moves, card ids and levels, and the match setup ever cross the wire:
- * never a name, an email or anything about the device. Every message from the other side is checked here before
- * the game looks at it, because it could be anything.
+ * What two devices say to each other. Only moves, card ids and levels, team ids and the match setup ever cross the
+ * wire: never a person's name, an email or anything about the device. A squad's name crosses only when it was built on
+ * the word wheels, and then as the two words' places on the wheels, which the other side checks against its own lists;
+ * a name typed in by hand never leaves its device. Every message from the other side is checked here before the game
+ * looks at it, because it could be anything.
  */
 
-import { MAX_LEVEL, PLAYERS, playerById } from '@/data/roster';
+import { MAX_LEVEL, PLAYERS, TEAMS, playerById } from '@/data/roster';
 import { RATING_KEYS, type Ratings } from '@/game/sim/ratings';
-import type { CourtId } from '@/game/render/court';
+import { isCourt } from '@/meta/courts';
 import type { MatchSetup, Side, SidePlayer } from '@/meta/match';
+import { ONLINE_NAMES, playableTeams } from '@/meta/setups';
+import { isWheelName, schemeById, wordsAt } from '@/meta/teamName';
 
-/** Bump whenever the simulation, the setup or these messages change in a way an older build would play differently. */
-export const NETCODE_VERSION = 1;
+/**
+ * Bump whenever the simulation, the setup or these messages change in a way an older build would play differently.
+ * 2: each device brings its squad's wheel name (as word places), its colours and the team it plays as; the host picks
+ * the court, a random one too.
+ */
+export const NETCODE_VERSION = 2;
 
 function fnv(text: string): number {
   let h = 2166136261;
@@ -36,6 +44,12 @@ export interface Offer {
   uni: string | null;
   /** this device plays with the wider shot window */
   easy: boolean;
+  /** the squad's wheel name as the places of its two words on the wheels (meta/teamName); left out for a typed name or none */
+  words?: [number, number];
+  /** the squad's colour scheme id; left out for the colours it wears */
+  colors?: string;
+  /** play as this team (a team id) instead of the squad; left out for the squad */
+  team?: string;
 }
 
 export type Role = 'host' | 'guest';
@@ -67,9 +81,6 @@ export type NetMsg =
   | { k: 'pause'; on: boolean; n: number }
   | { k: 'bye' };
 
-/** every court (written out so this file needs nothing of the renderer; the type keeps the list complete) */
-const COURTS: Record<CourtId, true> = { park: true, street: true, beach: true, rooftop: true, snow: true, canyon: true };
-
 const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isStr = (v: unknown): v is string => typeof v === 'string' && v.length < 200;
@@ -80,16 +91,45 @@ function squadOk(v: unknown, least = 1): v is SidePlayer[] {
   return v.every((p) => isObj(p) && isStr(p.id) && playerById(p.id) !== undefined && isInt(p.level) && p.level >= 1 && p.level <= MAX_LEVEL);
 }
 
-function sideOk(v: unknown, perTeam: number): v is Side {
-  return isObj(v) && isStr(v.name) && isStr(v.short) && isStr(v.kitTeam) && (v.uniform === undefined || isStr(v.uniform)) && squadOk(v.players, perTeam);
+/**
+ * A side's name: Player 1 or Player 2 (a squad without a wheel name), a name both wheels can make, or the name of the
+ * team the side plays as. Anything else could be something a person typed, and is refused.
+ */
+function nameOk(v: Record<string, unknown>, seat: 0 | 1): boolean {
+  if (v.short !== (seat === 0 ? 'P1' : 'P2') || !isStr(v.name)) return false;
+  return v.name === ONLINE_NAMES[seat] || isWheelName(v.name) || TEAMS.some((t) => t.id === v.kitTeam && t.name === v.name);
+}
+
+function sideOk(v: unknown, perTeam: number, seat: 0 | 1): v is Side {
+  return (
+    isObj(v) &&
+    nameOk(v, seat) &&
+    isStr(v.kitTeam) &&
+    TEAMS.some((t) => t.id === v.kitTeam) &&
+    (v.uniform === undefined || isStr(v.uniform)) &&
+    (v.colors === undefined || (isStr(v.colors) && schemeById(v.colors) !== undefined)) &&
+    squadOk(v.players, perTeam)
+  );
+}
+
+/** The optional parts of a hello, each kept only when it is good: anything else plays as if it was left out. */
+function offerExtras(v: Record<string, unknown>): Pick<Offer, 'words' | 'colors' | 'team'> {
+  const out: Pick<Offer, 'words' | 'colors' | 'team'> = {};
+  if (wordsAt(v.words)) out.words = [(v.words as number[])[0], (v.words as number[])[1]];
+  if (isStr(v.colors) && schemeById(v.colors)) out.colors = v.colors;
+  if (isStr(v.team) && playableTeams(2).some((t) => t.id === v.team)) out.team = v.team;
+  return out;
 }
 
 /** A match setup from the other device, checked field by field: anything off and it is refused. */
 export function setupOk(v: unknown): v is MatchSetup {
   if (!isObj(v)) return false;
   if (v.mode !== 'online' || (v.perTeam !== 2 && v.perTeam !== 3)) return false;
-  if (!sideOk(v.home, v.perTeam) || !sideOk(v.away, v.perTeam)) return false;
-  if (!isStr(v.court) || !Object.prototype.hasOwnProperty.call(COURTS, v.court)) return false;
+  if (!sideOk(v.home, v.perTeam, 0) || !sideOk(v.away, v.perTeam, 1)) return false;
+  // never the same team on both sides
+  const home = v.home as Side;
+  if (home.name === (v.away as Side).name && TEAMS.some((t) => t.name === home.name)) return false;
+  if (!isCourt(v.court) || (v.randomCourt !== undefined && typeof v.randomCourt !== 'boolean')) return false;
   for (const k of ['difficulty', 'timingAssist', 'rubberBand'] as const) if (!isNum(v[k]) || v[k] < 0 || v[k] > 4) return false;
   if (!isInt(v.quarters) || v.quarters < 1 || v.quarters > 8) return false;
   if (!isInt(v.quarterSeconds) || v.quarterSeconds < 10 || v.quarterSeconds > 600) return false;
@@ -106,7 +146,7 @@ export function readMsg(v: unknown): NetMsg | null {
   switch (v.k) {
     case 'hello':
       return isInt(v.v) && isStr(v.fp) && squadOk(v.squad, 2) && (v.uni === null || isStr(v.uni)) && typeof v.easy === 'boolean'
-        ? { k: 'hello', v: v.v, fp: v.fp, squad: v.squad.map((p) => ({ id: p.id, level: p.level })), uni: v.uni, easy: v.easy }
+        ? { k: 'hello', v: v.v, fp: v.fp, squad: v.squad.map((p) => ({ id: p.id, level: p.level })), uni: v.uni, easy: v.easy, ...offerExtras(v) }
         : // a hello from a build with another version may not have a squad this build knows: keep what says so
           isInt(v.v) && isStr(v.fp)
           ? { k: 'hello', v: v.v, fp: v.fp, squad: [], uni: null, easy: false }

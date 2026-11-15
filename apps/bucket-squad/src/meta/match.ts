@@ -13,6 +13,7 @@ import type { MatchVisuals } from '@/game/render/renderer';
 import { toAttrs } from '@/game/sim/ratings';
 import type { MatchConfig, MatchState, PlayerStats } from '@/game/sim/types';
 import { hexToRgb } from '@/game/kit/look';
+import { DEFAULT_SHORT, isWheelName, schemeById, shortOf } from './teamName';
 
 /**
  * `duo`: two people on one screen, the device's squad (P1, home) against a team the second person picks (P2).
@@ -43,6 +44,8 @@ export interface Side {
   kitTeam: string;
   /** a uniform the squad picked (see data/uniforms); left out, or one this build does not have, it wears `kitTeam`'s */
   uniform?: string;
+  /** the colour scheme the squad picked for its badge and its name (meta/teamName `COLOR_SCHEMES`); left out, the colours it wears */
+  colors?: string;
   players: SidePlayer[];
 }
 
@@ -53,6 +56,8 @@ export interface MatchSetup {
   home: Side;
   away: Side;
   court: CourtId;
+  /** the court was picked at random (the versus card says so) */
+  randomCourt?: boolean;
   /** 0..1 */
   difficulty: number;
   quarters: number;
@@ -91,6 +96,22 @@ function gap(a: string, b: string): number {
 export function sideWear(side: Side): Wear {
   const picked = uniformById(side.uniform);
   return picked ? wearOf(picked) : teamWear(teamById(side.kitTeam));
+}
+
+/** A side's own colours, for its badge, its name and its half of the versus card: the scheme it picked, or else what it wears. */
+export function sideColors(side: Side): { color: string; color2: string } {
+  const scheme = schemeById(side.colors);
+  if (scheme) return scheme;
+  const wear = sideWear(side);
+  return { color: wear.color, color2: wear.color2 };
+}
+
+/** The three letters on a side's badge: its own when it has three (the scoreboard's), a team's when it plays as one, or else ones from its name. */
+export function badgeLetters(side: Side): string {
+  if (side.short.length === 3) return side.short;
+  const team = teamById(side.kitTeam);
+  if (team.name === side.name) return team.short;
+  return /^Player \d$/.test(side.name) ? DEFAULT_SHORT : shortOf(isWheelName(side.name) ? { words: side.name.split(' ') as [string, string] } : { typed: side.name });
 }
 
 /** How a player looks on the person's side: the uniform's colours, with their own touches when it is their own team's uniform. */
@@ -185,6 +206,8 @@ export interface MatchSummary {
   difficulty: number;
   names: [string, string];
   tour?: MatchSetup['tour'];
+  /** set when the person played the away side (an online game's guest): the summary is turned round for them */
+  seat?: 1;
 }
 
 function impact(s: PlayerStats): number {
@@ -247,5 +270,6 @@ export function seenBy(s: MatchSummary, team: 0 | 1): MatchSummary {
     totals: [s.totals[1], s.totals[0]],
     players: s.players.map((p) => ({ ...p, team: p.team === 0 ? 1 : 0 })),
     names: [s.names[1], s.names[0]],
+    seat: 1,
   };
 }

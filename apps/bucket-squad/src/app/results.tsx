@@ -10,7 +10,8 @@ import { mustPlayer, playerOverall, teamById } from '@/data/roster';
 import { buzz } from '@/fx/feedback';
 import { levelOf, type Gain } from '@/meta/collection';
 import { tierProgress, type Tier } from '@/meta/ladder';
-import type { MatchSetup, MatchSummary, PlayerLine } from '@/meta/match';
+import { badgeLetters, sideColors, type MatchSetup, type MatchSummary, type PlayerLine } from '@/meta/match';
+import { ONLINE_NAMES } from '@/meta/setups';
 import type { RewardLine } from '@/meta/rewards';
 import { packById } from '@/meta/packs';
 import { dayKey } from '@/meta/rng';
@@ -41,6 +42,7 @@ import { Rays } from '@/ui/arcade/Room';
 import { SegBar, lampsFor } from '@/ui/arcade/SegBar';
 import { Sparks } from '@/ui/arcade/Sparks';
 import { Chip, NeonPanel, Plate, Tag, TeamMark, Well } from '@/ui/arcade/Surface';
+import { TeamBadge } from '@/ui/arcade/TeamBadge';
 import { Glow, Print } from '@/ui/arcade/Type';
 
 type Moment = { kind: 'player'; gain: Gain } | { kind: 'tier'; tier: Tier };
@@ -313,8 +315,13 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
   const mvpDef = mustPlayer(mvp.id);
   const online = summary.mode === 'online';
   // online, the summary is this device's: its side first, and the guest's side is the match's away side
-  const guest = online && summary.names[0] === setup.away.name;
+  const guest = online && summary.seat === 1;
   const away = teamById(guest ? setup.home.kitTeam : setup.away.kitTeam);
+  // the person's own side carries its badge, in its own colours
+  const mineSide = guest ? setup.away : setup.home;
+  const myBadge = <TeamBadge short={badgeLetters(mineSide)} colors={sideColors(mineSide)} size={px(22)} />;
+  // a friend online goes by their wheel name or their team's, and by FRIEND when they have neither
+  const friendName = (ONLINE_NAMES as readonly string[]).includes(summary.names[1]) ? 'FRIEND' : summary.names[1];
   const duo = summary.mode === 'duo';
   const onlineRole = useOnline((s) => s.room?.role ?? null);
   const leaveRoom = useOnline((s) => s.leave);
@@ -360,9 +367,9 @@ function Body({ summary, outcome, setup }: { summary: MatchSummary; outcome: Mat
           <View style={styles.left}>
             <Arrive onLayout={measureBoard}>
               <Well style={styles.board}>
-                <ScoreSide name={duo ? `P1 · ${summary.names[0]}` : online ? `YOU · ${guest ? 'P2' : 'P1'}` : summary.names[0]} score={summary.score[0]} lit={duo ? duoWinner(summary) === 0 : summary.won} />
+                <ScoreSide name={duo ? `P1 · ${summary.names[0]}` : online ? `YOU · ${guest ? 'P2' : 'P1'}` : summary.names[0]} score={summary.score[0]} lit={duo ? duoWinner(summary) === 0 : summary.won} mark={myBadge} />
                 <View style={styles.dash} />
-                <ScoreSide name={duo ? `P2 · ${summary.names[1]}` : online ? `FRIEND · ${guest ? 'P1' : 'P2'}` : summary.names[1]} score={summary.score[1]} lit={duo ? duoWinner(summary) === 1 : !summary.won} mark={<TeamMark team={away} small />} />
+                <ScoreSide name={duo ? `P2 · ${summary.names[1]}` : online ? `${friendName} · ${guest ? 'P1' : 'P2'}` : summary.names[1]} score={summary.score[1]} lit={duo ? duoWinner(summary) === 1 : !summary.won} mark={<TeamMark team={away} small />} />
               </Well>
             </Arrive>
             {summary.overtime && <Tag label="OVERTIME" tube="red" small style={styles.centerSelf} />}

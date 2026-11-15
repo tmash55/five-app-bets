@@ -6,7 +6,8 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { LEAGUES, leagueOf } from '@/data/roster';
-import { COURT_IDS, type CourtId } from '@/game/render/court';
+import { COURT_IDS } from '@/game/render/court';
+import { RANDOM_COURT } from '@/meta/courts';
 import { DIFFICULTY_NAMES, playableTeams } from '@/meta/setups';
 import { startQuick } from '@/state/play';
 import { useSave } from '@/state/save';
@@ -18,6 +19,7 @@ import { PickRow, SignHead, Tabs, type Choice } from '@/ui/arcade/Controls';
 import { FadeScroll } from '@/ui/arcade/FadeScroll';
 import { Arrive } from '@/ui/arcade/Motion';
 import { CourtPick, FADE_DOWN, FADE_UP, GLOW_ROOM, GRID_TOP, PANEL_PAD, TEAMS_FRAME, TEAM_GAP, teamGrid } from '@/ui/arcade/Pickers';
+import { PlayAsButton, PlayAsPopup } from '@/ui/arcade/PlayAs';
 import { NeonPanel } from '@/ui/arcade/Surface';
 import { TeamPick } from '@/ui/arcade/TeamPick';
 import { Print } from '@/ui/arcade/Type';
@@ -52,10 +54,18 @@ export default function Quick() {
   const homeTeam = useSave((s) => s.homeTeam);
   const last = useSession((s) => s.quick);
   const [opponent, setOpponent] = useState<string | null>(last?.opponent ?? null);
-  const [court, setCourt] = useState<CourtId | null>(last?.court ?? null);
+  // the court is remembered from game to game, and is a random one until something else is picked
+  const court = useSave((s) => s.settings.quickCourt);
+  const setCourt = (v: typeof court) => setSetting('quickCourt', v);
+  // who you play as: your squad, or any team (its own players at about your squad's level)
+  const [playAs, setPlayAs] = useState<string | null>(last?.team ?? null);
+  const [choosing, setChoosing] = useState(false);
+  const team = playAs !== null && playableTeams(format).some((t) => t.id === playAs) ? playAs : null;
   const [league, setLeague] = useState(() => (opponent !== null ? leagueOf(opponent) : (last?.league ?? leagueOf(homeTeam))));
-  const teams = playableTeams(format).filter((t) => t.league === league);
+  // never the same team on both sides: the team you play as is not in the list to play against
+  const teams = playableTeams(format).filter((t) => t.league === league && t.id !== team);
   const picked = opponent !== null && teams.some((t) => t.id === opponent) ? opponent : null;
+  const [rowW, setRowW] = useState(0);
   const [gridW, setGridW] = useState(0);
   // the height of the column the panel stands in, and of the panel's heading
   const [columnH, setColumnH] = useState(0);
@@ -70,15 +80,25 @@ export default function Quick() {
   const fadeAt = fadeH > 0 && grid ? ([0, (TEAM_GAP + grid.tileH * 0.1) / fadeH, (TEAM_GAP + grid.tileH * 0.21) / fadeH] as const) : undefined;
 
   const play = () => {
-    startQuick({ perTeam: format, difficulty, opponent: picked, court, league });
+    startQuick({ perTeam: format, difficulty, opponent: picked, court, league, team });
     router.push('/versus');
   };
 
   return (
+    <View style={styles.root}>
     <ArcadeScreen title="QUICK GAME" tube="cyan" style={styles.body} right={LEAGUES.length > 1 ? <Tabs options={LEAGUE_TABS} value={league} onChange={setLeague} tube="cyan" /> : undefined}>
       <View style={styles.row}>
         <Arrive delay={40} from="left" style={styles.left}>
           <NeonPanel tube="cyan" style={styles.panel}>
+            <Option label="YOU">
+              <View
+                onLayout={(e) => {
+                  const w = Math.floor(e.nativeEvent.layout.width);
+                  if (w !== rowW) setRowW(w);
+                }}>
+                {rowW > 0 && <PlayAsButton team={team} room={rowW} onPress={() => setChoosing(true)} />}
+              </View>
+            </Option>
             <Option label="PLAYERS">
               <PickRow options={FORMATS} value={format} onChange={(v) => setSetting('format', v)} tube="cyan" />
             </Option>
@@ -88,6 +108,7 @@ export default function Quick() {
             <Option label="COURT">
               {/* the courts that do not fit melt into the panel at its edge; the row's glow room is pulled back out so it starts in line with the rows above */}
               <FadeScroll horizontal showsHorizontalScrollIndicator={false} reach={px(30)} style={styles.courtsBox} contentContainerStyle={styles.courts}>
+                <CourtPick id={RANDOM_COURT} selected={court === RANDOM_COURT} onPress={() => setCourt(RANDOM_COURT)} />
                 <CourtPick id={null} selected={court === null} onPress={() => setCourt(null)} />
                 {COURT_IDS.map((id) => (
                   <CourtPick key={id} id={id} selected={court === id} onPress={() => setCourt(id)} />
@@ -141,10 +162,26 @@ export default function Quick() {
         </Arrive>
       </View>
     </ArcadeScreen>
+    {choosing && (
+      <PlayAsPopup
+        team={team}
+        perTeam={format}
+        tube="cyan"
+        onClose={() => setChoosing(false)}
+        onPick={(id) => {
+          setPlayAs(id);
+          if (id !== null && id === opponent) setOpponent(null);
+        }}
+      />
+    )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
   body: {
     paddingTop: space.md,
   },
@@ -161,9 +198,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: space.md,
   },
+  // four rows of choices: they sit a little closer than a panel's usual gap, so the panel and PLAY fit a phone's height
   panel: {
     padding: PANEL_PAD,
-    gap: space.sm,
+    gap: space.xs,
   },
   option: {
     flexDirection: 'row',
@@ -177,6 +215,7 @@ const styles = StyleSheet.create({
   courtsBox: {
     marginLeft: -GLOW_ROOM,
     marginRight: -PANEL_PAD,
+    marginVertical: -px(3),
   },
   courts: {
     gap: space.sm,

@@ -7,7 +7,17 @@ import { useSave } from './save';
 import { useSession } from './session';
 
 export function prefsFrom(data: SaveData): Prefs {
-  return { squad: squadLevels(data), quarterSeconds: data.settings.quarterSeconds, easyShots: data.settings.easyShots, homeTeam: data.homeTeam, uniform: data.uniform };
+  return {
+    squad: squadLevels(data),
+    quarterSeconds: data.settings.quarterSeconds,
+    easyShots: data.settings.easyShots,
+    homeTeam: data.homeTeam,
+    uniform: data.uniform,
+    teamName: data.teamName,
+    teamColors: data.teamColors,
+    // a random court is never the one just played on
+    lastCourt: useSession.getState().setup?.court ?? null,
+  };
 }
 
 export function startQuick(options: QuickOptions): void {
