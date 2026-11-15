@@ -33,6 +33,7 @@ import {
   hypeOn,
   isThree,
   laneClear,
+  luckShare,
   makeProb,
   nearestOpponent,
   newIntent,
@@ -88,6 +89,7 @@ function newBall(count: number): BallSim {
     points: 2,
     planned: false,
     ghost: false,
+    noLuck: false,
     perfect: false,
     fromShot: false,
     shotTeam: 0,
@@ -645,6 +647,7 @@ function launchShot(
   b.points = three ? 3 : 2;
   b.planned = made;
   b.ghost = made;
+  b.noLuck = false;
   b.perfect = perfect;
   b.fromShot = true;
   b.shotTeam = p.team;
@@ -676,8 +679,12 @@ function releaseShot(m: MatchState, p: PlayerSim, err: number, forced: ShotGrade
   const s = attackSign(p.team);
   const behindBoard = (hoopXOf(p.team) - p.x) * s < 0.1;
   const prob = makeProb(m, p, contest, grade, hypot2(p.vx, p.vz));
-  const made = !behindBoard && rngNext(m) < prob;
+  const roll = behindBoard ? 1 : rngNext(m);
+  const made = !behindBoard && roll < prob;
   launchShot(m, p, made, three, grade === 'perfect', 'jumper', 0);
+  // a long miss on the harder levels stays a miss: the same roll says whether it may still rattle in (no new random number)
+  const luck = luckShare(m, p);
+  m.ball.noLuck = !made && !behindBoard && luck < 1 && roll >= prob + (1 - prob) * luck;
 }
 
 function startShot(m: MatchState, p: PlayerSim): void {
@@ -1633,7 +1640,25 @@ function stepBallPhysics(m: MatchState): void {
     }
     // through the hoop?
     if (b.state !== 'dead' && py > COURT.rimY && b.y <= COURT.rimY && b.vy < 0) {
-      if (hypot2(b.x - hx, b.z) < COURT.rimR - 0.02) {
+      const ox = b.x - hx;
+      const dh = hypot2(ox, b.z);
+      if (dh < COURT.rimR - 0.02) {
+        if (b.fromShot && b.noLuck) {
+          // a long miss that may not drop: in and out, back up and away from the middle of the rim
+          const k = dh > 1e-3 ? 1 / dh : 0;
+          const away = -hoop;
+          b.y = COURT.rimY + 0.01;
+          b.vy = Math.max(3.3, Math.abs(b.vy) * 0.55);
+          b.vx = (k > 0 ? ox * k : away) * 1.7;
+          b.vz = k > 0 ? b.z * k * 1.7 : 0;
+          if (b.bounceT > 0.06) emit(m, { type: 'rim', speed: 2, hoop });
+          b.bounceT = 0;
+          if (b.state === 'shot') {
+            b.state = 'loose';
+            b.looseT = 0;
+          }
+          return;
+        }
         scoreBasket(m, (hoop > 0 ? 0 : 1) as TeamId, hoop);
         return;
       }

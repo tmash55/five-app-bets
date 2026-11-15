@@ -133,17 +133,52 @@ export const DEEP = {
   grace: 0.3,
   /** ...and the best shooter this much more */
   reach: 1.5,
-  /** how much the chance drops for each unit past a shooter's range, and how much more for a poor shooter */
-  falloff: 0.16,
-  falloffPoor: 0.08,
-  /** this far past their range, the timing of the release no longer adds anything */
-  timingFade: 2,
-  /** further than this past their range a shot is a heave */
-  heavePast: 2.5,
-  /** a heave goes in at most this often, plus this much more for the best shooter */
-  heaveMin: 0.01,
-  heaveBest: 0.02,
 } as const;
+
+/** How a level treats shots from past a shooter's range (see `DEEP_LEVELS`). */
+export interface DeepRules {
+  /** how much the chance drops for each unit past a shooter's range, and how much more for a poor shooter */
+  falloff: number;
+  falloffPoor: number;
+  /** this far past their range, the timing of the release no longer adds anything */
+  timingFade: number;
+  /** Hype, fire and the rubber band fade out past range just as the timing does (false: they count in full everywhere) */
+  boostFade: boolean;
+  /** past range a shot goes in at least this often (in range it is always at least 2 in 100) */
+  floor: number;
+  /** further than this past their range a shot is a heave */
+  heavePast: number;
+  /** fire's longer range also pushes the heave line out (false: fire never turns a heave back into a shot) */
+  fireHeave: boolean;
+  /** a heave goes in at most this often, plus this much more for the best shooter */
+  heaveMin: number;
+  heaveBest: number;
+  /** from the far half of the court (at least half court away) at most this often, plus this much more for the best shooter */
+  farMin: number;
+  farBest: number;
+  /**
+   * A shot meant to miss can still rattle in off the rim, about one miss in five. Past range that luck fades out
+   * over this distance and is gone by the heave line at the latest (Infinity: it never fades, from anywhere).
+   */
+  luckFade: number;
+}
+
+/**
+ * Long shots per level, the same for both teams: Rookie, Pro, All-Star. Shots inside a shooter's range are the
+ * same on every level; only what happens past it changes. Games with two people (one screen or two devices) play
+ * by Pro rules, every other game by the level its computer plays at (see `buildMatch` and `shotLevelFor`).
+ */
+export const DEEP_LEVELS: readonly [DeepRules, DeepRules, DeepRules] = [
+  // Rookie: the rules as they were. Timing still helps a long way out, and now and then a heave drops.
+  { falloff: 0.16, falloffPoor: 0.08, timingFade: 2, boostFade: false, floor: 0.02, heavePast: 2.5, fireHeave: true, heaveMin: 0.01, heaveBest: 0.02, farMin: 0.01, farBest: 0.02, luckFade: Infinity },
+  // Pro: past range the chance falls off clearly faster and a perfect release helps less; from the far half one in two hundred at most.
+  { falloff: 0.22, falloffPoor: 0.1, timingFade: 1.6, boostFade: true, floor: 0.005, heavePast: 2, fireHeave: false, heaveMin: 0.004, heaveBest: 0.008, farMin: 0.001, farBest: 0.004, luckFade: 2 },
+  // All-Star: past range it drops very fast; from the far half one in a thousand at most, for the very best shooter.
+  { falloff: 0.26, falloffPoor: 0.12, timingFade: 1.2, boostFade: true, floor: 0.001, heavePast: 1.5, fireHeave: false, heaveMin: 0.001, heaveBest: 0.003, farMin: 0, farBest: 0.001, luckFade: 1.2 },
+];
+
+/** The computer's skill (`MatchConfig.difficulty`) from which a game plays by Pro and by All-Star long-shot rules: the quick game's levels sit either side of these. */
+export const DEEP_LEVEL_FROM = [0.4, 0.7] as const;
 
 export const HYPE = {
   max: 100,

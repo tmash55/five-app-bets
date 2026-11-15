@@ -9,8 +9,11 @@ import { RATING_KEYS, type Ratings } from '@/game/sim/ratings';
 import type { CourtId } from '@/game/render/court';
 import type { MatchSetup, Side, SidePlayer } from '@/meta/match';
 
-/** Bump whenever the simulation, the setup or these messages change in a way an older build would play differently. */
-export const NETCODE_VERSION = 1;
+/**
+ * Bump whenever the simulation, the setup or these messages change in a way an older build would play differently.
+ * 2: long shots follow the level's rules (an online game plays by Pro's), and a long miss no longer rattles in.
+ */
+export const NETCODE_VERSION = 2;
 
 function fnv(text: string): number {
   let h = 2166136261;
