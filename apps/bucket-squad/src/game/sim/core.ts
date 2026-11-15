@@ -159,13 +159,15 @@ export function pastRange(p: PlayerSim): number {
 
 /**
  * Of p's jump shots that miss, the share that may still rattle in off the rim: all of them inside range, fading
- * out past it on the harder levels, none from a heave there.
+ * out past it by the heave line, down to what the level leaves however far out (a little on Rookie, none on the
+ * harder levels).
  */
 export function luckShare(m: MatchState, p: PlayerSim): number {
   const r = deepRules(m);
   if (r.luckFade === Infinity || !isThree(p.x, p.z, p.team)) return 1;
-  if (isHeave(distToHoop(p), p.attrs.shot, r.fireHeave ? rangeBoost(p) : 0, r.heavePast)) return 0;
-  return clamp01(1 - pastRange(p) / r.luckFade);
+  const left = r.luckLeft * p.attrs.shot;
+  if (isHeave(distToHoop(p), p.attrs.shot, r.fireHeave ? rangeBoost(p) : 0, r.heavePast)) return left;
+  return Math.max(left, clamp01(1 - pastRange(p) / r.luckFade));
 }
 
 /** Chance that a shot goes in. Shared with the computer players' shot selection. */

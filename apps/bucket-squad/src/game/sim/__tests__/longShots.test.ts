@@ -1,6 +1,7 @@
 /**
- * Long shots by level. Rookie keeps the rules as they were; Pro and All-Star make shots from past a shooter's range
- * fall off faster and a shot from the far half all but impossible, for both teams, whatever helps the shooter.
+ * Long shots by level. Rookie keeps the odds as they were and only stops long misses rattling in as often; Pro and
+ * All-Star make shots from past a shooter's range fall off faster and a shot from the far half all but impossible,
+ * for both teams, whatever helps the shooter.
  */
 
 import { TIERS } from '@/meta/ladder';
@@ -9,7 +10,7 @@ import { seededRng } from '@/meta/rng';
 import { duoSetup, ladderSetup, onlineSetup, quickSetup, type Prefs } from '@/meta/setups';
 import { shootAround, type LabResult } from '@/testing/shotLab';
 import { COURT, DEEP_LEVELS, FIRE, HYPE } from '../constants';
-import { attackSign, distToHoop, hoopXOf, isHeave, isThree, makeProb, shootingRange, shotLevelFor, shotLevelOf } from '../core';
+import { attackSign, distToHoop, hoopXOf, isHeave, isThree, luckShare, makeProb, shootingRange, shotLevelFor, shotLevelOf } from '../core';
 import { rangeBoost, shotBoost } from '../fire';
 import { clamp, clamp01 } from '../math';
 import { bandOf } from '../seats';
@@ -18,7 +19,7 @@ import type { Attrs, MatchConfig, MatchState, PlayerSim, ShotGrade } from '../ty
 
 const LEVELS = [0, 1, 2] as const;
 const GRADES: ShotGrade[] = ['perfect', 'good', 'ok', 'bad'];
-/** a shot from the far half goes in at most this often, per level (Rookie: as it always did, a few in a hundred) */
+/** a shot from the far half has at most this chance as it leaves the hand, per level (Rookie: as it always did, 2 or 3 in a hundred) */
 const FAR_MOST = [0.03, 0.005, 0.001];
 
 function attrs(shot: number): Attrs {
@@ -241,6 +242,26 @@ describe('the odds of a long shot', () => {
       else expect(far).toBe(0);
     }
   });
+
+  it('let a long miss rattle in less the further out it is: all of them in range, a little on Rookie from anywhere, none on the harder levels from a heave', () => {
+    for (const level of LEVELS) {
+      const m = helped(level, 0);
+      for (const shot of SHOOTERS) {
+        let last = 1;
+        for (let d = 1; d < 23; d += 0.1) {
+          const p = shooter(m, shot, d);
+          const luck = luckShare(m, p);
+          if (d <= shootingRange(shot)) expect(luck).toBe(1);
+          expect(luck).toBeLessThanOrEqual(last + 1e-12);
+          last = luck;
+        }
+        // from the far half
+        expect(luckShare(m, shooter(m, shot, 14))).toBeCloseTo(DEEP_LEVELS[level].luckLeft * shot, 12);
+      }
+    }
+    expect(DEEP_LEVELS[0].luckLeft).toBeGreaterThan(0);
+    expect(DEEP_LEVELS[1].luckLeft + DEEP_LEVELS[2].luckLeft).toBe(0);
+  });
 });
 
 describe('which rules a game plays by', () => {
@@ -291,11 +312,16 @@ describe('shots on the court, start to finish', () => {
     { who: 'average', shot: 0.5 },
     { who: 'great', shot: 0.9 },
   ] as const;
-  /** makes, shots and makes that rattled in, recorded with the simulation as it was before the levels (commit d05d461) */
-  const BEFORE: Record<string, Record<string, [number, number, number]>> = {
-    poor: { 'at the rim': [84, 100, 5], 'mid range': [77, 100, 9], 'at the arc': [39, 100, 16], 'past range': [25, 100, 24], deep: [22, 100, 21], 'far half': [81, 240, 79] },
-    average: { 'at the rim': [88, 100, 4], 'mid range': [81, 100, 7], 'at the arc': [51, 100, 12], 'past range': [35, 100, 23], deep: [22, 100, 21], 'far half': [82, 240, 79] },
-    great: { 'at the rim': [90, 100, 2], 'mid range': [91, 100, 2], 'at the arc': [74, 100, 11], 'past range': [62, 100, 13], deep: [29, 100, 19], 'far half': [82, 240, 79] },
+  /**
+   * Rookie's makes, shots and makes that rattled in, recorded once Rookie's long misses stopped rattling in as often.
+   * Inside range (at the rim, mid range, at the arc) these are the very counts the simulation gave before the levels
+   * (commit d05d461); past range it gave, poor / average / great: past range 25 / 35 / 62, deep 22 / 22 / 29, and
+   * from the far half 81 / 82 / 82 of 240, almost all of them rattles.
+   */
+  const ROOKIE: Record<string, Record<string, [number, number, number]>> = {
+    poor: { 'at the rim': [84, 100, 5], 'mid range': [77, 100, 9], 'at the arc': [39, 100, 16], 'past range': [8, 100, 7], deep: [1, 100, 0], 'far half': [2, 240, 0] },
+    average: { 'at the rim': [88, 100, 4], 'mid range': [81, 100, 7], 'at the arc': [51, 100, 12], 'past range': [28, 100, 16], deep: [2, 100, 1], 'far half': [9, 240, 6] },
+    great: { 'at the rim': [90, 100, 2], 'mid range': [91, 100, 2], 'at the arc': [74, 100, 11], 'past range': [60, 100, 11], deep: [15, 100, 5], 'far half': [9, 240, 6] },
   };
   /** the computer's skill of each quick-game level */
   const DIFFICULTY = [0.22, 0.5, 0.82];
@@ -312,11 +338,11 @@ describe('shots on the court, start to finish', () => {
     for (const level of LEVELS) expect(shotLevelFor(DIFFICULTY[level])).toBe(level);
   });
 
-  it('go in on Rookie exactly as often as before, rattles and all', () => {
+  it('go in on Rookie exactly as often as recorded, inside range as often as before the levels', () => {
     SHOOTERS.forEach(({ who }, w) =>
       BANDS.forEach(({ band }, b) => {
         const r = at(0, w, b);
-        expect([`${who} ${band}`, r.makes, r.shots, r.rattled]).toEqual([`${who} ${band}`, ...BEFORE[who][band]]);
+        expect([`${who} ${band}`, r.makes, r.shots, r.rattled]).toEqual([`${who} ${band}`, ...ROOKIE[who][band]]);
         expect(r.stuck).toBe(0);
       }),
     );
@@ -335,17 +361,27 @@ describe('shots on the court, start to finish', () => {
         }
       }),
     );
-    // past range the poor and average shooters lose most of their makes
+    // past range the poor and average shooters lose makes on each harder level
     for (const w of [0, 1]) {
-      expect(at(1, w, 3).makes).toBeLessThan(at(0, w, 3).makes * 0.65);
+      expect(at(1, w, 3).makes).toBeLessThan(at(0, w, 3).makes);
       expect(at(2, w, 3).makes).toBeLessThan(at(1, w, 3).makes * 0.5);
     }
+    // deep, Rookie stays clearly the most forgiving
+    expect(at(0, 2, 4).makes).toBeGreaterThanOrEqual(3 * at(1, 2, 4).makes + 5);
+    for (const w of [0, 1]) expect(at(0, w, 4).makes).toBeGreaterThan(at(1, w, 4).makes);
   });
 
-  it('from the far half: about one in three on Rookie as before, at most one in two hundred on Pro and one in a thousand on All-Star, rattles included', () => {
+  it('from the far half: now and then on Rookie (2 to 5 in 100 for a great shooter, fewer for a poor one), at most one in two hundred on Pro and one in a thousand on All-Star, rattles included', () => {
     const far = BANDS.length - 1;
+    const rate = (level: number, w: number) => at(level, w, far).makes / at(level, w, far).shots;
+    expect(rate(0, 2)).toBeGreaterThanOrEqual(0.02);
+    expect(rate(0, 2)).toBeLessThanOrEqual(0.05);
+    expect(rate(0, 0)).toBeLessThan(rate(0, 2));
     SHOOTERS.forEach((_, w) => {
-      expect(at(0, w, far).makes / at(0, w, far).shots).toBeGreaterThan(0.25);
+      expect(rate(0, w)).toBeLessThanOrEqual(0.05);
+      expect(at(0, w, far).best).toBeLessThanOrEqual(FAR_MOST[0] + 1e-12);
+      // what rattles in on Rookie is a small share of the misses, a few in a hundred of the shots at most
+      expect(at(0, w, far).rattled).toBeLessThanOrEqual(at(0, w, far).shots * 0.03);
       for (const level of [1, 2] as const) {
         const r = at(level, w, far);
         expect(r.best).toBeLessThanOrEqual(FAR_MOST[level] + 1e-12);

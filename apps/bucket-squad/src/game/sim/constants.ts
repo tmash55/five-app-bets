@@ -158,9 +158,12 @@ export interface DeepRules {
   farBest: number;
   /**
    * A shot meant to miss can still rattle in off the rim, about one miss in five. Past range that luck fades out
-   * over this distance and is gone by the heave line at the latest (Infinity: it never fades, from anywhere).
+   * over this distance and is gone by the heave line at the latest, so a heave goes in only as often as its chance
+   * says (Infinity: it never fades, from anywhere, as it was before the levels).
    */
   luckFade: number;
+  /** however far out, this share of misses (times the shooter's rating, 0..1) may still rattle in, heaves too */
+  luckLeft: number;
 }
 
 /**
@@ -169,12 +172,12 @@ export interface DeepRules {
  * by Pro rules, every other game by the level its computer plays at (see `buildMatch` and `shotLevelFor`).
  */
 export const DEEP_LEVELS: readonly [DeepRules, DeepRules, DeepRules] = [
-  // Rookie: the rules as they were. Timing still helps a long way out, and now and then a heave drops.
-  { falloff: 0.16, falloffPoor: 0.08, timingFade: 2, boostFade: false, floor: 0.02, heavePast: 2.5, fireHeave: true, heaveMin: 0.01, heaveBest: 0.02, farMin: 0.01, farBest: 0.02, luckFade: Infinity },
+  // Rookie: the most forgiving. Timing still helps a long way out, rim luck fades out only by the heave line, and now and then a heave drops (2 or 3 in 100 for the best shooter).
+  { falloff: 0.16, falloffPoor: 0.08, timingFade: 2, boostFade: false, floor: 0.02, heavePast: 2.5, fireHeave: true, heaveMin: 0.01, heaveBest: 0.02, farMin: 0.01, farBest: 0.02, luckFade: 2.5, luckLeft: 0.07 },
   // Pro: past range the chance falls off clearly faster and a perfect release helps less; from the far half one in two hundred at most.
-  { falloff: 0.22, falloffPoor: 0.1, timingFade: 1.6, boostFade: true, floor: 0.005, heavePast: 2, fireHeave: false, heaveMin: 0.004, heaveBest: 0.008, farMin: 0.001, farBest: 0.004, luckFade: 2 },
+  { falloff: 0.22, falloffPoor: 0.1, timingFade: 1.6, boostFade: true, floor: 0.005, heavePast: 2, fireHeave: false, heaveMin: 0.004, heaveBest: 0.008, farMin: 0.001, farBest: 0.004, luckFade: 2, luckLeft: 0 },
   // All-Star: past range it drops very fast; from the far half one in a thousand at most, for the very best shooter.
-  { falloff: 0.26, falloffPoor: 0.12, timingFade: 1.2, boostFade: true, floor: 0.001, heavePast: 1.5, fireHeave: false, heaveMin: 0.001, heaveBest: 0.003, farMin: 0, farBest: 0.001, luckFade: 1.2 },
+  { falloff: 0.26, falloffPoor: 0.12, timingFade: 1.2, boostFade: true, floor: 0.001, heavePast: 1.5, fireHeave: false, heaveMin: 0.001, heaveBest: 0.003, farMin: 0, farBest: 0.001, luckFade: 1.2, luckLeft: 0 },
 ];
 
 /** The computer's skill (`MatchConfig.difficulty`) from which a game plays by Pro and by All-Star long-shot rules: the quick game's levels sit either side of these. */
