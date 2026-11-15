@@ -52,6 +52,11 @@ export interface MatchConfig {
   quarterSeconds: number;
   /** 0..1 skill of the computer opponents */
   difficulty: number;
+  /**
+   * Which level's long-shot rules both teams play by: 0 Rookie, 1 Pro, 2 All-Star (see `DEEP_LEVELS`). Left out,
+   * Rookie's, the rules there always were. The app sets it for every game (see `buildMatch`).
+   */
+  shotLevel?: 0 | 1 | 2;
   /** 0..1 skill of computer-controlled players on the person's own team */
   mateSkill: number;
   /** widens the perfect-release window for the person (1 = standard) */
@@ -248,6 +253,8 @@ export interface BallSim {
   points: 2 | 3;
   planned: boolean;
   ghost: boolean;
+  /** a shot meant to miss that may not rattle in off the rim (a long one on the harder levels) */
+  noLuck: boolean;
   perfect: boolean;
   fromShot: boolean;
   shotTeam: TeamId;

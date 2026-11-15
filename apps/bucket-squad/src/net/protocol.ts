@@ -17,8 +17,9 @@ import { isWheelName, schemeById, wordsAt } from '@/meta/teamName';
  * Bump whenever the simulation, the setup or these messages change in a way an older build would play differently.
  * 2: each device brings its squad's wheel name (as word places), its colours and the team it plays as; the host picks
  * the court, a random one too.
+ * 3: long shots follow the level's rules (an online game plays by Pro's), and a long miss no longer rattles in.
  */
-export const NETCODE_VERSION = 2;
+export const NETCODE_VERSION = 3;
 
 function fnv(text: string): number {
   let h = 2166136261;

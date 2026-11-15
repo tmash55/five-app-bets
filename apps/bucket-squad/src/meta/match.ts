@@ -10,6 +10,7 @@ import { teamWear, uniformById, wearOf, type Wear } from '@/data/uniforms';
 import type { KitColors, Look } from '@/game/kit/look';
 import type { CourtId } from '@/game/render/court';
 import type { MatchVisuals } from '@/game/render/renderer';
+import { shotLevelFor } from '@/game/sim/core';
 import { toAttrs } from '@/game/sim/ratings';
 import type { MatchConfig, MatchState, PlayerStats } from '@/game/sim/types';
 import { hexToRgb } from '@/game/kit/look';
@@ -162,6 +163,8 @@ export function buildMatch(setup: MatchSetup): BuiltMatch {
     quarters: setup.quarters,
     quarterSeconds: setup.quarterSeconds,
     difficulty: setup.difficulty,
+    // long shots: two people (one screen or two devices) pick no level and play by Pro's rules; anyone else by the computer's level
+    shotLevel: setup.duo ? 1 : shotLevelFor(setup.difficulty),
     mateSkill: Math.max(0.55, setup.difficulty),
     timingAssist: setup.timingAssist,
     rubberBand: setup.rubberBand,

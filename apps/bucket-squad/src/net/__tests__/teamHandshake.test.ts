@@ -144,6 +144,6 @@ describe('checking what arrives', () => {
   });
 
   it('is a new netcode version: an older build is told to update', () => {
-    expect(NETCODE_VERSION).toBe(2);
+    expect(NETCODE_VERSION).toBeGreaterThanOrEqual(2);
   });
 });

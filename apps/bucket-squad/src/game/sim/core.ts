@@ -1,6 +1,6 @@
 /** Helpers shared by the simulation and the computer players. */
 
-import { BALL_R, COURT, DEEP, DRIBBLE_H, DUNK, G_JUMP, SHOT } from './constants';
+import { BALL_R, COURT, DEEP, DEEP_LEVELS, DEEP_LEVEL_FROM, DRIBBLE_H, DUNK, G_JUMP, SHOT, type DeepRules } from './constants';
 import { rangeBoost, reachBoost, shotBoost } from './fire';
 import { clamp, clamp01, distToSegment, hypot2, lerp, smooth } from './math';
 import { assistOf, bandOf } from './seats';
@@ -122,12 +122,52 @@ export function shootingRange(shot: number, extra = 0): number {
   return COURT.threeR + DEEP.grace + DEEP.reach * shot + extra;
 }
 
+/** At least half the court away from the hoop: a shot from here is always a heave. */
+export function fromFarHalf(d: number): boolean {
+  return d >= COURT.hoopX;
+}
+
 /**
  * Beyond this, a shot is a heave: the timing of the release no longer helps and the chance is capped, at a few
- * in a hundred for the best shooter. From the far half of the court it is always a heave.
+ * in a hundred for the best shooter on Rookie and far less on the harder levels. From the far half of the court it
+ * is always a heave. `heavePast` is the level's (Rookie's when left out).
  */
-export function isHeave(d: number, shot: number, extra = 0): boolean {
-  return d >= COURT.hoopX || d > shootingRange(shot, extra) + DEEP.heavePast;
+export function isHeave(d: number, shot: number, extra = 0, heavePast: number = DEEP_LEVELS[0].heavePast): boolean {
+  return fromFarHalf(d) || d > shootingRange(shot, extra) + heavePast;
+}
+
+/** Which level's long-shot rules this game plays by: 0 Rookie, 1 Pro, 2 All-Star (see `MatchConfig.shotLevel`). */
+export function shotLevelOf(m: MatchState): 0 | 1 | 2 {
+  return m.cfg.shotLevel ?? 0;
+}
+
+/** The long-shot level of a game against a computer of this skill (`MatchConfig.difficulty`): the quick game's Rookie, Pro and All-Star map to their own. */
+export function shotLevelFor(difficulty: number): 0 | 1 | 2 {
+  return difficulty < DEEP_LEVEL_FROM[0] ? 0 : difficulty < DEEP_LEVEL_FROM[1] ? 1 : 2;
+}
+
+/** The long-shot rules of this game's level. */
+export function deepRules(m: MatchState): DeepRules {
+  return DEEP_LEVELS[shotLevelOf(m)];
+}
+
+/** How far past their own range a jump shot from p's spot is (0 inside it, and for every two). */
+export function pastRange(p: PlayerSim): number {
+  if (!isThree(p.x, p.z, p.team)) return 0;
+  return Math.max(0, distToHoop(p) - shootingRange(p.attrs.shot, rangeBoost(p)));
+}
+
+/**
+ * Of p's jump shots that miss, the share that may still rattle in off the rim: all of them inside range, fading
+ * out past it by the heave line, down to what the level leaves however far out (a little on Rookie, none on the
+ * harder levels).
+ */
+export function luckShare(m: MatchState, p: PlayerSim): number {
+  const r = deepRules(m);
+  if (r.luckFade === Infinity || !isThree(p.x, p.z, p.team)) return 1;
+  const left = r.luckLeft * p.attrs.shot;
+  if (isHeave(distToHoop(p), p.attrs.shot, r.fireHeave ? rangeBoost(p) : 0, r.heavePast)) return left;
+  return Math.max(left, clamp01(1 - pastRange(p) / r.luckFade));
 }
 
 /** Chance that a shot goes in. Shared with the computer players' shot selection. */
@@ -138,20 +178,23 @@ export function makeProb(
   grade: ShotGrade,
   moving: number,
 ): number {
+  const r = deepRules(m);
   const d = distToHoop(p);
   const s = p.attrs.shot;
   const three = isThree(p.x, p.z, p.team);
   const extra = rangeBoost(p);
   // how far past the shooter's own range, and how much the timing of the release can still do from there
   const past = three ? Math.max(0, d - shootingRange(s, extra)) : 0;
-  const timing = clamp01(1 - past / DEEP.timingFade);
+  const timing = clamp01(1 - past / r.timingFade);
+  // on the harder levels Hype, fire and the rubber band fade out past range just as the timing does
+  const boost = r.boostFade ? timing : 1;
   let base: number;
   if (d < 2.3) {
     base = 0.62 + 0.2 * (0.5 * s + 0.5 * p.attrs.dunk);
   } else if (!three) {
     base = 0.41 + 0.26 * s - 0.012 * (d - 2.3);
   } else {
-    base = 0.1 + 0.34 * s - past * (DEEP.falloff + DEEP.falloffPoor * (1 - s));
+    base = 0.1 + 0.34 * s - past * (r.falloff + r.falloffPoor * (1 - s));
   }
   let c = contest;
   if (grade === 'perfect') {
@@ -167,12 +210,14 @@ export function makeProb(
   }
   base -= c * 0.4;
   // Hype and fire, together never more than FIRE.shotCap
-  base += shotBoost(m, p);
+  base += shotBoost(m, p) * boost;
   const diff = clamp(m.score[p.team] - m.score[1 - p.team], -12, 12) / 12;
-  base -= diff * 0.07 * bandOf(m, p.team, diff);
+  base -= diff * 0.07 * bandOf(m, p.team, diff) * boost;
   base -= Math.min(0.07, moving * 0.011);
-  const chance = clamp(base, 0.02, 0.96);
-  return three && isHeave(d, s, extra) ? Math.min(chance, DEEP.heaveMin + DEEP.heaveBest * s) : chance;
+  const chance = clamp(base, past > 0 ? r.floor : 0.02, 0.96);
+  if (!three || !isHeave(d, s, r.fireHeave ? extra : 0, r.heavePast)) return chance;
+  // a heave is capped whatever helped it: the timing, Hype, fire or the rubber band
+  return Math.min(chance, fromFarHalf(d) ? r.farMin + r.farBest * s : r.heaveMin + r.heaveBest * s);
 }
 
 /** True when no defender stands in the corridor between (ax, az) and (bx, bz). */
