@@ -17,6 +17,7 @@ import { tierProgress } from '@/meta/ladder';
 import { currentMissions, missionsToClaim } from '@/meta/missions';
 import { dayKey } from '@/meta/rng';
 import { shopIsNew } from '@/meta/shop';
+import { nameText, shortOf } from '@/meta/teamName';
 import { nextTourGame, preferredTour, toursFor } from '@/meta/tour';
 import { useSave } from '@/state/save';
 import { arcade, blend, neonText, night, rarityPaint, track, tube } from '@/theme/arcade';
@@ -29,6 +30,7 @@ import { placePlates } from '@/ui/arcade/plateRow';
 import { Floor, Spotlight, StageRing } from '@/ui/arcade/Room';
 import { HOOP_SHAPE, HoopSign, StarSign } from '@/ui/arcade/Signs';
 import { Chip, Plate } from '@/ui/arcade/Surface';
+import { TeamNameButton } from '@/ui/arcade/TeamBadge';
 import { Glow, Print } from '@/ui/arcade/Type';
 import { wallSpot, type WallSpot } from '@/ui/arcade/wallSpot';
 
@@ -61,6 +63,9 @@ const MENU_W = Math.max(px(284), 2 * (Math.max(...TILE_TITLES.map((t) => widthOf
 const TILE_ROOM = (MENU_W - TILE_GAP) / 2 - TILE_EDGE;
 /** the room for the line under PLAY: the big button less its padding, its icon and the gap after it */
 const PLAY_ROOM = MENU_W - px(18) * 2 - px(46) - px(14);
+
+/** the most the squad's name button may take in the top bar */
+const TEAM_ROOM = px(210);
 
 /** The first of these that fits on the line under PLAY at its own size (the last one if none does): a shrunk line would be cut. */
 function fitLine(choices: readonly string[], room: number): string {
@@ -348,6 +353,7 @@ export default function Home() {
   const tour = useSave((s) => s.tour);
   const homeTeam = useSave((s) => s.homeTeam);
   const shop = useSave((s) => s.shop);
+  const teamName = useSave((s) => s.teamName);
 
   if (!onboarded || squad.length === 0) return <Redirect href="/welcome" />;
 
@@ -377,6 +383,7 @@ export default function Home() {
       left={<Logo />}
       right={
         <>
+          <TeamNameButton small room={TEAM_ROOM} />
           <View accessible accessibilityLabel={`Ladder: ${tier.name}`}>
             <Chip>
               <Print face="bold" size="small" color="textFaint" track="wider">
@@ -401,7 +408,7 @@ export default function Home() {
               <BreathingTile delay={900} tube="cyan" icon="grid" title="COLLECTION" sub={collectionSub} badge={fresh.length} onPress={go('/shelf')} />
             </View>
             <View style={styles.tileRow}>
-              <BreathingTile delay={1800} tube="violet" icon="squad" title="SQUAD" sub={fitSub(['Pick your three', 'Pick three'])} onPress={go('/squad')} />
+              <BreathingTile delay={1800} tube="violet" icon="squad" title="SQUAD" sub={fitSub(teamName ? [nameText(teamName), shortOf(teamName)] : ['Pick your three', 'Pick three'])} onPress={go('/squad')} />
               <BreathingTile delay={2700} tube="green" icon="target" title="MISSIONS" sub={fitSub(toClaim > 0 ? ['Prizes waiting!', 'Prizes!'] : ['New every day', 'New daily'])} badge={toClaim} onPress={go('/missions')} />
             </View>
           </View>

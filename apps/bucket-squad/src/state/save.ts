@@ -31,6 +31,8 @@ interface SaveActions {
   visitShop: (day?: string) => void;
   buyShopSlot: (slotId: string, day?: string) => logic.ShopBuy | null;
   wearUniform: (id: string | null) => boolean;
+  /** name the squad (null: "Your Squad" again) and light it in a colour scheme (null: the colours it wears) */
+  nameTeam: (name: logic.SaveData['teamName'], colors: string | null) => void;
   addCoins: (n: number) => void;
   resetAll: () => void;
 }
@@ -60,6 +62,8 @@ export function dataOf(s: SaveStore): SaveData {
     uniforms: s.uniforms,
     uniform: s.uniform,
     shop: s.shop,
+    teamName: s.teamName,
+    teamColors: s.teamColors,
   };
 }
 
@@ -134,6 +138,7 @@ export const useSave = create<SaveStore>()(
         set(next);
         return true;
       },
+      nameTeam: (name, colors) => set(logic.colorTeam(logic.nameTeam(dataOf(get()), name), colors)),
       addCoins: (n) => set({ coins: Math.max(0, get().coins + n) }),
       resetAll: () => set(logic.newSave()),
     }),

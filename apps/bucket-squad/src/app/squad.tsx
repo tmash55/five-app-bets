@@ -21,6 +21,7 @@ import { Spotlight, StageRing } from '@/ui/arcade/Room';
 import { ChemChip, OvrMeter } from '@/ui/arcade/Strength';
 import { NeonPanel } from '@/ui/arcade/Surface';
 import { Print } from '@/ui/arcade/Type';
+import { TeamNameButton } from '@/ui/arcade/TeamBadge';
 import { WearingButton } from '@/ui/arcade/UniformLinks';
 import { columnsThatFit, rowsOf } from '@/ui/rows';
 
@@ -97,7 +98,7 @@ export default function Squad() {
   const beamTall = space.md + (height - (cardsTall + AROUND_CARDS - SPOT_LABEL)) / 2 + cardsTall - px(10);
 
   return (
-    <ArcadeScreen title="SQUAD" tube="violet" style={styles.body}>
+    <ArcadeScreen title="SQUAD" tube="violet" style={styles.body} right={<TeamNameButton small room={Math.round(body.width * 0.42)} />}>
       <View style={styles.row}>
         <View style={[styles.left, { width: leftW }]}>
           {/* the squad stands under a spotlight, on a lit ring like the one on the home page */}

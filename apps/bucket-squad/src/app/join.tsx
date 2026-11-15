@@ -12,6 +12,7 @@ import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
 import { useWidth } from '@/ui/arcade/Buttons';
 import { SignHead } from '@/ui/arcade/Controls';
 import { Arrive, Breathe } from '@/ui/arcade/Motion';
+import { PlayAsButton, PlayAsPopup } from '@/ui/arcade/PlayAs';
 import { CodeTiles, LetterPad } from '@/ui/arcade/RoomCode';
 import { NeonPanel } from '@/ui/arcade/Surface';
 import { Glow, Print } from '@/ui/arcade/Type';
@@ -24,6 +25,10 @@ export default function Join() {
   const leave = useOnline((s) => s.leave);
   const [code, setCode] = useState('');
   const [padW, onPadLayout] = useWidth();
+  const playAs = useOnline((s) => s.playAs);
+  const setPlayAs = useOnline((s) => s.setPlayAs);
+  const [choosing, setChoosing] = useState(false);
+  const [rowW, setRowW] = useState(0);
 
   useLeaveUnlessMatched();
   const phase = view?.phase;
@@ -53,6 +58,7 @@ export default function Join() {
   const looking = view !== null && (view.phase === 'joining' || view.phase === 'looking');
 
   return (
+    <View style={styles.root}>
     <ArcadeScreen
       title="JOIN A GAME"
       tube="pink"
@@ -94,6 +100,20 @@ export default function Join() {
                 </Print>
               )}
             </View>
+            {/* the team this device plays as goes with the hello, so it is picked before the code is in */}
+            <View style={styles.you}>
+              <Print face="bold" size="tiny" color="textFaint" track="wider">
+                YOU
+              </Print>
+              <View
+                style={styles.grow}
+                onLayout={(e) => {
+                  const w = Math.floor(e.nativeEvent.layout.width);
+                  if (w !== rowW) setRowW(w);
+                }}>
+                {rowW > 0 && <PlayAsButton team={playAs} room={rowW} disabled={looking} onPress={() => setChoosing(true)} />}
+              </View>
+            </View>
           </NeonPanel>
         </Arrive>
         <Arrive delay={110} from="right" style={styles.side}>
@@ -103,10 +123,21 @@ export default function Join() {
         </Arrive>
       </View>
     </ArcadeScreen>
+    {/* any team plays in a game of either size, so the list does not depend on the size the host picks */}
+    {choosing && <PlayAsPopup team={playAs} perTeam={3} tube="pink" onClose={() => setChoosing(false)} onPick={setPlayAs} />}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  you: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+  },
   body: {
     paddingTop: space.md,
   },

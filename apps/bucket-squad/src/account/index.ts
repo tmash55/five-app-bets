@@ -9,7 +9,7 @@ import { AppState } from 'react-native';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { newSave, repairSave, type SaveData } from '@/state/logic';
+import { forAccount, fromAccount, newSave, repairSave, type SaveData } from '@/state/logic';
 import { dataOf, useSave } from '@/state/save';
 import { appleSignIn, appleSignInAvailable } from './apple';
 import { ACCOUNTS_SET_UP } from './config';
@@ -45,8 +45,9 @@ function cleanMeta(raw: unknown): AccountMeta {
 const SAVE_KEYS = Object.keys(newSave()) as (keyof SaveData)[];
 
 const savePort: SavePort = {
-  get: () => dataOf(useSave.getState()),
-  replace: (data) => useSave.setState(repairSave(data)),
+  // a typed team name stays on this device: the account gets the save without it, and keeps it when it hands one back
+  get: () => forAccount(dataOf(useSave.getState())),
+  replace: (data) => useSave.setState(fromAccount(repairSave(data), useSave.getState())),
   subscribe: (onChange) =>
     useSave.subscribe((now, before) => {
       if (SAVE_KEYS.some((k) => now[k] !== before[k])) onChange();

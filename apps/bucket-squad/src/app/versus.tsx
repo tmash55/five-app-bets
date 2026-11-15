@@ -11,7 +11,7 @@ import { playSfx } from '@/audio/sound';
 import { mustPlayer, teamById } from '@/data/roster';
 import { COURTS } from '@/game/render/court';
 import { TIERS, tierIndex } from '@/meta/ladder';
-import { chemistry, sideWear, type MatchSetup, type Side } from '@/meta/match';
+import { badgeLetters, chemistry, sideColors, type MatchSetup, type Side } from '@/meta/match';
 import { DIFFICULTY_NAMES, sideOverall } from '@/meta/setups';
 import { tourById } from '@/meta/tour';
 import { problemWords } from '@/net/words';
@@ -29,6 +29,7 @@ import { Popup } from '@/ui/arcade/Popup';
 import { Bulbs } from '@/ui/arcade/Room';
 import { ChemChip, OvrMeter } from '@/ui/arcade/Strength';
 import { Chip, TeamMark } from '@/ui/arcade/Surface';
+import { TeamBadge } from '@/ui/arcade/TeamBadge';
 import { teamTube } from '@/ui/arcade/TeamPick';
 import { Glow, Print } from '@/ui/arcade/Type';
 
@@ -97,8 +98,8 @@ function SideColumn({ side, perTeam, cardW, mine, from, tube: tb, tag, you }: { 
             </Glow>
           </View>
         )}
-        {/* your own squad needs no badge: its name says whose it is */}
-        {!mine && <TeamMark team={team} small />}
+        {/* your own side carries its own badge, in the colours it picked; the other side its team's letters */}
+        {mine ? <TeamBadge short={badgeLetters(side)} colors={sideColors(side)} size={px(26)} /> : <TeamMark team={team} small />}
         <Glow face="display" size="title" tube={tb} track="close" room={cardW * perTeam - (tag !== undefined ? TAG_W + space.sm : 0)}>
           {/* two devices: the side played on this one is yours */}
           {you ? 'YOU' : side.name.toUpperCase()}
@@ -159,9 +160,9 @@ function Matchup({ setup }: { setup: MatchSetup }) {
   const leave = useOnline((s) => s.leave);
   // an online game's guest plays the away side
   const local = online && view?.role === 'guest' ? 1 : 0;
-  // your side is lit in the colours it wears
-  const homeTube = teamTube(sideWear(setup.home));
-  const awayTube = teamTube(teamById(setup.away.kitTeam));
+  // each side is lit in its own colours: the ones it picked, or else the ones it wears
+  const homeTube = teamTube(sideColors(setup.home));
+  const awayTube = teamTube(sideColors(setup.away));
   const [area, setArea] = useState({ width: 0, height: 0 });
   // the button row's own height, measured, so the fight card and the button sit together in the middle of a tall screen
   const [footH, setFootH] = useState(0);
@@ -248,7 +249,12 @@ function Matchup({ setup }: { setup: MatchSetup }) {
           }}>
           <View style={styles.footInfo}>
             <Chip small>
-              <LineIcon name="flag" size={px(14)} tube="cyan" />
+              <LineIcon name={setup.randomCourt ? 'dice' : 'flag'} size={px(14)} tube={setup.randomCourt ? 'gold' : 'cyan'} />
+              {setup.randomCourt && (
+                <Print face="bold" size="tiny" color={tubes.gold.soft} track="wide" lines={1}>
+                  RANDOM
+                </Print>
+              )}
               <Print face="bold" size="small" color="textSoft" lines={1}>
                 {court.name}
               </Print>

@@ -8,11 +8,11 @@ import { create } from 'zustand';
 
 import { newRoomCode } from '@/net/code';
 import { makeTransport } from '@/net/config';
-import { NETCODE_VERSION, ROSTER_FINGERPRINT, type Offer } from '@/net/protocol';
+import type { Offer } from '@/net/protocol';
 import { OnlineRoom, type RoomView } from '@/net/room';
 import type { Transport } from '@/net/transport';
 import { onlineSetup } from '@/meta/setups';
-import { squadLevels } from './logic';
+import { offerFrom, squadOf } from './offer';
 import { useSave } from './save';
 import { useSession } from './session';
 
@@ -21,6 +21,9 @@ interface Online {
   view: RoomView | null;
   /** this build has no way to play online */
   unavailable: boolean;
+  /** the team this device plays as, or null for its squad: picked before hosting or joining */
+  playAs: string | null;
+  setPlayAs: (team: string | null) => void;
   /** open a room; the match is built when the friend arrives, at the size set then (`settings.format`) */
   host: () => void;
   join: (code: string) => void;
@@ -41,10 +44,11 @@ function transport(): Transport | null {
   return transportOverride ?? makeTransport();
 }
 
-/** What this device brings: its squad's card ids and levels, its uniform, its shot window. Nothing personal. */
+export { offerFrom, squadOf } from './offer';
+
+/** What this device brings now (see `offerFrom`). */
 export function myOffer(): Offer {
-  const data = useSave.getState();
-  return { v: NETCODE_VERSION, fp: ROSTER_FINGERPRINT, squad: squadLevels(data).map((p) => ({ id: p.id, level: p.level })), uni: data.uniform ?? null, easy: data.settings.easyShots };
+  return offerFrom(useSave.getState(), useOnline.getState().playAs);
 }
 
 export const useOnline = create<Online>((set, get) => {
@@ -71,6 +75,8 @@ export const useOnline = create<Online>((set, get) => {
     room: null,
     view: null,
     unavailable: false,
+    playAs: null,
+    setPlayAs: (team) => set({ playAs: team }),
     host: () => {
       get().leave();
       const t = transport();
@@ -84,9 +90,10 @@ export const useOnline = create<Online>((set, get) => {
           role: 'host',
           code: newRoomCode(),
           offer: myOffer(),
-          makeSetup: (h, g) => {
-            const { format, quarterSeconds } = useSave.getState().settings;
-            return onlineSetup({ squad: h.squad, uniform: h.uni, easyShots: h.easy }, { squad: g.squad, uniform: g.uni, easyShots: g.easy }, format, quarterSeconds);
+          // the host's own choices as they are when the friend arrives: the size, the court and the team it plays as
+          makeSetup: (_h, g) => {
+            const { format, quarterSeconds, hostCourt } = useSave.getState().settings;
+            return onlineSetup(squadOf(myOffer()), squadOf(g), format, quarterSeconds, Math.random, hostCourt, useSession.getState().setup?.court ?? null);
           },
         });
         adopt(room, tries > 1 ? () => open(tries - 1) : undefined);

@@ -64,6 +64,17 @@ const DRAWINGS = {
   dot: { shapes: [{ c: [12, 12, 5] }], solid: true },
   clock: { shapes: [{ c: [12, 12, 8.5] }, { p: 'M12 7v5.2l3.4 2.1' }] },
   tag: { shapes: [{ p: 'M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1.4 1.4 0 0 1 0 2l-6.6 6.6a1.4 1.4 0 0 1-2 0z' }, { c: [8, 8, 1.4] }] },
+  /** a die showing five: anything picked at random */
+  dice: { shapes: [{ r: [3.5, 3.5, 17, 17, 3.5] }, { c: [8.3, 8.3, 0.7] }, { c: [15.7, 8.3, 0.7] }, { c: [12, 12, 0.7] }, { c: [8.3, 15.7, 0.7] }, { c: [15.7, 15.7, 0.7] }] },
+  /** writing something in */
+  pencil: { shapes: [{ p: 'M4.5 19.5l1.2-4.6L15.6 5a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8l-9.9 9.9z' }, { p: 'M13.8 6.8l3.4 3.4' }] },
+  /** a team's badge */
+  shield: { shapes: [{ p: 'M12 3l7.5 2.8v5.6c0 4.5-3.1 8-7.5 9.6-4.4-1.6-7.5-5.1-7.5-9.6V5.8z' }] },
+  /** a drop of paint: colours */
+  drop: { shapes: [{ p: 'M12 3.5c3.6 4.3 6 7.6 6 10.6a6 6 0 0 1-12 0c0-3 2.4-6.3 6-10.6z' }] },
+  /** a wheel turns one step */
+  chevUp: { shapes: [{ p: 'M6 15l6-6 6 6' }] },
+  chevDown: { shapes: [{ p: 'M6 9l6 6 6-6' }] },
 } as const satisfies Record<string, Drawing>;
 
 export type LineIconName = keyof typeof DRAWINGS;

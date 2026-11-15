@@ -4,9 +4,11 @@
  */
 
 import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { COURT_IDS } from '@/game/render/court';
+import { RANDOM_COURT } from '@/meta/courts';
 import { problemWords } from '@/net/words';
 import { useLeaveUnlessMatched, useOnline } from '@/state/online';
 import { useSave } from '@/state/save';
@@ -15,8 +17,11 @@ import { px, space } from '@/theme/tokens';
 import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
 import { GoldButton } from '@/ui/arcade/Buttons';
 import { PickRow, SignHead, type Choice } from '@/ui/arcade/Controls';
+import { FadeScroll } from '@/ui/arcade/FadeScroll';
 import { LineIcon } from '@/ui/arcade/LineIcon';
 import { Arrive, Breathe } from '@/ui/arcade/Motion';
+import { PlayAsButton, PlayAsPopup } from '@/ui/arcade/PlayAs';
+import { CourtPick, GLOW_ROOM } from '@/ui/arcade/Pickers';
 import { CodeTiles } from '@/ui/arcade/RoomCode';
 import { NeonPanel } from '@/ui/arcade/Surface';
 import { Glow, Print } from '@/ui/arcade/Type';
@@ -34,6 +39,12 @@ export default function Host() {
   const leave = useOnline((s) => s.leave);
   const format = useSave((s) => s.settings.format);
   const setSetting = useSave((s) => s.setSetting);
+  // the court and the team the host plays as are read when the friend arrives, so they can change until then
+  const court = useSave((s) => s.settings.hostCourt);
+  const playAs = useOnline((s) => s.playAs);
+  const setPlayAs = useOnline((s) => s.setPlayAs);
+  const [choosing, setChoosing] = useState(false);
+  const [rowW, setRowW] = useState(0);
 
   useEffect(() => {
     host();
@@ -49,6 +60,7 @@ export default function Host() {
   const code = view && view.phase !== 'joining' && view.phase !== 'failed' ? view.code : '';
 
   return (
+    <View style={styles.root}>
     <ArcadeScreen
       title="HOST A GAME"
       tube="pink"
@@ -92,20 +104,49 @@ export default function Host() {
               </>
             ) : (
               <>
-                <Breathe depth={0.5} ms={900}>
-                  <LineIcon name="duo" size={px(44)} tube={view?.friendHere ? 'green' : 'pink'} />
-                </Breathe>
-                <Glow face="display" size="large" tube={view?.friendHere ? 'green' : 'pink'} center>
-                  {phase === 'joining' || !view ? 'OPENING A ROOM…' : view.friendHere ? 'YOUR FRIEND IS HERE!' : 'WAITING FOR YOUR FRIEND…'}
-                </Glow>
-                <View style={styles.size}>
-                  <Print face="bold" size="tiny" color="textFaint" track="wider">
+                <View style={styles.status}>
+                  <Breathe depth={0.5} ms={900}>
+                    <LineIcon name="duo" size={px(32)} tube={view?.friendHere ? 'green' : 'pink'} />
+                  </Breathe>
+                  <Glow face="display" size="large" tube={view?.friendHere ? 'green' : 'pink'} center>
+                    {phase === 'joining' || !view ? 'OPENING A ROOM…' : view.friendHere ? 'YOUR FRIEND IS HERE!' : 'WAITING FOR YOUR FRIEND…'}
+                  </Glow>
+                </View>
+                <View style={styles.option}>
+                  <Print face="bold" size="tiny" color="textFaint" track="wider" style={styles.optionLabel}>
                     PLAYERS
                   </Print>
-                  <PickRow options={FORMATS} value={format} onChange={(v) => setSetting('format', v)} tube="pink" />
+                  <View style={styles.grow}>
+                    <PickRow options={FORMATS} value={format} onChange={(v) => setSetting('format', v)} tube="pink" />
+                  </View>
                 </View>
-                <Print face="medium" size="small" color={tubes.pink.soft} center>
-                  You play your own squad. Your friend plays theirs.
+                <View style={styles.option}>
+                  <Print face="bold" size="tiny" color="textFaint" track="wider" style={styles.optionLabel}>
+                    YOU
+                  </Print>
+                  <View
+                    style={styles.grow}
+                    onLayout={(e) => {
+                      const w = Math.floor(e.nativeEvent.layout.width);
+                      if (w !== rowW) setRowW(w);
+                    }}>
+                    {rowW > 0 && <PlayAsButton team={playAs} room={rowW} onPress={() => setChoosing(true)} />}
+                  </View>
+                </View>
+                <View style={styles.option}>
+                  <Print face="bold" size="tiny" color="textFaint" track="wider" style={styles.optionLabel}>
+                    COURT
+                  </Print>
+                  <FadeScroll horizontal showsHorizontalScrollIndicator={false} reach={px(30)} style={styles.courtsBox} contentContainerStyle={styles.courts}>
+                    <CourtPick id={RANDOM_COURT} selected={court === RANDOM_COURT} onPress={() => setSetting('hostCourt', RANDOM_COURT)} tube="pink" />
+                    <CourtPick id={null} selected={court === null} onPress={() => setSetting('hostCourt', null)} tube="pink" homeLabel="Your court" />
+                    {COURT_IDS.map((id) => (
+                      <CourtPick key={id} id={id} selected={court === id} onPress={() => setSetting('hostCourt', id)} tube="pink" />
+                    ))}
+                  </FadeScroll>
+                </View>
+                <Print face="medium" size="tiny" color={tubes.pink.soft} center>
+                  Your friend picks their own team.
                 </Print>
               </>
             )}
@@ -113,10 +154,18 @@ export default function Host() {
         </Arrive>
       </View>
     </ArcadeScreen>
+    {choosing && <PlayAsPopup team={playAs} perTeam={format} tube="pink" onClose={() => setChoosing(false)} onPick={setPlayAs} />}
+    </View>
   );
 }
 
+/** the label column beside each choice, so the rows line up */
+const LABEL_W = px(66);
+
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
   body: {
     paddingTop: space.md,
   },
@@ -130,7 +179,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   side: {
-    width: '42%',
+    width: '48%',
     justifyContent: 'center',
   },
   panel: {
@@ -143,9 +192,24 @@ const styles = StyleSheet.create({
   },
   status: {
     alignItems: 'center',
-  },
-  size: {
-    alignSelf: 'stretch',
     gap: space.xs,
+  },
+  option: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+  },
+  optionLabel: {
+    width: LABEL_W,
+  },
+  courtsBox: {
+    flex: 1,
+    marginLeft: -GLOW_ROOM,
+    marginRight: -px(16),
+  },
+  courts: {
+    gap: space.sm,
+    padding: GLOW_ROOM,
   },
 });
