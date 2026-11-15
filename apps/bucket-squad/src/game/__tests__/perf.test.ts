@@ -1,4 +1,4 @@
-import { perfAdd, perfFrame, perfLines, perfLoad, perfOn, perfReset, perfSound, perfStep, perfSummary } from '../perf';
+import { perfAdd, perfFrame, perfLevel, perfLines, perfLoad, perfOn, perfReset, perfSound, perfStep, perfSummary } from '../perf';
 
 const g = globalThis as { __perfOn?: boolean };
 
@@ -40,6 +40,25 @@ describe('the frame probe', () => {
     expect(s.avg.draw).toBe(2);
     expect(s.avg.steps).toBe(1);
     expect(s.p90.draw).toBe(2);
+  });
+
+  it('counts the frames that missed 60 and 30 a second, and notes each change of graphics level', () => {
+    g.__perfOn = true;
+    perfLevel(0);
+    for (let i = 0; i < 130; i++) {
+      if (i === 80) perfLevel(5);
+      perfFrame(i < 80 ? (i % 10 === 0 ? 25 : 16.7) : i % 10 === 0 ? 50 : 33.4);
+      perfAdd('anim', 1);
+      perfAdd('submit', 3);
+    }
+    const s = perfSummary();
+    expect(s.over20).toBe(5 + 50);
+    expect(s.over33).toBe(5);
+    expect(s.avg.anim).toBe(1);
+    expect(s.avg.submit).toBe(3);
+    expect(s.level).toBe(5);
+    expect(s.levels).toEqual([[80, 5]]);
+    perfLevel(0);
   });
 
   it('splits a long summary into numbered pieces a phone log keeps whole', () => {

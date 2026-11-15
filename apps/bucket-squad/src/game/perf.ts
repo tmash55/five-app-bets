@@ -3,8 +3,9 @@
  *
  * Off unless the bundle is started with EXPO_PUBLIC_BS_PERF=1 (any build, release included) or a development
  * build sets `globalThis.__perfOn = true` before the match. When on, every display frame of a match is noted with
- * how long it waited for the GL thread, how long the simulation and the drawing took in JS, what happened in the
- * game that frame and which sounds started or were loaded. At the end of the match a few lines starting with BSPERF
+ * how long it waited for the GL thread, how long the simulation and the drawing took in JS (and, inside the drawing,
+ * the animator and three.js handing the scene to GL), the graphics level it was drawn at, what happened in the game
+ * that frame and which sounds started or were loaded. At the end of the match a few lines starting with BSPERF
  * go to the console with the average cost of each part, the slow frames and what they had in common, so a device
  * log shows it. iOS cuts each log message at about 1,000 bytes, so the summary is split into numbered pieces.
  */
@@ -24,7 +25,12 @@ interface Frame {
   sim: number;
   /** ms of drawing (JS side) */
   draw: number;
+  /** of the drawing: ms of the animator (poses, the drawn ball, the camera) and of three.js submitting the scene */
+  anim: number;
+  submit: number;
   steps: number;
+  /** the graphics level (src/game/quality.ts) the frame was drawn at */
+  level: number;
   events: string[];
   sounds: string[];
   /** sound pools made this frame (players loaded from disk) */
@@ -34,6 +40,9 @@ interface Frame {
 
 let current: Frame | null = null;
 const frames: Frame[] = [];
+let level = 0;
+/** level changes in the match: [frame, level] */
+const changes: [number, number][] = [];
 
 export function perfOn(): boolean {
   return ENV_ON || (globalThis as { __perfOn?: boolean }).__perfOn === true;
@@ -42,13 +51,21 @@ export function perfOn(): boolean {
 /** Start noting a frame; `gap` is the time since the last one. */
 export function perfFrame(gap: number): void {
   if (!perfOn()) return;
-  current = { gap, wait: 0, sim: 0, draw: 0, steps: 0, events: [], sounds: [], loads: [], hud: false };
+  current = { gap, wait: 0, sim: 0, draw: 0, anim: 0, submit: 0, steps: 0, level, events: [], sounds: [], loads: [], hud: false };
   frames.push(current);
   if (frames.length > KEEP) frames.shift();
 }
 
-export function perfAdd(part: 'wait' | 'sim' | 'draw', ms: number): void {
+export function perfAdd(part: 'wait' | 'sim' | 'draw' | 'anim' | 'submit', ms: number): void {
   if (current) current[part] += ms;
+}
+
+/** The graphics level frames are drawn at from now on. */
+export function perfLevel(l: number): void {
+  if (!perfOn() || l === level) return;
+  level = l;
+  changes.push([frames.length, l]);
+  if (current) current.level = l;
 }
 
 export function perfStep(eventTypes: readonly string[]): void {
@@ -76,15 +93,21 @@ export interface PerfSummary {
   slow: number;
   /** frames at or over 100 ms */
   stalls: number;
+  /** frames over 20 ms (a 60 Hz frame missed) and over 33 ms (a 30 Hz one missed) */
+  over20: number;
+  over33: number;
   worst: number;
   /** mean ms per frame of waiting for the GL thread, simulation and drawing, and mean simulation steps per frame */
-  avg: { wait: number; sim: number; draw: number; steps: number };
+  avg: { wait: number; sim: number; draw: number; anim: number; submit: number; steps: number };
   /** the 90th-percentile ms of each part, so a steady cost and a spiky one can be told apart */
-  p90: { wait: number; sim: number; draw: number };
+  p90: { wait: number; sim: number; draw: number; anim: number; submit: number };
+  /** the graphics level at the end, and each change as [frame, level] */
+  level: number;
+  levels: [number, number][];
   /** of the slow frames, how many had each thing happen in them, against how often it happens in any frame */
   together: Record<string, { slow: number; all: number }>;
   /** the slowest frames with what happened in them */
-  top: (Omit<Frame, 'gap' | 'wait' | 'sim' | 'draw'> & { gap: number; wait: number; sim: number; draw: number })[];
+  top: Frame[];
 }
 
 const round = (n: number) => Math.round(n * 10) / 10;
@@ -113,15 +136,20 @@ export function perfSummary(): PerfSummary {
   const top = [...slow]
     .sort((a, b) => b.gap - a.gap)
     .slice(0, 12)
-    .map((f) => ({ ...f, gap: round(f.gap), wait: round(f.wait), sim: round(f.sim), draw: round(f.draw) }));
+    .map((f) => ({ ...f, gap: round(f.gap), wait: round(f.wait), sim: round(f.sim), draw: round(f.draw), anim: round(f.anim), submit: round(f.submit) }));
   return {
     frames: play.length,
     fps: total > 0 ? round((play.length * 1000) / total) : 0,
     slow: slow.length,
     stalls: play.filter((f) => f.gap >= 100).length,
+    over20: play.filter((f) => f.gap > 20).length,
+    // a frame at 30 a second is 33.3 ms and a little jitter: past 34 it missed one
+    over33: play.filter((f) => f.gap > 34).length,
     worst: round(Math.max(0, ...play.map((f) => f.gap))),
-    avg: { wait: mean(play.map((f) => f.wait)), sim: mean(play.map((f) => f.sim)), draw: mean(play.map((f) => f.draw)), steps: mean(play.map((f) => f.steps)) },
-    p90: { wait: p90(play.map((f) => f.wait)), sim: p90(play.map((f) => f.sim)), draw: p90(play.map((f) => f.draw)) },
+    avg: { wait: mean(play.map((f) => f.wait)), sim: mean(play.map((f) => f.sim)), draw: mean(play.map((f) => f.draw)), anim: mean(play.map((f) => f.anim)), submit: mean(play.map((f) => f.submit)), steps: mean(play.map((f) => f.steps)) },
+    p90: { wait: p90(play.map((f) => f.wait)), sim: p90(play.map((f) => f.sim)), draw: p90(play.map((f) => f.draw)), anim: p90(play.map((f) => f.anim)), submit: p90(play.map((f) => f.submit)) },
+    level,
+    levels: changes.map((c) => [c[0], c[1]]),
     together,
     top,
   };
@@ -140,11 +168,11 @@ export function perfLines(label: string, summary: PerfSummary): string[] {
 export function perfReport(label: string): void {
   if (!perfOn() || frames.length === 0) return;
   for (const line of perfLines(label, perfSummary())) console.log(line);
-  frames.length = 0;
-  current = null;
+  perfReset();
 }
 
 export function perfReset(): void {
   frames.length = 0;
   current = null;
+  changes.length = 0;
 }

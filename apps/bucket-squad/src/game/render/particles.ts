@@ -36,6 +36,8 @@ const CORNERS = [-1, -1, 1, -1, 1, 1, -1, 1];
 
 export class Particles {
   readonly mesh: THREE.Mesh;
+  /** the share of each burst, puff and shower that is made (the lighter graphics levels make half) */
+  thin = 1;
   private readonly max: number;
   private n = 0;
   private readonly px: Float32Array;
@@ -61,6 +63,7 @@ export class Particles {
   private readonly aCol: THREE.BufferAttribute;
   private readonly aCorner: THREE.BufferAttribute;
   private readonly aSpin: THREE.BufferAttribute;
+  private readonly attrs: THREE.BufferAttribute[];
   private seed = 1;
 
   constructor(max = 320) {
@@ -90,7 +93,8 @@ export class Particles {
     this.aCol = new THREE.BufferAttribute(new Float32Array(max * 16), 4);
     this.aCorner = new THREE.BufferAttribute(new Float32Array(max * 12), 3);
     this.aSpin = new THREE.BufferAttribute(new Float32Array(max * 8), 2);
-    for (const a of [this.aPos, this.aCol, this.aCorner, this.aSpin]) a.setUsage(THREE.DynamicDrawUsage);
+    this.attrs = [this.aPos, this.aCol, this.aCorner, this.aSpin];
+    for (const a of this.attrs) a.setUsage(THREE.DynamicDrawUsage);
     g.setAttribute('position', this.aPos);
     g.setAttribute('color', this.aCol);
     g.setAttribute('corner', this.aCorner);
@@ -159,8 +163,13 @@ export class Particles {
     this.shape[i] = s.shape ?? SHAPE_SOFT;
   }
 
+  private few(count: number): number {
+    return this.thin < 1 ? Math.ceil(count * this.thin) : count;
+  }
+
   /** Puffs kicked up at floor level. */
   dust(x: number, z: number, count: number, color: Rgb, power = 1): void {
+    count = this.few(count);
     for (let k = 0; k < count; k++) {
       const a = this.rand() * Math.PI * 2;
       const sp = (0.5 + this.rand() * 1.1) * power;
@@ -183,6 +192,7 @@ export class Particles {
 
   /** Sparkles flying out from a point. */
   burst(x: number, y: number, z: number, count: number, colors: Rgb[], speed: number, size = 0.16): void {
+    count = this.few(count);
     for (let k = 0; k < count; k++) {
       const a = this.rand() * Math.PI * 2;
       const e = (this.rand() - 0.3) * 1.6;
@@ -208,6 +218,7 @@ export class Particles {
   }
 
   confetti(x: number, y: number, z: number, count: number, colors: Rgb[], spread = 2.4): void {
+    count = this.few(count);
     for (let k = 0; k < count; k++) {
       const a = this.rand() * Math.PI * 2;
       const sp = spread * (0.3 + this.rand());
@@ -303,10 +314,9 @@ export class Particles {
         spn[v * 2 + 1] = this.shape[i];
       }
     }
-    this.aPos.needsUpdate = true;
-    this.aCol.needsUpdate = true;
-    this.aCorner.needsUpdate = true;
-    this.aSpin.needsUpdate = true;
+    // nothing goes to GL while there is nothing to draw: it was the whole pool (about 100 KB) every frame. (expo-gl
+    // sends a whole array whatever part of it is asked for, so an update range would not make the rest any smaller.)
+    if (n > 0) for (const a of this.attrs) a.needsUpdate = true;
     this.mesh.geometry.setDrawRange(0, n * 6);
   }
 

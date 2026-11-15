@@ -271,6 +271,11 @@ void main() {
  * The ground: court markings are drawn analytically so the lines stay crisp
  * at any zoom, and the soft shadows and team rings under the players are part
  * of the same pass.
+ *
+ * It covers most of the screen, so it is the costliest thing the match draws. A ring or a shadow is skipped where it
+ * cannot reach (the same picture, for far less work on all the floor nobody stands on), and with FAST defined (the
+ * lighter graphics levels) the grain of the grass and the court and the hot-streak ring's halo, ripple and chasing
+ * spots are left out.
  */
 export const FLOOR_VERT = /* glsl */ `
 precision highp float;
@@ -357,8 +362,13 @@ void main() {
   float arcX = hoopX - sqrt(max(threeR * threeR - cornerZ * cornerZ, 0.0));
 
   // --- surfaces
+#ifdef FAST
+  float n1 = 0.5;
+  float n2 = 0.5;
+#else
   float n1 = noise(p * 0.7);
   float n2 = noise(p * 3.1 + 7.0);
+#endif
   vec3 outside = mix(uOutCol, uOutCol2, smoothstep(0.35, 0.65, n1));
   outside *= 0.94 + 0.12 * n2;
   // mowing stripes on grass themes
@@ -402,6 +412,8 @@ void main() {
     vec4 r = uRings[i];
     if (r.w <= 0.0) continue;
     float d = length(p - r.xy);
+    // past the ring's outer edge both its band and its fill are exactly nothing
+    if (d >= r.z + aa) continue;
     float band = smoothstep(r.z - 0.11 - aa, r.z - 0.11 + aa, d) * (1.0 - smoothstep(r.z - aa, r.z + aa, d));
     float fill = (1.0 - smoothstep(r.z - 0.11 - aa, r.z - 0.11 + aa, d)) * 0.22;
     c = mix(c, uRingCol[i], clamp((band + fill) * r.w, 0.0, 1.0));
@@ -416,8 +428,11 @@ void main() {
     // a wide, flat blob: the camera looks along the court. Its edge softens as what casts it rises (a fainter shadow is a
     // higher one)
     d.y *= 1.35;
+    float len = length(d);
+    // past its edge a shadow adds exactly nothing
+    if (len >= s.z * 1.06) continue;
     float inner = clamp(s.w * 0.7 - 0.08, 0.1, 0.5);
-    float k = 1.0 - smoothstep(s.z * inner, s.z * 1.06, length(d));
+    float k = 1.0 - smoothstep(s.z * inner, s.z * 1.06, len);
     sh = max(sh, k * s.w);
   }
   // shadows of players and the ball, on top of the ones baked under the scenery
@@ -450,6 +465,9 @@ void main() {
     float hw = 0.03 + 0.085 * lv;
     float e = abs(d - R);
     float band = 1.0 - smoothstep(hw - aa, hw + aa, e);
+#ifdef FAST
+    c = mix(c, uHotCol[1] * (1.0 + 0.1 * pulse), band * min(1.0, lv * 1.6));
+#else
     // gold in the middle of the band, orange at its edges, and three white-hot spots chasing round it
     float chase = smoothstep(0.4, 1.0, cos(atan(dv.y, dv.x) * 3.0 - uTime * 4.2 - float(i)));
     vec3 core = mix(uHotCol[1], uHotCol[2], smoothstep(0.4, 1.0, e / hw));
@@ -463,6 +481,7 @@ void main() {
     float rip = (1.0 - smoothstep(0.025 - aa, 0.025 + aa, abs(d - R - hw - ph * 0.7))) * (1.0 - ph) * (1.0 - ph) * 0.8;
     c = mix(c, c + uHotCol[1] * pool + halo + uHotCol[3] * rip, lv);
     c = mix(c, core * (1.0 + 0.1 * pulse), band * min(1.0, lv * 1.6));
+#endif
   }
 
   float fog = smoothstep(uFogNear, uFogFar, length(cameraPosition - vWorld));
@@ -470,7 +489,11 @@ void main() {
 }
 `;
 
-/** Sky dome: a vertical gradient with a warm glow toward the sun. */
+/**
+ * Sky dome: a vertical gradient with a warm glow toward the sun. It sits on the far plane (depth 1) and is drawn after
+ * everything solid, so it is only worked out where nothing else covers the sky: the same picture as drawing it first
+ * under everything, without shading the whole screen twice.
+ */
 export const SKY_VERT = /* glsl */ `
 precision highp float;
 uniform mat4 modelMatrix;
@@ -482,6 +505,7 @@ void main() {
   vDir = position;
   vec4 world = modelMatrix * vec4(position, 1.0);
   gl_Position = projectionMatrix * viewMatrix * world;
+  gl_Position.z = gl_Position.w;
 }
 `;
 
@@ -784,6 +808,8 @@ void main() {
     vec4 s = uShadows[i];
     if (s.w <= 0.0) continue;
     float d = length(vWorld.xz - s.xy);
+    // past its edge a shadow adds exactly nothing
+    if (d >= s.z) continue;
     sh = max(sh, (1.0 - smoothstep(s.z * 0.25, s.z, d)) * s.w);
   }
   sh *= step(-0.01, vWorld.y);

@@ -17,7 +17,7 @@ import { FigureAnimator, type ShowFrame } from './animator';
 import { COURTS, type CourtId } from './court';
 import { FigureView, newLightUniforms, type LightUniforms } from './figure';
 import { MeshBuilder, rgb, tint, type Rgb } from './geo';
-import { buildBallGeometry, programCount, warmUp, wrapContext } from './props';
+import { buildBallGeometry, discardDepth, programCount, warmUp, wrapContext } from './props';
 import { BASE_FRAG, BASE_VERT, DROP_FRAG, STATIC_FRAG, STATIC_VERT, UNLIT_VERT } from './shaders';
 
 /**
@@ -167,6 +167,7 @@ interface Actor {
 
 export class StageRenderer {
   private readonly three: THREE.WebGLRenderer;
+  private readonly gl: WebGL2RenderingContext;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(FOV, 1, 1, 80);
   private readonly lights: LightUniforms = newLightUniforms();
@@ -203,6 +204,7 @@ export class StageRenderer {
     const paint = setup.paint;
     this.floorY = paint ? 0 : -BASE_H;
     this.groupW = groupWidth(setup.spread ?? 1);
+    this.gl = gl;
     this.three = wrapContext(gl, true);
     this.three.sortObjects = true;
     this.scene.matrixAutoUpdate = false;
@@ -586,7 +588,9 @@ export class StageRenderer {
       // screen box for taps: feet to the top of the head
       this.boxOf(a);
     }
-    if (draw) this.three.render(this.scene, cam);
+    if (!draw) return;
+    this.three.render(this.scene, cam);
+    discardDepth(this.gl);
   }
 
   private shadow(sh: Float32Array, n: number, x: number, z: number, r: number, s: number): number {
