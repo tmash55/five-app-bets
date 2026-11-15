@@ -19,6 +19,7 @@ import { setMusicEnabled, setSoundEnabled, warmSounds } from '@/audio/sound';
 import { exposeForTooling } from '@/dev/expose';
 import { DevInsets } from '@/dev/insets';
 import { setHapticsEnabled } from '@/fx/feedback';
+import { setGraphicsMode } from '@/game/quality';
 import { useSave, useSaveReady } from '@/state/save';
 import { night } from '@/theme/arcade';
 import { SaveChoice } from '@/ui/arcade/Account';
@@ -44,12 +45,14 @@ export default function RootLayout() {
   const sound = useSave((s) => s.settings.sound);
   const music = useSave((s) => s.settings.music);
   const haptics = useSave((s) => s.settings.haptics);
+  const graphics = useSave((s) => s.settings.graphics);
   const ready = (loaded || !!error) && saveReady;
   const [opening, setOpening] = useState(OPENS_WITH_SIGN);
 
   useEffect(() => setSoundEnabled(sound), [sound]);
   useEffect(() => setMusicEnabled(music), [music]);
   useEffect(() => setHapticsEnabled(haptics), [haptics]);
+  useEffect(() => setGraphicsMode(graphics), [graphics]);
 
   useEffect(() => {
     // on a phone the lit sign takes the loading picture down itself, once it is drawn in its place

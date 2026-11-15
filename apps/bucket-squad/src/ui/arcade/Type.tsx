@@ -5,6 +5,7 @@
 
 import { Platform, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
+import { useLightMenus } from '@/game/quality';
 import { fade, neonFont, neonLeading, neonText, night, track as tracks, tubeOf, type NeonFace, type NeonSize, type NightName, type Tube, type TubeName } from '@/theme/arcade';
 import { px } from '@/theme/tokens';
 import { fitTo } from './measure';
@@ -110,10 +111,13 @@ export interface GlowProps {
 /**
  * Lettering lit like a neon tube: near-white letters with coloured light round them.
  * A phone can give a text one shadow only, so the light is built from copies of the
- * lettering stacked under it, each throwing its own.
+ * lettering stacked under it, each throwing its own. On a device that draws light
+ * (see `useLightMenus`) the widest, softest copy is left out: one blurred copy fewer
+ * for every sign on the page to draw and keep.
  */
 export function Glow({ children, face = 'display', size = 'title', tube: t = 'pink', track = 'close', center, room, least, lit = true, spread, tight, style }: GlowProps) {
   const tb = tubeOf(t);
+  const lightMenus = useLightMenus();
   const base = sizeOf(size);
   const gap = gapOf(track);
   const fs = room !== undefined ? fitTo(children, face, base, room, gap, least) : base;
@@ -142,7 +146,7 @@ export function Glow({ children, face = 'display', size = 'title', tube: t = 'pi
     <View style={style}>
       {/* the copies are only light: a screen reader gets the lettering once, from the top layer */}
       <View pointerEvents="none" aria-hidden importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={StyleSheet.absoluteFill}>
-        {wide && (
+        {wide && !lightMenus && (
           <Text allowFontScaling={false} numberOfLines={1} style={[type, under, { color: tb.glass, textShadowColor: fade(tb.glass, 0.7), textShadowRadius: reach }]}>
             {children}
           </Text>

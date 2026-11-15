@@ -1,4 +1,4 @@
-/** Settings: sound, controls, game length, your record, the how-to-play guide, the account and starting over. */
+/** Settings: sound, controls, game length, graphics, your record, the how-to-play guide, the account and starting over. */
 
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
@@ -8,7 +8,7 @@ import { StyleSheet, View } from 'react-native';
 import { useAccount } from '@/account';
 import { HAS_EXTRA_ROSTER } from '@/data/roster';
 import { HowToOverlay } from '@/match/HowTo';
-import type { Stats } from '@/state/logic';
+import type { Settings as SaveSettings, Stats } from '@/state/logic';
 import { useSave } from '@/state/save';
 import { tube as tubes } from '@/theme/arcade';
 import { px, space } from '@/theme/tokens';
@@ -29,6 +29,13 @@ const QUARTERS: readonly Choice<45 | 60 | 90>[] = [
   { value: 90, label: '1:30', lamps: 3 },
 ];
 
+/** how the 3D is drawn: Auto finds what runs smooth on this device, Fast always draws the lightest, Pretty the full look */
+const GRAPHICS: readonly Choice<SaveSettings['graphics']>[] = [
+  { value: 'auto', label: 'AUTO' },
+  { value: 'fast', label: 'FAST' },
+  { value: 'pretty', label: 'PRETTY' },
+];
+
 /** the record, each with the same picture it has on the missions page */
 const RECORD: readonly { key: keyof Stats; label: string; icon: LineIconName }[] = [
   { key: 'wins', label: 'WINS', icon: 'trophy' },
@@ -40,6 +47,12 @@ const RECORD: readonly { key: keyof Stats; label: string; icon: LineIconName }[]
   { key: 'blocks', label: 'BLOCKS', icon: 'close' },
   { key: 'packs', label: 'PACKS', icon: 'pack' },
 ];
+
+const GRAPHICS_HINT: Record<SaveSettings['graphics'], string> = {
+  auto: 'Auto makes the game look as nice as this device can keep smooth.',
+  fast: 'Fast is the smoothest: simpler pictures, best for older iPads.',
+  pretty: 'Pretty always looks its best, even if it gets a bit choppy.',
+};
 
 function Stat({ label, value, icon }: { label: string; value: number; icon: LineIconName }) {
   return (
@@ -98,6 +111,15 @@ export default function Settings() {
                 </Print>
                 <PickRow options={QUARTERS} value={settings.quarterSeconds} onChange={(v) => setSetting('quarterSeconds', v)} tube="cyan" style={styles.grow} />
               </View>
+              <View style={styles.option}>
+                <Print face="bold" size="tiny" color="textFaint" track="wider" lines={1} style={styles.optionLabel}>
+                  GRAPHICS
+                </Print>
+                <PickRow options={GRAPHICS} value={settings.graphics} onChange={(v) => setSetting('graphics', v)} tube="cyan" style={styles.grow} />
+              </View>
+              <Print face="medium" size="tiny" color="textDim">
+                {GRAPHICS_HINT[settings.graphics]}
+              </Print>
             </NeonPanel>
           </Arrive>
 

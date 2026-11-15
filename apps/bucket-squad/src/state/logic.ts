@@ -32,6 +32,8 @@ export interface Settings {
   format: 2 | 3;
   /** extra-wide shot timing */
   easyShots: boolean;
+  /** how the 3D is drawn: adapted to the device, the lightest, or the full look (src/game/quality.ts) */
+  graphics: 'auto' | 'fast' | 'pretty';
 }
 
 export interface Stats {
@@ -87,6 +89,7 @@ export const DEFAULT_SETTINGS: Settings = {
   quarterSeconds: 60,
   format: 2,
   easyShots: true,
+  graphics: 'auto',
 };
 
 export const STARTING_COINS = 300;
@@ -589,6 +592,7 @@ export function repairSave(raw: unknown): SaveData {
       quarterSeconds: oneOf(st.quarterSeconds, [45, 60, 90] as const, base.settings.quarterSeconds),
       format: oneOf(st.format, [2, 3] as const, base.settings.format),
       easyShots: flag(st.easyShots, base.settings.easyShots),
+      graphics: oneOf(st.graphics, ['auto', 'fast', 'pretty'] as const, base.settings.graphics),
     },
     tips: { ...(r.tips ?? {}) },
     // bought uniforms are kept even when this build does not know one: the coins were spent

@@ -3,6 +3,7 @@
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import type { TeamDef } from '@/data/types';
+import { useLightMenus } from '@/game/quality';
 import { luminance } from '@/game/kit/look';
 import { arcade, blend, halo, inner, night, tubeOf, type Tube, type TubeName } from '@/theme/arcade';
 import { px, space } from '@/theme/tokens';
@@ -20,11 +21,13 @@ export interface NeonPanelProps {
   style?: StyleProp<ViewStyle>;
 }
 
-/** A dark panel with a lit tube round it. */
+/** A dark panel with a lit tube round it. On a device that draws light (see `useLightMenus`) the shade inside is left out. */
 export function NeonPanel({ children, tube: t = 'cyan', round = arcade.rPanel, lit = true, style }: NeonPanelProps) {
   const tb = tubeOf(t);
+  const lightMenus = useLightMenus();
+  const shade = lightMenus ? [] : [inner(night.black, 26, 0.7)];
   return (
-    <View style={[styles.panel, { borderRadius: round, borderColor: lit ? tb.glass : night.line, boxShadow: lit ? [halo(tb.glass, 14, 0.55), inner(night.black, 26, 0.7)] : [inner(night.black, 26, 0.7)] }, style]}>
+    <View style={[styles.panel, { borderRadius: round, borderColor: lit ? tb.glass : night.line, boxShadow: lit ? [halo(tb.glass, 14, 0.55), ...shade] : shade }, style]}>
       {children}
     </View>
   );
