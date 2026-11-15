@@ -8,6 +8,7 @@ import { router } from 'expo-router';
 
 import { useAccount } from '@/account';
 import * as roster from '@/data/roster';
+import { forceLevel, liveGovernors } from '@/game/quality';
 import type { MatchState } from '@/game/sim/types';
 import * as setups from '@/meta/setups';
 import { stateHash } from '@/net/stateHash';
@@ -26,6 +27,8 @@ export function exposeForTooling(): void {
   g.__account = useAccount;
   // an online game: the room, and the running match's state hash (two devices showing the same moment agree on it)
   g.__online = useOnline;
+  // graphics levels: `__quality.force(4)` holds every 3D view at a level (null lets them adapt), `describe()` says where they are
+  g.__quality = { force: forceLevel, describe: liveGovernors };
   g.__netHash = () => {
     const r = g.__bs as { m?: MatchState } | undefined;
     return r?.m ? stateHash(r.m) : 0;

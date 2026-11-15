@@ -62,6 +62,25 @@ frame. Three settings deal with it:
   the jump makes the blocks worse, and take two or three tries if needed:
   `VT_TWICE=1 VT_GAP=200 VT_ONLY=140-180 node reveals.js 30 2 retake`.
 
+## Frame costs on a slow device
+
+`perfmatch.js` plays a whole demo match under a slowed CPU (CDP CPU throttling) and times each frame's
+JavaScript: the simulation, the animator, three.js submitting the scene, and the rest. The page clock is the
+virtual clock, stepped exactly 1/60 s a frame. The software GPU cannot draw a big screen 60 times a second, so
+the draw calls are dropped at the WebGL boundary after three.js has done all its own work for them. Give a tiny
+device scale (`@0.25`) so the page itself stays cheap: the JavaScript of a frame does not depend on its pixels.
+
+```sh
+node perfmatch.js --size 1024x768@0.25 --throttle 6 --out t6.json          # an older iPad's CPU, roughly
+node perfmatch.js --size 1024x768@0.25 --throttle 6 --tier 5 --out l5.json  # held at a graphics level (src/game/quality.ts)
+# the same moment at a level, drawn for real at iPad size: a picture, and the software GPU's time per frame
+node perfmatch.js --size 1024x768@2 --throttle 1 --tier 0 --shot l0.png --shotAt 20 --fill 6
+```
+
+On a phone, start the bundler with `EXPO_PUBLIC_BS_PERF=1` and look for the `BSPERF match` lines at the end of
+a match (see `src/game/perf.ts`): frame gaps, frames over 20 and 33 ms, the time in each part and the graphics
+level with each change of it.
+
 ## Needs
 
 Node 22 or newer, Python 3 with numpy and Pillow, ffmpeg, and a Chromium binary

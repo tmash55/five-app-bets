@@ -1,11 +1,14 @@
 /**
  * Runs one match: owns the simulation, steps it at a fixed rate, draws it every
- * display frame and tells the screen what happened.
+ * display frame (or every other one, when the device cannot keep up: see
+ * quality.ts) and tells the screen what happened.
  */
 
 import { Platform } from 'react-native';
 
-import { perfAdd, perfFrame, perfHud, perfOn, perfReport, perfReset, perfStep } from './perf';
+import { runSteps } from './clock';
+import { perfAdd, perfFrame, perfHud, perfLevel, perfOn, perfReport, perfReset, perfStep } from './perf';
+import { adoptGovernor, closeGovernor, openGovernor, shouldDraw, type Governor } from './quality';
 import { MatchRenderer, type MatchVisuals } from './render/renderer';
 import { DT, FIRE, RULES } from './sim/constants';
 import { ignite } from './sim/fire';
@@ -94,9 +97,8 @@ export interface RunnerHooks {
   onFinal?: (m: MatchState) => void;
 }
 
-function hudKey(h: HudState): string {
-  return `${h.score[0]},${h.score[1]},${h.quarter},${h.overtime ? 1 : 0},${h.clock},${h.shotClock},${h.phase},${h.countdown},${h.turbo},${h.hype[0]},${h.hype[1]},${h.fire.join('.')},${h.offense ? 1 : 0},${h.control},${h.second ? `${h.second.turbo},${h.second.offense ? 1 : 0},${h.second.control}` : '-'}`;
-}
+/** numbers in a HUD's signature: 15 fixed ones, then one flame meter per player */
+const HUD_FIXED = 15;
 
 export class MatchRunner {
   readonly m: MatchState;
@@ -109,12 +111,20 @@ export class MatchRunner {
   /** when true the display loop only draws; time moves through `advance` (used by tests and tooling) */
   manual = false;
 
+  /** how much this device can draw: the GL view's size and smoothing, the renderer's extras, every frame or every other */
+  readonly quality: Governor;
+
   private renderer: MatchRenderer | null = null;
   private gl: GLContextLike | null = null;
   private raf = 0;
+  /** when the last frame was drawn (display clock, ms), -1 before the first */
   private last = -1;
   private acc = 0;
-  private lastHud = '';
+  private stopLevel: (() => void) | null = null;
+  /** what the HUD was last sent, as numbers (no string or object is built every frame to find out it is the same) */
+  private hudSig = new Float64Array(0);
+  private hudNow = new Float64Array(0);
+  private hudPhase: Phase | '' = '';
   private finalSent = false;
   private paused = false;
   private hooks: RunnerHooks;
@@ -126,6 +136,7 @@ export class MatchRunner {
     this.hooks = hooks;
     const local = (t: TeamId) => (isHuman(this.m, t) || (t === 0 && config.userTeam === -1) ? new LocalPad(this.pads[t]) : null);
     this.sources = [local(0), local(1)];
+    this.quality = openGovernor('match');
   }
 
   /** the team the person on this screen plays, when it is not the match's own idea of it (an online game's guest) */
@@ -152,7 +163,7 @@ export class MatchRunner {
   /** Choose who hears about the match. Replaces any earlier listeners. */
   listen(hooks: RunnerHooks): void {
     this.hooks = hooks;
-    this.lastHud = '';
+    this.hudPhase = '';
     this.sendHud();
   }
 
@@ -179,9 +190,14 @@ export class MatchRunner {
   attach(gl: GLContextLike): void {
     this.detach();
     this.gl = gl;
-    this.renderer = new MatchRenderer(gl, this.visuals);
+    const r = (this.renderer = new MatchRenderer(gl, this.visuals));
+    adoptGovernor(this.quality);
+    const q = this.quality;
+    r.setLevel(q.current);
+    this.stopLevel = q.subscribe(() => r.setLevel(q.current));
     this.last = -1;
     perfReset();
+    perfLevel(q.level);
     this.raf = requestAnimationFrame(this.frame);
     this.sendHud();
   }
@@ -189,7 +205,12 @@ export class MatchRunner {
   detach(): void {
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = 0;
-    if (this.renderer) this.renderer.dispose();
+    if (this.renderer) {
+      this.renderer.dispose();
+      closeGovernor('match', this.quality);
+    }
+    this.stopLevel?.();
+    this.stopLevel = null;
     this.renderer = null;
     this.gl = null;
   }
@@ -237,34 +258,36 @@ export class MatchRunner {
     }
   }
 
+  private readonly isReady = (): boolean => this.ready();
+  private readonly runTick = (): void => this.tick();
+
   private readonly frame = (now: number): void => {
     this.raf = requestAnimationFrame(this.frame);
     const r = this.renderer;
     const gl = this.gl;
     if (!r || !gl) return;
+    const q = this.quality;
+    // at 30 a second every other display frame is left alone: nothing is stepped or drawn, and the next frame steps
+    // the simulation for both (it always moves in the same 1/60 s steps)
+    if (!shouldDraw(q.current.half, now, this.last)) return;
     const probe = perfOn();
-    if (probe) perfFrame(this.last < 0 ? 0 : now - this.last);
-    let t0 = probe ? performance.now() : 0;
+    const gap = this.last < 0 ? 0 : now - this.last;
+    if (probe) {
+      perfFrame(gap);
+      perfLevel(q.level);
+    }
+    const start = performance.now();
+    let t0 = start;
     waitForGL(gl);
     if (probe) {
       const t1 = performance.now();
       perfAdd('wait', t1 - t0);
       t0 = t1;
     }
-    let dt = this.last < 0 ? 0 : (now - this.last) / 1000;
+    const dt = Math.min(0.1, gap / 1000);
     this.last = now;
-    if (dt > 0.1) dt = 0.1;
     const running = !this.paused && !this.manual;
-    if (running) {
-      this.acc += dt * r.timeScale;
-      let steps = 0;
-      while (this.acc >= DT && steps < 6 && this.ready()) {
-        this.tick();
-        this.acc -= DT;
-        steps++;
-      }
-      if (this.acc >= DT) this.acc = 0;
-    }
+    if (running) this.acc = runSteps(this.acc, dt, r.timeScale, DT, this.isReady, this.runTick);
     if (probe) {
       const t1 = performance.now();
       perfAdd('sim', t1 - t0);
@@ -273,7 +296,10 @@ export class MatchRunner {
     r.resize(gl.drawingBufferWidth, gl.drawingBufferHeight);
     r.render(this.m, this.manual ? 1 : this.acc / DT, running ? dt : 0);
     gl.endFrameEXP?.();
-    if (probe) perfAdd('draw', performance.now() - t0);
+    const end = performance.now();
+    if (probe) perfAdd('draw', end - t0);
+    // the level changes here, between frames; the renderer hears of it through its subscription
+    q.frame(gap, end - start);
     this.sendHud();
   };
 
@@ -320,39 +346,65 @@ export class MatchRunner {
     return i * DT;
   }
 
+  /**
+   * Tell the HUD what it shows, when any of it has changed. Every frame asks, so the question is answered with numbers
+   * written into one array kept for it, and the HUD's object is only built when something really is new.
+   */
   private sendHud(): void {
     const onHud = this.hooks.onHud;
     if (!onHud) return;
     const m = this.m;
     const c = m.control;
-    const b = m.ball.state;
-    const hud: HudState = {
-      score: [m.score[0], m.score[1]],
-      quarter: m.quarter,
-      overtime: m.overtime,
-      // whole seconds until the last ten, then tenths
-      clock: m.clock >= 10 ? Math.ceil(m.clock - 1e-6) * 10 : Math.ceil(m.clock * 10 - 1e-6),
-      shotClock: Math.ceil(m.shotClock - 1e-6),
-      phase: m.phase,
-      countdown: m.phase === 'countdown' ? Math.max(0, Math.ceil(RULES.countdown - m.phaseT - 1e-6)) : 0,
-      turbo: c >= 0 ? Math.round(m.players[c].turbo * 20) : 0,
-      hype: [m.hypeT[0] > 0 ? 21 : Math.round(m.hype[0] / 5), m.hypeT[1] > 0 ? 21 : Math.round(m.hype[1] / 5)],
-      fire: m.players.map((p) => (p.fireT > 0 ? 21 : Math.min(20, Math.floor((p.heat / FIRE.max) * 20)))),
-      offense: c >= 0 ? m.possession === m.players[c].team && (b === 'held' || b === 'pass' || b === 'dead') : false,
-      control: c,
-      second: null,
-    };
     const c2 = m.second.control;
-    if (c2 >= 0) {
-      hud.second = {
-        turbo: Math.round(m.players[c2].turbo * 20),
-        offense: m.possession === m.players[c2].team && (b === 'held' || b === 'pass' || b === 'dead'),
-        control: c2,
-      };
+    const b = m.ball.state;
+    const inHand = b === 'held' || b === 'pass' || b === 'dead';
+    const n = m.players.length;
+    if (this.hudSig.length !== HUD_FIXED + n) {
+      this.hudSig = new Float64Array(HUD_FIXED + n).fill(NaN);
+      this.hudNow = new Float64Array(HUD_FIXED + n);
     }
-    const key = hudKey(hud);
-    if (key === this.lastHud) return;
-    this.lastHud = key;
+    const now = this.hudNow;
+    now[0] = m.score[0];
+    now[1] = m.score[1];
+    now[2] = m.quarter;
+    now[3] = m.overtime ? 1 : 0;
+    // whole seconds until the last ten, then tenths
+    now[4] = m.clock >= 10 ? Math.ceil(m.clock - 1e-6) * 10 : Math.ceil(m.clock * 10 - 1e-6);
+    now[5] = Math.ceil(m.shotClock - 1e-6);
+    now[6] = m.phase === 'countdown' ? Math.max(0, Math.ceil(RULES.countdown - m.phaseT - 1e-6)) : 0;
+    now[7] = c >= 0 ? Math.round(m.players[c].turbo * 20) : 0;
+    now[8] = m.hypeT[0] > 0 ? 21 : Math.round(m.hype[0] / 5);
+    now[9] = m.hypeT[1] > 0 ? 21 : Math.round(m.hype[1] / 5);
+    now[10] = c >= 0 && m.possession === m.players[c].team && inHand ? 1 : 0;
+    now[11] = c;
+    now[12] = c2;
+    now[13] = c2 >= 0 ? Math.round(m.players[c2].turbo * 20) : 0;
+    now[14] = c2 >= 0 && m.possession === m.players[c2].team && inHand ? 1 : 0;
+    for (let i = 0; i < n; i++) {
+      const p = m.players[i];
+      now[HUD_FIXED + i] = p.fireT > 0 ? 21 : Math.min(20, Math.floor((p.heat / FIRE.max) * 20));
+    }
+    const sig = this.hudSig;
+    let same = this.hudPhase === m.phase;
+    for (let i = 0; same && i < now.length; i++) if (now[i] !== sig[i]) same = false;
+    if (same) return;
+    sig.set(now);
+    this.hudPhase = m.phase;
+    const hud: HudState = {
+      score: [sig[0], sig[1]],
+      quarter: sig[2],
+      overtime: sig[3] === 1,
+      clock: sig[4],
+      shotClock: sig[5],
+      phase: m.phase,
+      countdown: sig[6],
+      turbo: sig[7],
+      hype: [sig[8], sig[9]],
+      fire: Array.from(sig.subarray(HUD_FIXED)),
+      offense: sig[10] === 1,
+      control: c,
+      second: c2 >= 0 ? { turbo: sig[13], offense: sig[14] === 1, control: c2 } : null,
+    };
     perfHud();
     onHud(hud);
   }

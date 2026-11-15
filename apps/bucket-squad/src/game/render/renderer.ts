@@ -9,6 +9,8 @@
 import * as THREE from 'three';
 
 import { hexToRgb, type Look } from '../kit/look';
+import { perfAdd, perfOn } from '../perf';
+import type { Level } from '../quality';
 import { BALL_R, COURT, DT, RULES } from '../sim/constants';
 import { attackSign, shotApexTime, shotMeter } from '../sim/core';
 import { clamp, clamp01, lerp, smooth } from '../sim/math';
@@ -20,7 +22,7 @@ import { FigureView, newLightUniforms, type LightUniforms } from './figure';
 import { rgb, type Rgb } from './geo';
 import { Particles, SHAPE_SOFT, SHAPE_SPARKLE } from './particles';
 import { CAM_FOV, MatchMotion } from './motion';
-import { buildBallGeometry, programCount, warmUp, wrapContext } from './props';
+import { buildBallGeometry, discardDepth, programCount, warmUp, wrapContext } from './props';
 import {
   ARROW_FRAG,
   FLOOR_FRAG,
@@ -122,6 +124,12 @@ export class MatchRenderer {
   private readonly ball: THREE.Mesh;
   private readonly ballQuat = new THREE.Quaternion();
   private readonly sky: THREE.Mesh;
+  /** the floor as always, and the lighter one the lower graphics levels draw instead (same uniforms) */
+  private readonly floor: THREE.Mesh;
+  private readonly floorFast: THREE.Mesh;
+  private readonly gl: WebGL2RenderingContext;
+  /** the costly extras are off (a lower graphics level) */
+  private lite = false;
   private readonly floorU: Record<string, THREE.IUniform>;
   private readonly staticU: Record<string, THREE.IUniform>;
   private readonly netU: Record<string, THREE.IUniform>[] = [];
@@ -156,6 +164,7 @@ export class MatchRenderer {
   constructor(gl: WebGL2RenderingContext, visuals: MatchVisuals) {
     const w = gl.drawingBufferWidth;
     const h = gl.drawingBufferHeight;
+    this.gl = gl;
     this.three = wrapContext(gl, false);
     this.three.sortObjects = true;
     this.scene.matrixAutoUpdate = false;
@@ -180,7 +189,8 @@ export class MatchRenderer {
       fragmentShader: SKY_FRAG,
       side: THREE.BackSide,
       depthWrite: false,
-      depthTest: false,
+      // on the far plane, after everything solid: only the sky nothing covers is drawn
+      depthTest: true,
       uniforms: {
         uTop: { value: hexV3(th.sky.top) },
         uHorizon: { value: hexV3(th.sky.horizon) },
@@ -189,7 +199,7 @@ export class MatchRenderer {
       },
     });
     this.sky = new THREE.Mesh(skyGeo, skyMat);
-    this.sky.renderOrder = -10;
+    this.sky.renderOrder = 10;
     this.sky.frustumCulled = false;
     this.scene.add(this.sky);
     this.disposables.push(skyGeo, skyMat);
@@ -217,17 +227,27 @@ export class MatchRenderer {
       uHotCol: { value: new Float32Array(HOT.flat()) },
       uTime: { value: 0 },
     };
-    const floorMat = new THREE.RawShaderMaterial({
-      glslVersion: THREE.GLSL3,
-      vertexShader: FLOOR_VERT,
-      fragmentShader: FLOOR_FRAG,
-      uniforms: this.floorU,
+    // the floor is drawn after the scenery and the figures, so what they cover is never worked out; with "less" it loses
+    // every tie, as it did when it was drawn first and they were drawn over it, so the picture is the same
+    const floorMat = (fast: boolean) =>
+      new THREE.RawShaderMaterial({
+        glslVersion: THREE.GLSL3,
+        vertexShader: FLOOR_VERT,
+        fragmentShader: FLOOR_FRAG,
+        uniforms: this.floorU,
+        depthFunc: THREE.LessDepth,
+        defines: fast ? { FAST: 1 } : {},
+      });
+    const floorMats = [floorMat(false), floorMat(true)];
+    [this.floor, this.floorFast] = floorMats.map((mat, i) => {
+      const mesh = new THREE.Mesh(court.floor, mat);
+      mesh.frustumCulled = false;
+      mesh.renderOrder = 5;
+      mesh.visible = i === 0;
+      this.scene.add(mesh);
+      return mesh;
     });
-    const floor = new THREE.Mesh(court.floor, floorMat);
-    floor.frustumCulled = false;
-    floor.renderOrder = -5;
-    this.scene.add(floor);
-    this.disposables.push(court.floor, floorMat);
+    this.disposables.push(court.floor, ...floorMats);
 
     // --- scenery, hoops, ball share one lit material setup
     this.staticU = {
@@ -381,8 +401,11 @@ export class MatchRenderer {
     this.disposables.push(tri, wipeMat);
 
     this.resize(w, h);
-    // every shader the match can ever use is built and queried now, never mid-game
+    // every shader the match can ever use is built and queried now, never mid-game, and drawn with once (the sparkles
+    // too: one empty sparkle, so the first real ones do not stall the frame they appear in)
+    this.particles.mesh.geometry.setDrawRange(0, 6);
     this.warmPrograms = warmUp(this.three, this.scene, this.camera);
+    this.particles.mesh.geometry.setDrawRange(0, 0);
   }
 
   /** Shader programs built before the first frame, and how many exist now (tooling: the two should stay equal). */
@@ -562,7 +585,14 @@ export class MatchRenderer {
     const mo = this.motion;
     const photo = this.photo;
     mo.lookEye = photo ? photo.eye : null;
+    const probe = draw && perfOn();
+    let t0 = probe ? performance.now() : 0;
     mo.frame(m, a, dt, this.camera.aspect, this.bones);
+    if (probe) {
+      const t1 = performance.now();
+      perfAdd('anim', t1 - t0);
+      t0 = t1;
+    }
     const cam = this.camera;
     if (photo) {
       cam.position.set(photo.eye[0], photo.eye[1], photo.eye[2]);
@@ -684,7 +714,7 @@ export class MatchRenderer {
     this.hotTrailT -= dt * scale;
     const hotShot = ball.state === 'shot' && ball.shooter >= 0 && this.hotLv[ball.shooter] > 0.05;
     while (hotShot && this.hotTrailT <= 0) {
-      this.hotTrailT += HOT_TRAIL_EVERY;
+      this.hotTrailT += this.lite ? HOT_TRAIL_EVERY * 2 : HOT_TRAIL_EVERY;
       const P = this.particles;
       const glint = P.rand() < 0.3;
       // a little behind the ball, so the ball itself stays clear
@@ -711,7 +741,7 @@ export class MatchRenderer {
     this.trailT -= dt;
     const hypeTrail = !hotShot && ball.state !== 'dead' && (m.hypeT[m.possession] > 0 || (ball.state === 'shot' && ball.perfect));
     if (hypeTrail && this.trailT <= 0) {
-      this.trailT = 0.03;
+      this.trailT = this.lite ? 0.06 : 0.03;
       const hyped = m.hypeT[m.possession] > 0;
       const c = hyped ? this.teamRgb[m.possession] : SPARK[1];
       this.particles.spawn({
@@ -771,7 +801,24 @@ export class MatchRenderer {
 
     this.sky.position.copy(cam.position);
     this.sky.updateMatrix();
-    if (draw) this.three.render(this.scene, cam);
+    if (!draw) return;
+    if (probe) t0 = performance.now();
+    this.three.render(this.scene, cam);
+    discardDepth(this.gl);
+    if (probe) perfAdd('submit', performance.now() - t0);
+  }
+
+  /**
+   * Draw at a graphics level (src/game/quality.ts). Only the extras are the renderer's: the size and the edge smoothing
+   * are the GL view's, and drawing every other frame is the runner's. At the top level everything is as it always was.
+   */
+  setLevel(level: Level): void {
+    const lite = !level.extras;
+    if (lite === this.lite) return;
+    this.lite = lite;
+    this.floor.visible = !lite;
+    this.floorFast.visible = lite;
+    this.particles.thin = lite ? 0.5 : 1;
   }
 
   /**

@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppState, Pressable, type GestureResponderEvent, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 
 import { tapFeedback } from '@/fx/feedback';
 import { DENSITY, GLSurface } from './GLSurface';
+import { adoptGovernor, closeGovernor, openGovernor, shouldDraw, type Governor } from './quality';
 import { StageRenderer, type StageFocus, type StageSetup } from './render/stage';
 import { waitForGL, type GLContextLike } from './runner';
 import type { StageAct } from './stage/director';
@@ -21,6 +22,7 @@ interface Props {
 }
 
 interface Loop {
+  quality: Governor | null;
   renderer: StageRenderer | null;
   gl: GLContextLike | null;
   raf: number;
@@ -44,7 +46,9 @@ const nothing = () => {};
  * failure goes to `onError`.
  */
 export function StageView({ setup, focus, onReady, onError, onPressEmpty, style }: Props) {
-  const loop = useRef<Loop>({ renderer: null, gl: null, raf: 0, last: -1, ready: false, dead: false, active: AppState.currentState !== 'background', width: 1, height: 1, start: nothing, fail: nothing, build: nothing });
+  // what this device can draw: the view's size and smoothing, and every frame or every other (see quality.ts)
+  const [quality] = useState(() => openGovernor('stage'));
+  const loop = useRef<Loop>({ quality: null, renderer: null, gl: null, raf: 0, last: -1, ready: false, dead: false, active: AppState.currentState !== 'background', width: 1, height: 1, start: nothing, fail: nothing, build: nothing });
   const props = useRef({ setup, focus, onReady, onError, onPressEmpty });
 
   useEffect(() => {
@@ -52,7 +56,13 @@ export function StageView({ setup, focus, onReady, onError, onPressEmpty, style 
   });
 
   useEffect(() => {
+    adoptGovernor(quality);
+    return () => closeGovernor('stage', quality);
+  }, [quality]);
+
+  useEffect(() => {
     const L = loop.current;
+    L.quality = quality;
     const fail = (e: unknown) => {
       if (L.dead) return;
       L.dead = true;
@@ -65,15 +75,23 @@ export function StageView({ setup, focus, onReady, onError, onPressEmpty, style 
       const r = L.renderer;
       const gl = L.gl;
       if (!r || !gl || L.dead || !L.active) return;
+      const q = L.quality;
+      // at 30 a second every other display frame is left alone (the show moves by real time, so it keeps its pace)
+      if (q && L.ready && !shouldDraw(q.current.half, now, L.last)) {
+        L.raf = requestAnimationFrame(frame);
+        return;
+      }
       try {
+        const start = performance.now();
         waitForGL(gl);
-        let dt = L.last < 0 ? 0 : (now - L.last) / 1000;
+        const gap = L.last < 0 ? 0 : now - L.last;
+        const dt = Math.min(0.1, gap / 1000);
         L.last = now;
-        if (dt > 0.1) dt = 0.1;
         r.resize(gl.drawingBufferWidth, gl.drawingBufferHeight);
         r.setFocus(props.current.focus);
         r.render(dt);
         gl.endFrameEXP?.();
+        q?.frame(gap, performance.now() - start);
       } catch (e) {
         fail(e);
         return;
@@ -151,7 +169,7 @@ export function StageView({ setup, focus, onReady, onError, onPressEmpty, style 
         if ((g.__stage as { renderer?: unknown } | undefined)?.renderer === null) delete g.__stage;
       }
     };
-  }, []);
+  }, [quality]);
 
   const onContextCreate = (raw: unknown) => {
     const L = loop.current;
@@ -181,7 +199,7 @@ export function StageView({ setup, focus, onReady, onError, onPressEmpty, style 
 
   return (
     <Pressable style={style} onPress={onPress} onLayout={onLayout} accessibilityRole="button" accessibilityLabel="Your squad warming up. Tap a player to say hi.">
-      <GLSurface density={DENSITY.stage} onContextCreate={onContextCreate} />
+      <GLSurface density={DENSITY.stage} quality={quality} onContextCreate={onContextCreate} />
     </Pressable>
   );
 }

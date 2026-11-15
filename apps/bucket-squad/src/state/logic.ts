@@ -38,6 +38,8 @@ export interface Settings {
   quickCourt: CourtChoice;
   duoCourt: CourtChoice;
   hostCourt: CourtChoice;
+  /** how the 3D is drawn: adapted to the device, the lightest, or the full look (src/game/quality.ts) */
+  graphics: 'auto' | 'fast' | 'pretty';
 }
 
 export interface Stats {
@@ -100,6 +102,7 @@ export const DEFAULT_SETTINGS: Settings = {
   quickCourt: 'random',
   duoCourt: 'random',
   hostCourt: null,
+  graphics: 'auto',
 };
 
 export const STARTING_COINS = 300;
@@ -631,6 +634,7 @@ export function repairSave(raw: unknown): SaveData {
       quickCourt: courtChoiceOr(st.quickCourt, base.settings.quickCourt),
       duoCourt: courtChoiceOr(st.duoCourt, base.settings.duoCourt),
       hostCourt: courtChoiceOr(st.hostCourt, base.settings.hostCourt),
+      graphics: oneOf(st.graphics, ['auto', 'fast', 'pretty'] as const, base.settings.graphics),
     },
     tips: { ...(r.tips ?? {}) },
     // bought uniforms are kept even when this build does not know one: the coins were spent
