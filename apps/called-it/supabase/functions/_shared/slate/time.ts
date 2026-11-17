@@ -54,3 +54,8 @@ export function easternTipoff(date: string, status: string | null | undefined): 
   const offset = easternOffsetMinutes(new Date(wall + 5 * 3600_000));
   return new Date(wall - offset * 60_000).toISOString();
 }
+
+/** The hour (0 to 23) on a US Eastern clock at this instant. */
+export function easternHour(at: Date): number {
+  return easternParts(at).hour;
+}
