@@ -66,7 +66,14 @@ export interface MatchSetup {
   seed: number;
   /** wider shot timing windows for younger players */
   timingAssist: number;
+  /** how much the rubber band helps the person while behind (see `bandFor`; a person in the lead is held back less, or not at all, on the easy levels) */
   rubberBand: number;
+  /**
+   * The hidden nudge from how the person has been doing lately (state/form.ts), worked out before the game: added to
+   * the computer's skill for this one game, never more than a little. Left out, none. The level the game is shown
+   * and rewarded at, and its long-shot rules, stay `difficulty`'s.
+   */
+  ease?: number;
   tour?: { tourId: string; stage: number; game: number };
   /** watch two computer teams play (attract mode) */
   spectate?: boolean;
@@ -129,6 +136,17 @@ export interface BuiltMatch {
   lineup: { def: PlayerDef; level: number; team: 0 | 1 }[];
 }
 
+/** a person's own computer teammates never play worse than this, whatever the level (see `buildMatch`) */
+export const MATES_FLOOR = 0.62;
+
+/**
+ * How much the rubber band holds back a person who leads the computer, as a share of its help to one who trails:
+ * none up to Rookie, so a child in the lead is never dragged back, rising to all of it from All-Star.
+ */
+export function dragFor(difficulty: number): number {
+  return Math.max(0, Math.min(1, (difficulty - 0.22) / (0.82 - 0.22)));
+}
+
 export function buildMatch(setup: MatchSetup): BuiltMatch {
   const home = sideWear(setup.home);
   const awayTeam = teamById(setup.away.kitTeam);
@@ -160,12 +178,15 @@ export function buildMatch(setup: MatchSetup): BuiltMatch {
     teams,
     userTeam: setup.spectate ? -1 : 0,
     ...(setup.duo && !setup.spectate ? { humans: [true, true] as [boolean, boolean], teamAssist: setup.duo.teamAssist, catchUp: setup.duo.catchUp } : {}),
+    // against the computer the rubber band helps the person while behind, and holds them back in the lead only from Pro up
+    ...(!setup.duo && !setup.spectate && !setup.demo ? { leadDrag: setup.rubberBand * dragFor(setup.difficulty) } : {}),
     quarters: setup.quarters,
     quarterSeconds: setup.quarterSeconds,
-    difficulty: setup.difficulty,
+    // the hidden nudge moves the computer's play a little for this game only (see `ease`)
+    difficulty: setup.ease && !setup.duo ? Math.max(0, Math.min(1, setup.difficulty + setup.ease)) : setup.difficulty,
     // long shots: two people (one screen or two devices) pick no level and play by Pro's rules; anyone else by the computer's level
     shotLevel: setup.duo ? 1 : shotLevelFor(setup.difficulty),
-    mateSkill: Math.max(0.55, setup.difficulty),
+    mateSkill: Math.max(setup.duo ? 0.55 : MATES_FLOOR, setup.difficulty),
     timingAssist: setup.timingAssist,
     rubberBand: setup.rubberBand,
     autoSwitch: true,

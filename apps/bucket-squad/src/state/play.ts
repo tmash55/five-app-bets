@@ -17,6 +17,7 @@ export function prefsFrom(data: SaveData): Prefs {
     teamColors: data.teamColors,
     // a random court is never the one just played on
     lastCourt: useSession.getState().setup?.court ?? null,
+    form: data.form,
   };
 }
 
