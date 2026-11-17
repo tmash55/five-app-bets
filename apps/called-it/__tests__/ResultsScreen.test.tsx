@@ -1,5 +1,6 @@
 import { ThemeProvider } from '@five/shell';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
+import { router } from 'expo-router';
 
 import ResultsScreen from '../src/app/results';
 import { fetchResults, type ResultsData } from '../src/results/api';
@@ -129,4 +130,23 @@ it('shows a load error', async () => {
   mockedFetch.mockRejectedValue(new Error('offline'));
   await renderScreen();
   expect(await screen.findByText("Couldn't load your results")).toBeOnTheScreen();
+});
+
+it('offers to share only once every question is graded', async () => {
+  mockedFetch.mockResolvedValue(data);
+  await renderScreen();
+  await screen.findByText('20 pts');
+  expect(screen.queryByText('Share your results')).toBeNull();
+});
+
+it('opens the share card for this slate when it is fully graded', async () => {
+  const graded: ResultsData = {
+    ...data,
+    questions: data.questions.map((q) => (q.id === 'q3' ? { ...q, result: 'no', result_value: 22, yes_picks: 9, no_picks: 11 } : q)),
+    picks: { ...data.picks, q3: { question_id: 'q3', answer: true, correct: false, base_points: 0, bonus_points: 0 } },
+  };
+  mockedFetch.mockResolvedValue(graded);
+  await renderScreen();
+  await fireEvent.press(await screen.findByText('Share your results'));
+  expect(router.push).toHaveBeenCalledWith({ pathname: '/share-results', params: { date: '2026-11-10' } });
 });
