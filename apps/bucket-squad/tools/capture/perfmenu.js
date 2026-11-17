@@ -3,7 +3,7 @@
 //   - how much work the page did to open (main-thread time in the 1.5 s after the tap), and
 //   - how much work it does just sitting there (main-thread time per second, three seconds after opening).
 //
-//   node perfmenu.js --size 1024x768@1 --cpu 6 --out FILE.json [--save SAVE.json] [--touch]
+//   node perfmenu.js --size 1024x768@1 --cpu 6 --out FILE.json [--save SAVE.json] [--touch] [--only collection,squad --times 3]
 //
 // Run it against a production web build (npx expo export -p web, then serve the folder and give its address in
 // APP_URL): a development build runs React's slow checks and says little about a device. A production build has no
@@ -97,8 +97,21 @@ async function main() {
     console.log(`${name.padEnd(12)} stall ${String(row.stall).padStart(5)} ms   open work ${String(row.open.task).padStart(5)} ms (script ${row.open.script}, style ${row.open.style}, layout ${row.open.layout})   idle ${String(row.idlePerSec.task).padStart(4)} ms/s (script ${row.idlePerSec.script}, style ${row.idlePerSec.style})  ${row.idleFps} fps`);
   };
 
-  await measure(null, 'home');
-  for (const [label, name] of WALK) await measure(label, name);
+  // --only collection,squad: just those pages, each opened from home and left again (--times N: that many rounds)
+  const only = args.only ? String(args.only).split(',') : null;
+  if (only) {
+    const steps = WALK.filter(([, name], i) => only.includes(name) && WALK[i + 1] && WALK[i + 1][0] === 'Back');
+    for (let round = 0; round < Number(args.times || 1); round++) {
+      for (const [label, name] of steps) {
+        await measure(label, name);
+        await tap('Back');
+        await sleep(2500);
+      }
+    }
+  } else {
+    await measure(null, 'home');
+    for (const [label, name] of WALK) await measure(label, name);
+  }
 
   await send('Emulation.setCPUThrottlingRate', { rate: 1 });
   await send('Emulation.setTouchEmulationEnabled', { enabled: false });
