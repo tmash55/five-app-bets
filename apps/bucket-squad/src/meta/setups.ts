@@ -5,6 +5,7 @@ import type { TeamDef } from '@/data/types';
 import type { CourtId } from '@/game/render/court';
 import { RANDOM_COURT, resolveCourt, type CourtChoice } from './courts';
 import { TIERS, ladderOpponent, tierIndex } from './ladder';
+import { easeFor } from './form';
 import type { DuoRules, MatchSetup, Side, SidePlayer } from './match';
 import { pick, type Rng } from './rng';
 import { DEFAULT_SHORT, nameText, schemeById, shortOf, type TeamName } from './teamName';
@@ -12,7 +13,10 @@ import { tourById } from './tour';
 
 export const DIFFICULTY_NAMES = ['Rookie', 'Pro', 'All-Star'] as const;
 
-/** computer skill, opponent card level and how hard the game leans toward a close finish, per difficulty */
+/**
+ * Per difficulty: the computer's skill (how it plays: game/sim/levels.ts), its card level, and how much the rubber
+ * band helps the person while behind (it holds a person in the lead back only from Pro up: meta/match `dragFor`).
+ */
 const QUICK_LEVELS = [
   { difficulty: 0.22, level: 1, rubberBand: 0.6 },
   { difficulty: 0.5, level: 2, rubberBand: 0.4 },
@@ -46,6 +50,14 @@ export interface Prefs {
   teamColors?: string | null;
   /** the court played on last, which a random court is never */
   lastCourt?: CourtId | null;
+  /** how the person has been doing against the computer lately (meta/form), which nudges the computer a little */
+  form?: number;
+}
+
+/** The hidden nudge for a game against the computer at `difficulty` (meta/form), as setup fields: none when there is none. */
+function eased(prefs: Prefs, difficulty: number): { ease?: number } {
+  const ease = easeFor(prefs.form, difficulty);
+  return ease !== 0 ? { ease } : {};
 }
 
 function newSeed(rng: Rng): number {
@@ -184,6 +196,7 @@ export function quickSetup(prefs: Prefs, o: QuickOptions, rng: Rng = Math.random
     court: resolveCourt(o.court, team.court, seed, prefs.lastCourt),
     ...(o.court === RANDOM_COURT ? { randomCourt: true } : {}),
     difficulty: lv.difficulty,
+    ...eased(prefs, lv.difficulty),
     quarters: QUARTERS,
     quarterSeconds: prefs.quarterSeconds,
     seed,
@@ -203,6 +216,7 @@ export function ladderSetup(prefs: Prefs, points: number, perTeam: 2 | 3, rng: R
     away,
     court: teamById(away.kitTeam).court,
     difficulty: tier.difficulty,
+    ...eased(prefs, tier.difficulty),
     quarters: QUARTERS,
     quarterSeconds: prefs.quarterSeconds,
     seed: newSeed(rng),
@@ -225,6 +239,7 @@ export function tourSetup(prefs: Prefs, tourId: string, stage: number, game: num
     away,
     court: st.team.court,
     difficulty: g.difficulty,
+    ...eased(prefs, g.difficulty),
     quarters: QUARTERS,
     quarterSeconds: prefs.quarterSeconds,
     seed: newSeed(rng),

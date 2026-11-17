@@ -7,6 +7,14 @@
  * eight were recorded again, each only after checking where it first parts from its old recording: at a miss from the
  * far half (15 to 23 from the hoop) that rattled in by the old rules and stays out now. "person, hands off" never
  * takes such a shot and is still the recording from 56a9e27.
+ *
+ * When the computer got its level table for games against a person (levels.ts), every case a person plays in was
+ * recorded again, here and in onePlayer.levels.golden.json; "computer only" never meets the table and is unchanged.
+ * Each was recorded again only after checking where it first parts from its old recording: at the first tick of live
+ * play (3.05 s in), where the computer's defenders now look up at where to stand only now and then (the table's
+ * `react`), or, in "person away, scripted", where the computer's ball handler first decides whether to sprint on
+ * its drive (`burst`, a new random number) 3.25 s in. With the table switched off, all of them still play exactly as
+ * they did before it (onePlayerSteady.test.ts keeps their old recordings and checks that).
  */
 
 import golden from './fixtures/onePlayer.golden.json';
@@ -36,6 +44,7 @@ describe('one-player games are unchanged', () => {
  * its level by `buildMatch`, and one told none plays by Rookie's, as above). Recorded when the levels came in, after
  * checking where each first parts from its game by the rules before the levels: every one that differs does so at a
  * miss from the far half (15 to 23 from the hoop) that rattled in by those rules and stays out by the harder ones.
+ * Recorded again with the level table, the same way and for the same reasons as above.
  */
 describe('one-player games by the harder levels’ long-shot rules', () => {
   const harder = GOLDEN_CASES.filter((c) => shotLevelFor(c.cfg.difficulty) > 0);

@@ -21,15 +21,16 @@ export interface Tier {
   reward: { coins: number; pack?: string };
 }
 
+/** The computer's skill climbs a little at every tier, in smaller steps at the bottom, where a beginner plays. */
 export const TIERS: readonly Tier[] = [
   { name: 'Rookie', floor: 0, difficulty: 0.2, level: 1, color: 'common', reward: { coins: 0 } },
-  { name: 'Bronze', floor: 100, difficulty: 0.32, level: 1, color: 'orangeDeep', reward: { coins: 150 } },
-  { name: 'Silver', floor: 250, difficulty: 0.44, level: 2, color: 'inkFaint', reward: { coins: 200, pack: 'playground' } },
-  { name: 'Gold', floor: 450, difficulty: 0.56, level: 2, color: 'sun', reward: { coins: 300, pack: 'allstar' } },
-  { name: 'Platinum', floor: 700, difficulty: 0.67, level: 3, color: 'skyLight', reward: { coins: 400, pack: 'allstar' } },
-  { name: 'Diamond', floor: 1000, difficulty: 0.78, level: 4, color: 'grape', reward: { coins: 500, pack: 'legend' } },
-  { name: 'All-Star', floor: 1400, difficulty: 0.88, level: 5, color: 'coral', reward: { coins: 700, pack: 'legend' } },
-  { name: 'Legend', floor: 1900, difficulty: 0.97, level: 5, color: 'legend', reward: { coins: 1000, pack: 'legend' } },
+  { name: 'Bronze', floor: 100, difficulty: 0.25, level: 1, color: 'orangeDeep', reward: { coins: 150 } },
+  { name: 'Silver', floor: 250, difficulty: 0.33, level: 2, color: 'inkFaint', reward: { coins: 200, pack: 'playground' } },
+  { name: 'Gold', floor: 450, difficulty: 0.42, level: 2, color: 'sun', reward: { coins: 300, pack: 'allstar' } },
+  { name: 'Platinum', floor: 700, difficulty: 0.52, level: 3, color: 'skyLight', reward: { coins: 400, pack: 'allstar' } },
+  { name: 'Diamond', floor: 1000, difficulty: 0.63, level: 4, color: 'grape', reward: { coins: 500, pack: 'legend' } },
+  { name: 'All-Star', floor: 1400, difficulty: 0.76, level: 5, color: 'coral', reward: { coins: 700, pack: 'legend' } },
+  { name: 'Legend', floor: 1900, difficulty: 0.9, level: 5, color: 'legend', reward: { coins: 1000, pack: 'legend' } },
 ];
 
 export function tierIndex(points: number): number {

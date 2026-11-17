@@ -60,11 +60,18 @@ function strength(team: TeamDef): number {
     .reduce((a, b) => a + b, 0);
 }
 
+/** the computer's skill at the first stop's Warm-Up and at the last stop's (each stop's Rivalry and Showdown are a little more) */
+const TOUR_EASIEST = 0.16;
+const TOUR_HARDEST = 0.74;
+/** how the skill climbs from stop to stop: above 1, slowly at first */
+const TOUR_CURVE = 1.4;
+
 function buildStage(team: TeamDef, index: number, count: number, starId: string | undefined): TourStage | null {
   const roster = teamPlayers(team.id).sort((a, b) => playerOverall(a) - playerOverall(b));
   if (roster.length < 2) return null;
   const u = count > 1 ? index / (count - 1) : 0;
-  const base = 0.18 + 0.72 * u;
+  // the computer's skill climbs slowly at first, so the first stops stay easy for a beginner, and faster later on
+  const base = TOUR_EASIEST + (TOUR_HARDEST - TOUR_EASIEST) * Math.pow(u, TOUR_CURVE);
   const level = 1 + Math.min(3, Math.floor(u * 4));
   const three = roster.length >= 3;
   const star: PlayerDef = (starId && roster.find((p) => p.id === starId)) || [...roster].reverse().find((p) => p.rarity !== 'legend') || roster[roster.length - 1];

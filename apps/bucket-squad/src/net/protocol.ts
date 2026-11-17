@@ -138,7 +138,8 @@ export function setupOk(v: unknown): v is MatchSetup {
   const d = v.duo;
   if (!isObj(d) || !Array.isArray(d.teamAssist) || !Array.isArray(d.catchUp) || d.teamAssist.length !== 2 || d.catchUp.length !== 2) return false;
   if (![...d.teamAssist, ...d.catchUp].every((n) => isNum(n) && n >= 0 && n <= 4)) return false;
-  return v.spectate === undefined && v.demo === undefined && v.tour === undefined;
+  // a game between two people has no hidden nudge (meta/form)
+  return v.spectate === undefined && v.demo === undefined && v.tour === undefined && v.ease === undefined;
 }
 
 /** Turn whatever arrived into a message this build understands, or null. */

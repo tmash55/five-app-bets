@@ -64,6 +64,7 @@ export function dataOf(s: SaveStore): SaveData {
     shop: s.shop,
     teamName: s.teamName,
     teamColors: s.teamColors,
+    form: s.form,
   };
 }
 

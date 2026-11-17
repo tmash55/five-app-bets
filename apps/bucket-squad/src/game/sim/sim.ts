@@ -44,6 +44,7 @@ import {
 } from './core';
 import { handling, handlingAt, pushShare } from './feel';
 import { cool, defenseBoost, fireOut, heatUp, onFire, speedBoost, stack, stepFire } from './fire';
+import { levelOf, opponentLevel } from './levels';
 import { approach, approachAngle, clamp, clamp01, hypot2, lerp, rngNext, smooth } from './math';
 import { assistOf, bandOf, isControlled, isHuman, seatOf } from './seats';
 import type {
@@ -513,6 +514,17 @@ function gradeOf(m: MatchState, p: PlayerSim, err: number): ShotGrade {
   return 'bad';
 }
 
+/**
+ * What the computer's level (levels.ts) adds to a block by `o` on `p`'s shot: the computer's own blocks work less on
+ * the easy levels, and the person's blocks on it more. Nothing in a game without exactly one person.
+ */
+function blockShift(m: MatchState, o: PlayerSim, p: PlayerSim): number {
+  const own = opponentLevel(m, o.team);
+  if (own) return own.blockHit;
+  const theirs = opponentLevel(m, p.team);
+  return theirs && isControlled(m, o) ? theirs.giveBlock : 0;
+}
+
 /** Try to swat a shot at the moment it leaves the hand. Returns the blocker or null. */
 function tryBlock(m: MatchState, p: PlayerSim, ballY: number, base: number): PlayerSim | null {
   const hx = hoopXOf(p.team);
@@ -533,6 +545,7 @@ function tryBlock(m: MatchState, p: PlayerSim, ballY: number, base: number): Pla
     let pr = base + 0.5 * o.attrs.block - 0.1 * p.attrs.shot;
     pr += defenseBoost(m, o, 0.12, FIRE.blockBonus);
     if (isControlled(m, o)) pr += 0.1;
+    pr += blockShift(m, o, p);
     pr *= clamp01(1.25 - d / 1.4);
     if (rngNext(m) < clamp(pr, 0.03, 0.85)) return o;
   }
@@ -678,7 +691,9 @@ function releaseShot(m: MatchState, p: PlayerSim, err: number, forced: ShotGrade
   }
   const s = attackSign(p.team);
   const behindBoard = (hoopXOf(p.team) - p.x) * s < 0.1;
-  const prob = makeProb(m, p, contest, grade, hypot2(p.vx, p.vz));
+  // a computer on an easy level misses more against a person (levels.ts)
+  const lv = opponentLevel(m, p.team);
+  const prob = lv ? makeProb(m, p, contest, grade, hypot2(p.vx, p.vz)) * lv.make : makeProb(m, p, contest, grade, hypot2(p.vx, p.vz));
   const roll = behindBoard ? 1 : rngNext(m);
   const made = !behindBoard && roll < prob;
   launchShot(m, p, made, three, grade === 'perfect', 'jumper', 0);
@@ -785,7 +800,9 @@ function startShotOrFinish(m: MatchState, p: PlayerSim): void {
   const toward = sp > 0.6 && d > 1e-3 ? (p.vx * dx + p.vz * dz) / (sp * d) : 0;
   const inFront = dx * s > 0.3;
   if (inFront && d > 0.45) {
-    const range = dunkRange(m, p);
+    // a computer on an easy level takes off for a dunk from less far out, and lays it up instead (levels.ts)
+    const lv = opponentLevel(m, p.team);
+    const range = lv ? dunkRange(m, p) * lv.dunkReach : dunkRange(m, p);
     const far = d > 2.3;
     // a defender planted in the runway turns a dunk into a layup
     const k = Math.max(0, d - 0.95) / d;
@@ -818,7 +835,8 @@ function releaseLayup(m: MatchState, p: PlayerSim): void {
   prob += stack(hypeOn(m, p.team) ? 0.08 : 0, onFire(p) ? FIRE.shotBonus * 0.8 : 0, FIRE.shotCap);
   const diff = clamp(m.score[p.team] - m.score[1 - p.team], -12, 12) / 12;
   prob -= diff * 0.05 * bandOf(m, p.team, diff);
-  const made = rngNext(m) < clamp(prob, 0.08, 0.97);
+  const lv = opponentLevel(m, p.team);
+  const made = rngNext(m) < (lv ? clamp(prob, 0.08, 0.97) * lv.make : clamp(prob, 0.08, 0.97));
   launchShot(m, p, made, false, false, 'layup', 0.36);
 }
 
@@ -842,6 +860,7 @@ function resolveDunk(m: MatchState, p: PlayerSim): void {
     pr -= stack(hypeOn(m, p.team) ? 0.1 : 0, onFire(p) ? FIRE.blockBonus : 0, FIRE.defenseCap);
     pr += onFire(o) ? FIRE.blockBonus : 0;
     if (isControlled(m, o)) pr += 0.12;
+    pr += blockShift(m, o, p);
     if (rngNext(m) < clamp(pr, 0.02, 0.5)) {
       m.stats[p.idx].fga++;
       heldBallPos(m, p, tmp);
@@ -1032,6 +1051,11 @@ function stealCheck(m: MatchState, p: PlayerSim): void {
   if (h.sprinting) pr += 0.04;
   pr += defenseBoost(m, p, 0.1);
   if (isControlled(m, p)) pr += 0.07;
+  // the computer's level: its own swipes work less on the easy levels, and it loses the ball to the person's more
+  const own = opponentLevel(m, p.team);
+  const theirs = opponentLevel(m, h.team);
+  if (own) pr += own.stealHit;
+  else if (theirs && isControlled(m, p)) pr += theirs.looseHandle;
   const diff = clamp(m.score[p.team] - m.score[1 - p.team], -12, 12) / 12;
   pr -= diff * 0.05 * bandOf(m, p.team, diff);
   if (rngNext(m) >= clamp(pr, 0.04, 0.72)) {
@@ -1199,6 +1223,9 @@ function jukeCheck(m: MatchState, p: PlayerSim, it: Intent): void {
           let pr = 0.08 + 0.5 * p.attrs.handle - 0.3 * o.attrs.steal;
           if (isControlled(m, o)) pr *= 0.4;
           if (!isControlled(m, p)) pr *= 0.6;
+          // the computer's level: on the easy ones its cuts trip the person up less
+          const lv = opponentLevel(m, p.team);
+          if (lv && isControlled(m, o)) pr *= lv.juke;
           if (hypeOn(m, p.team)) pr += 0.15;
           if (rngNext(m) < clamp(pr, 0.03, 0.7)) {
             stumble(m, o, 'ankle', 0.95);
@@ -1467,6 +1494,14 @@ function canCatch(p: PlayerSim): boolean {
   return p.state === 'free' || p.state === 'recover' || p.state === 'jump' || p.state === 'oop' || p.state === 'pass';
 }
 
+/**
+ * The skill a defender picks off passes with: the computer's against a person, a person's own teammates at their
+ * skill, and in a two-player game or a game with nobody playing everybody at the computer's.
+ */
+function interceptSkill(m: MatchState, team: TeamId): number {
+  return isHuman(m, team) && !isHuman(m, (1 - team) as TeamId) ? m.cfg.mateSkill : m.cfg.difficulty;
+}
+
 function stepPass(m: MatchState): void {
   const b = m.ball;
   const r = m.players[b.to];
@@ -1506,7 +1541,7 @@ function stepPass(m: MatchState): void {
       let pr: number;
       if (active) pr = 0.5 + 0.42 * o.attrs.steal;
       else if (isControlled(m, o)) pr = 0.34 + 0.36 * o.attrs.steal;
-      else pr = lerp(0.04, 0.26, m.cfg.difficulty) * (0.5 + o.attrs.steal);
+      else pr = levelOf(m, o.team, interceptSkill(m, o.team)).intercept * (0.5 + o.attrs.steal);
       pr += defenseBoost(m, o, 0.1);
       if (rngNext(m) < clamp(pr, 0, 0.95)) {
         m.stats[o.idx].steals++;

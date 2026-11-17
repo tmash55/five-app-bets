@@ -9,6 +9,7 @@ import type { PlayerDef, TeamDef } from '@/data/types';
 import { teamWear, uniformById, uniformNeed, wearOf, type UniformDef, type Wear } from '@/data/uniforms';
 import { MAX_COPIES, addCopy, levelOf, type Gain, type Owned } from '@/meta/collection';
 import { courtChoiceOr, type CourtChoice } from '@/meta/courts';
+import { formAfter, repairForm } from '@/meta/form';
 import { TIERS, ladderResult, tierIndex, type Tier } from '@/meta/ladder';
 import type { MatchSummary } from '@/meta/match';
 import { ALL_DONE_PACK, currentMissions, missionDone, missionsAfterDuo, missionsAfterMatch, missionsAfterPack, type Mission, type MissionDay } from '@/meta/missions';
@@ -88,6 +89,8 @@ export interface SaveData {
   teamName: TeamName | null;
   /** the squad's colour scheme (meta/teamName), or null for the colours it wears */
   teamColors: string | null;
+  /** how the person has been doing against the computer lately, -1..1 (meta/form): hidden, it nudges the next games a little */
+  form: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -132,6 +135,7 @@ export function newSave(): SaveData {
     shop: null,
     teamName: null,
     teamColors: null,
+    form: 0,
   };
 }
 
@@ -497,6 +501,7 @@ export function finishMatch(data: SaveData, summary: MatchSummary, day: string):
       tour,
       starPacks,
       firstWinDay: summary.won ? day : data.firstWinDay,
+      form: formAfter(data.form, margin),
     },
   };
 }
@@ -645,6 +650,8 @@ export function repairSave(raw: unknown): SaveData {
     // a save from before names: "Your Squad" in the colours it wears
     teamName: repairName(r.teamName),
     teamColors: typeof r.teamColors === 'string' && schemeById(r.teamColors) ? r.teamColors : null,
+    // a save from before form starts even
+    form: repairForm(r.form),
   };
 }
 
