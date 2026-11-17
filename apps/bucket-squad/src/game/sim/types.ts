@@ -70,6 +70,12 @@ export interface MatchConfig {
    * is held back only by the other side's number, so [0, 0] is no rubber band at all and [r, r] is `rubberBand: r`.
    */
   catchUp?: [number, number];
+  /**
+   * A game with one person against the computer: how hard the rubber band pulls while the person leads (holding their
+   * shots back and helping the computer catch up), in place of `rubberBand`, which then only helps the person while
+   * they trail. Left out, `rubberBand` pulls both ways. Ignored with `catchUp`.
+   */
+  leadDrag?: number;
   autoSwitch: boolean;
   /** the person's team plays itself while the camera, rings and HUD behave as if someone were playing (trailers and screenshots) */
   demo?: boolean;
@@ -159,7 +165,12 @@ export interface AiMemory {
   jumpAt: number;
   jumpFor: number;
   passCool: number;
+  /** sprints on this drive */
   sprint: boolean;
+  /** a slow defender's next look at where to stand, and where it last decided to */
+  lookT: number;
+  lx: number;
+  lz: number;
 }
 
 export interface PlayerSim {

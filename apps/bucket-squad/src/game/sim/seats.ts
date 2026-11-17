@@ -48,10 +48,16 @@ export function assistOf(m: MatchState, team: TeamId): number {
 
 /**
  * How hard the rubber band pulls on a play by `team` when it leads by `diff` (a share of the most that counts; the
- * caller multiplies it in). Ahead, the other side's catch-up number holds it back; behind, its own helps it.
+ * caller multiplies it in). Ahead, the other side's catch-up number holds it back; behind, its own helps it. Against
+ * the computer with `leadDrag`, the band pulls by `leadDrag` while the person leads and by `rubberBand` while they trail.
  */
 export function bandOf(m: MatchState, team: TeamId, diff: number): number {
   const c = m.cfg.catchUp;
-  if (!c) return m.cfg.rubberBand;
-  return diff > 0 ? c[1 - team] : c[team];
+  if (c) return diff > 0 ? c[1 - team] : c[team];
+  const drag = m.cfg.leadDrag;
+  const ut = m.cfg.userTeam;
+  if (drag === undefined || ut === -1) return m.cfg.rubberBand;
+  // the person leads: their own play while ahead, or the computer's while behind
+  const personLeads = team === ut ? diff > 0 : diff < 0;
+  return personLeads ? drag : m.cfg.rubberBand;
 }

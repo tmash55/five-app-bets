@@ -4,6 +4,8 @@
  *
  * `skill` (0..1) scales reaction time, shot selection and how often they go
  * for steals and blocks. It never changes what a player can physically do.
+ * Against a person, the computer's team plays by its level's row in the
+ * table in levels.ts; everyone else plays as the skill alone says.
  */
 
 import { COURT, DT, LAYUP, RULES } from './constants';
@@ -19,6 +21,7 @@ import {
   resetIntent,
   shotContest,
 } from './core';
+import { levelOf } from './levels';
 import { clamp, clamp01, hypot2, lerp, rngNext } from './math';
 import { isHuman } from './seats';
 import type { AiMemory, Intent, MatchState, PlayerSim, TeamId } from './types';
@@ -53,6 +56,9 @@ export function newAiMemory(): AiMemory {
     jumpFor: 0,
     passCool: 0,
     sprint: false,
+    lookT: 0,
+    lx: 0,
+    lz: 0,
   };
 }
 
@@ -69,6 +75,7 @@ export function aiReset(p: PlayerSim): void {
   ai.jumpFor = 0;
   ai.passCool = 0.3;
   ai.stealT = Math.max(ai.stealT, 0.6);
+  ai.lookT = 0;
 }
 
 function skillOf(m: MatchState, p: PlayerSim): number {
@@ -157,11 +164,15 @@ function handlerAi(m: MatchState, p: PlayerSim, it: Intent, skill: number): void
   const elapsed = RULES.shotClock - m.shotClock;
   const urgency = clamp01(elapsed / RULES.shotClock);
   const clockLow = m.shotClock < 2 || (!m.overtime && m.clock < 1.5);
-  const finishR = canDunk(p) ? dunkRange(m, p) * 0.92 : LAYUP.range * 0.9;
+  const lv = levelOf(m, p.team, skill);
+  // a computer that dunks from less far out lays it up instead (see startShotOrFinish)
+  const finishR = canDunk(p) ? (lv.dunkReach === 1 ? dunkRange(m, p) * 0.92 : Math.max(LAYUP.range * 0.9, dunkRange(m, p) * 0.92 * lv.dunkReach)) : LAYUP.range * 0.9;
   // how long this player likes to work before settling for a jump shot
   if (ai.planT <= 0) ai.planT = 1.8 + rngNext(m) * 2.6;
   if (ai.thinkT <= 0) {
-    ai.thinkT = lerp(0.42, 0.16, skill) + rngNext(m) * 0.12;
+    ai.thinkT = lv.think + rngNext(m) * 0.12;
+    // whether it sprints on this drive (a computer that always does never asks)
+    ai.sprint = lv.burst >= 1 || rngNext(m) < lv.burst;
     const laneOpen = front > 0.5 && laneClear(m, p.team, p.x, p.z, hx - s * 0.6, 0, 0.8);
     const contest = shotContest(m, p);
     const three = isThree(p.x, p.z, p.team);
@@ -175,7 +186,8 @@ function handlerAi(m: MatchState, p: PlayerSim, it: Intent, skill: number): void
     if (ai.passCool <= 0) {
       for (const q of m.players) {
         if (q.team !== p.team || q === p || q.state !== 'free') continue;
-        if (!passLaneOpen(m, p, q)) continue;
+        // a sloppy passer does not always look at the lane first
+        if (!(lv.sloppy > 0 && rngNext(m) < lv.sloppy) && !passLaneOpen(m, p, q)) continue;
         const open = nearestOpponentDist(m, q.x, q.z, p.team);
         const qd = hypot2(hx - q.x, q.z);
         let val = clamp01(open / 1.7);
@@ -195,11 +207,14 @@ function handlerAi(m: MatchState, p: PlayerSim, it: Intent, skill: number): void
       ai.plan = 'finish';
     } else if (clockLow) {
       ai.plan = d < finishR + 0.6 && front > 0.4 ? 'finish' : 'shoot';
-    } else if (laneOpen && d < 9 && driveVal > ev * (0.85 + rngNext(m) * 0.3)) {
+    } else if (laneOpen && d < 9 && driveVal * lv.drive > ev * (0.85 + rngNext(m) * 0.3)) {
       ai.plan = 'drive';
     } else if (ev >= th && contest < 0.6) {
       ai.plan = 'shoot';
-    } else if (bestMate >= 0 && bestVal > ev * 0.55 + 0.5 && rngNext(m) < lerp(0.35, 0.7, skill)) {
+    } else if (lv.badShot > 0 && front > 0.5 && d < COURT.threeR + 1 && rngNext(m) < lv.badShot) {
+      // a shot it should not take: contested, or from a spot it does not shoot well from
+      ai.plan = 'shoot';
+    } else if (bestMate >= 0 && bestVal > ev * 0.55 + 0.5 && rngNext(m) < lv.pass) {
       it.pass = true;
       it.passTo = bestMate;
       ai.passCool = 1.2;
@@ -207,7 +222,7 @@ function handlerAi(m: MatchState, p: PlayerSim, it: Intent, skill: number): void
       return;
     } else if (p.x * s < -0.5) {
       ai.plan = 'none';
-    } else if (d < 8.5 && front > 1 && rngNext(m) < 0.22 + 0.25 * urgency) {
+    } else if (d < 8.5 && front > 1 && rngNext(m) < (0.22 + 0.25 * urgency) * lv.drive) {
       // attack the defender anyway
       ai.plan = 'drive';
     } else {
@@ -223,7 +238,7 @@ function handlerAi(m: MatchState, p: PlayerSim, it: Intent, skill: number): void
   switch (ai.plan) {
     case 'finish': {
       moveTo(p, it, hx - s * 0.5, 0, 0.1, true);
-      it.turbo = true;
+      it.turbo = lv.burst >= 1 || ai.sprint;
       const sp = hypot2(p.vx, p.vz);
       const toward = sp > 0.5 && d > 0.01 ? (p.vx * dxh + p.vz * -p.z) / (sp * d) : 0;
       if ((toward > 0.5 && sp > 2.5) || d < 1.5 || clockLow) it.shootPress = true;
@@ -232,8 +247,8 @@ function handlerAi(m: MatchState, p: PlayerSim, it: Intent, skill: number): void
     case 'shoot': {
       // how well they time the release depends on skill, not luck alone
       const r = rngNext(m);
-      const pPerfect = lerp(0.06, 0.36, skill);
-      const pGood = lerp(0.4, 0.46, skill);
+      const pPerfect = lv.perfect;
+      const pGood = lv.good;
       if (r < pPerfect) ai.releaseAt = (rngNext(m) - 0.5) * 0.08;
       else if (r < pPerfect + pGood) ai.releaseAt = (rngNext(m) < 0.5 ? -1 : 1) * (0.06 + rngNext(m) * 0.05);
       else ai.releaseAt = -(0.13 + rngNext(m) * 0.09);
@@ -243,7 +258,7 @@ function handlerAi(m: MatchState, p: PlayerSim, it: Intent, skill: number): void
       return;
     }
     case 'drive': {
-      moveTo(p, it, hx - s * 0.7, p.z * 0.25, 0.1, p.turbo > 0.25);
+      moveTo(p, it, hx - s * 0.7, p.z * 0.25, 0.1, p.turbo > 0.25 && (lv.burst >= 1 || ai.sprint));
       if (d < finishR && front > 0.4) it.shootPress = true;
       return;
     }
@@ -299,6 +314,7 @@ function defenseAi(m: MatchState, p: PlayerSim, it: Intent, skill: number): void
   if (!man || man.team === p.team) man = m.players.find((q) => q.team !== p.team) as PlayerSim;
   const handler = b.state === 'held' ? m.players[b.holder] : b.state === 'pass' ? m.players[b.to] : null;
   const onBall = handler === man;
+  const lv = levelOf(m, p.team, skill);
 
   // --- reactions: go up with shooters and dunkers
   for (const q of m.players) {
@@ -306,8 +322,8 @@ function defenseAi(m: MatchState, p: PlayerSim, it: Intent, skill: number): void
     if (q.state === 'shoot') {
       if (ai.jumpFor !== q.idx + 1 && hypot2(q.x - p.x, q.z - p.z) < 1.7) {
         ai.jumpFor = q.idx + 1;
-        if (rngNext(m) < lerp(0.4, 0.9, skill)) {
-          ai.jumpAt = Math.max(m.time, m.time - q.t + lerp(0.3, 0.1, skill) + rngNext(m) * 0.08);
+        if (rngNext(m) < lv.contest) {
+          ai.jumpAt = Math.max(m.time, m.time - q.t + lv.contestLate + rngNext(m) * 0.08);
         } else {
           ai.jumpAt = -1;
         }
@@ -315,7 +331,7 @@ function defenseAi(m: MatchState, p: PlayerSim, it: Intent, skill: number): void
     } else if (q.state === 'dunk' || q.state === 'oop' || q.state === 'layup') {
       if (ai.jumpFor !== q.idx + 1 && hypot2(p.x - hx, p.z) < 1.9) {
         ai.jumpFor = q.idx + 1;
-        if (rngNext(m) < lerp(0.25, 0.75, skill)) {
+        if (rngNext(m) < lv.rimJump) {
           const arrive = q.dur * (q.state === 'layup' ? LAYUP.releaseU : 1);
           ai.jumpAt = Math.max(m.time, m.time - q.t + arrive - 0.32);
         } else {
@@ -338,7 +354,7 @@ function defenseAi(m: MatchState, p: PlayerSim, it: Intent, skill: number): void
   const mdx = hx - man.x;
   const mdz = -man.z;
   const md = hypot2(mdx, mdz) || 1;
-  let gap = onBall ? lerp(1.5, 1.05, skill) : 2.3;
+  let gap = onBall ? lv.gap : 2.3;
   if (md > 9) gap = Math.max(gap, md - 8.2);
   if (gap > md - 0.6) gap = Math.max(0.5, md - 0.6);
   let tx = man.x + (mdx / md) * gap;
@@ -356,9 +372,9 @@ function defenseAi(m: MatchState, p: PlayerSim, it: Intent, skill: number): void
         if (!qm || qm === handler) continue;
         if (hypot2(qm.x - handler.x, qm.z - handler.z) > mine) weak = false;
       }
-      if (weak) {
-        tx = lerp(tx, hx - attackSign(oppTeam) * 1.7, 0.55);
-        tz = lerp(tz, 0, 0.55);
+      if (weak && lv.help > 0) {
+        tx = lerp(tx, hx - attackSign(oppTeam) * 1.7, 0.55 * lv.help);
+        tz = lerp(tz, 0, 0.55 * lv.help);
       }
     }
     // step in when the dribbler has beaten their defender
@@ -366,10 +382,23 @@ function defenseAi(m: MatchState, p: PlayerSim, it: Intent, skill: number): void
     if (hd < 4.6 && handler.state === 'free') {
       const hDef = m.players[handler.mark];
       const defD = hDef && hDef.team === p.team && hDef.state !== 'stumble' ? hypot2(hx - hDef.x, hDef.z) : 99;
-      if (defD > hd - 0.2 && hypot2(p.x - hx, p.z) < 5.5) {
-        tx = lerp(handler.x, hx, 0.55);
-        tz = lerp(handler.z, 0, 0.55);
+      if (defD > hd - 0.2 && hypot2(p.x - hx, p.z) < 5.5 && lv.help > 0) {
+        const sx = lerp(handler.x, hx, 0.55);
+        const sz = lerp(handler.z, 0, 0.55);
+        tx = lv.help >= 1 ? sx : lerp(tx, sx, lv.help);
+        tz = lv.help >= 1 ? sz : lerp(tz, sz, lv.help);
       }
+    }
+  }
+  // a slow defender only looks up now and then, and runs to where the play was
+  if (lv.react > 0) {
+    if (ai.lookT > 0) {
+      tx = ai.lx;
+      tz = ai.lz;
+    } else {
+      ai.lookT = lv.react;
+      ai.lx = tx;
+      ai.lz = tz;
     }
   }
   const dist = hypot2(tx - p.x, tz - p.z);
@@ -379,13 +408,21 @@ function defenseAi(m: MatchState, p: PlayerSim, it: Intent, skill: number): void
   // --- reach for the ball now and then
   if (onBall && handler && handler.state === 'free' && ai.stealT <= 0) {
     if (hypot2(handler.x - p.x, handler.z - p.z) < 1.15) {
-      ai.stealT = lerp(3.4, 1.4, skill) + rngNext(m) * 1.6;
-      if (rngNext(m) < lerp(0.35, 0.85, skill)) it.steal = true;
+      ai.stealT = lv.reachEvery + rngNext(m) * 1.6;
+      if (rngNext(m) < lv.reach) it.steal = true;
     }
   }
 }
 
-function reboundAi(m: MatchState, p: PlayerSim, it: Intent): void {
+/** A computer that does not hustle gets to a rebound or a loose ball at a jog. */
+function jog(it: Intent, hustle: number): void {
+  if (hustle >= 1) return;
+  it.mx *= hustle;
+  it.mz *= hustle;
+  it.turbo = false;
+}
+
+function reboundAi(m: MatchState, p: PlayerSim, it: Intent, skill: number): void {
   const b = m.ball;
   const hx = hoopXOf(b.shotTeam);
   const s = attackSign(b.shotTeam);
@@ -402,6 +439,7 @@ function reboundAi(m: MatchState, p: PlayerSim, it: Intent): void {
     const tx = hx - s * (1.25 + 0.55 * rank);
     const tz = (rank === 0 ? 0.35 : -0.9) * side * (defending ? 1 : -1);
     moveTo(p, it, tx, tz, 0.4, p.turbo > 0.2);
+    jog(it, levelOf(m, p.team, skill).hustle);
   } else if (defending) {
     const man = m.players[p.mark];
     moveTo(p, it, lerp(man.x, hx, 0.3), man.z * 0.7, 0.5, false);
@@ -421,6 +459,7 @@ function looseAi(m: MatchState, p: PlayerSim, it: Intent, skill: number): void {
   if (rank <= 1) {
     const lead = clamp(dB / 8, 0, 0.45);
     moveTo(p, it, b.x + b.vx * lead, b.z + b.vz * lead, 0.1, p.turbo > 0.1);
+    jog(it, levelOf(m, p.team, skill).hustle);
     if (dB < 0.95 && b.y > 1.75 && b.y < 3.5 && b.vy < 1.5 && rngNext(m) < lerp(0.05, 0.22, skill)) it.jump = true;
     return;
   }
@@ -437,6 +476,7 @@ export function aiIntent(m: MatchState, p: PlayerSim, it: Intent): void {
   ai.relocT -= DT;
   ai.stealT -= DT;
   ai.passCool -= DT;
+  ai.lookT -= DT;
   if (ai.cutT > 0) ai.cutT -= DT;
   if (p.state === 'shoot') {
     it.shoot = p.t < ai.releaseAt;
@@ -456,7 +496,7 @@ export function aiIntent(m: MatchState, p: PlayerSim, it: Intent): void {
   if (p.state !== 'free' && p.state !== 'recover' && p.state !== 'pass') return;
   const skill = skillOf(m, p);
   if (b.state === 'shot') {
-    reboundAi(m, p, it);
+    reboundAi(m, p, it, skill);
     return;
   }
   if (b.state === 'loose') {
