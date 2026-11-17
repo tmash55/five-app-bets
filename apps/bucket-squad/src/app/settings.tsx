@@ -13,7 +13,7 @@ import { useSave } from '@/state/save';
 import { tube as tubes } from '@/theme/arcade';
 import { px, space } from '@/theme/tokens';
 import { AccountRow, AccountSheet, useGate } from '@/ui/arcade/Account';
-import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
+import { ArcadeScreen, useArcadeBody } from '@/ui/arcade/ArcadeScreen';
 import { GhostButton, GoldButton } from '@/ui/arcade/Buttons';
 import { LampSwitch, PickRow, SignHead, type Choice } from '@/ui/arcade/Controls';
 import { LineIcon, type LineIconName } from '@/ui/arcade/LineIcon';
@@ -54,6 +54,9 @@ const GRAPHICS_HINT: Record<SaveSettings['graphics'], string> = {
   pretty: 'Pretty always looks its best, even if it gets a bit choppy.',
 };
 
+/** the body height the tall switch tiles need: the left panel with them, and the gap over it */
+const ROOMY = px(380);
+
 function Stat({ label, value, icon }: { label: string; value: number; icon: LineIconName }) {
   return (
     <View accessible accessibilityLabel={`${label.toLowerCase()}: ${value}`} style={styles.stat}>
@@ -80,6 +83,8 @@ export default function Settings() {
   const [gate, askGrownUp] = useGate();
   const phase = useAccount((s) => s.phase);
   const inAccount = useAccount((s) => s.userId !== null);
+  // a phone has no height for the tall switch tiles: the left panel would run off the bottom of the screen
+  const low = useArcadeBody().height < ROOMY;
 
   const startOver = () => {
     resetAll();
@@ -94,13 +99,13 @@ export default function Settings() {
           <Arrive delay={40} from="left" style={styles.left}>
             <NeonPanel tube="steel" style={styles.panel}>
               <View style={styles.switches}>
-                <LampSwitch label="Sound" icon="sound" iconOff="mute" tube="cyan" on={settings.sound} onChange={(v) => setSetting('sound', v)} />
-                <LampSwitch label="Music" icon="music" tube="cyan" on={settings.music} onChange={(v) => setSetting('music', v)} />
-                <LampSwitch label="Buzz" icon="buzz" tube="cyan" on={settings.haptics} onChange={(v) => setSetting('haptics', v)} />
+                <LampSwitch label="Sound" icon="sound" iconOff="mute" tube="cyan" compact={low} on={settings.sound} onChange={(v) => setSetting('sound', v)} />
+                <LampSwitch label="Music" icon="music" tube="cyan" compact={low} on={settings.music} onChange={(v) => setSetting('music', v)} />
+                <LampSwitch label="Buzz" icon="buzz" tube="cyan" compact={low} on={settings.haptics} onChange={(v) => setSetting('haptics', v)} />
               </View>
               <View style={styles.switches}>
-                <LampSwitch label="Easy shots" icon="target" tube="gold" on={settings.easyShots} onChange={(v) => setSetting('easyShots', v)} />
-                <LampSwitch label="Lefty pad" icon="swap" tube="gold" on={settings.lefty} onChange={(v) => setSetting('lefty', v)} />
+                <LampSwitch label="Easy shots" icon="target" tube="gold" compact={low} on={settings.easyShots} onChange={(v) => setSetting('easyShots', v)} />
+                <LampSwitch label="Lefty pad" icon="swap" tube="gold" compact={low} on={settings.lefty} onChange={(v) => setSetting('lefty', v)} />
               </View>
               <Print face="medium" size="tiny" color="textDim">
                 Easy shots gives you more time to let go of a shot. Lefty pad puts the buttons on the left.

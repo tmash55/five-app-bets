@@ -17,6 +17,7 @@ import { HowToOverlay } from '@/match/HowTo';
 import { CalloutLayer, ControlPlate, NetHint, Scoreboard, SquadHeat, type CalloutHandle } from '@/match/Hud';
 import { PauseMenu } from '@/match/PauseMenu';
 import { buildMatch, seenBy, summarize, type MatchSetup } from '@/meta/match';
+import { LOCKSTEP } from '@/net/lockstep';
 import { problemWords } from '@/net/words';
 import { useOnline } from '@/state/online';
 import { useSave } from '@/state/save';
@@ -28,6 +29,8 @@ import { StickerText, Txt } from '@/ui/Txt';
 
 /** an online game held up this long (ms) for the other device's moves says so on screen */
 const HINT_AFTER = 300;
+/** a round trip longer than the longest input delay covers there and back (12 ticks each way is 400 ms) */
+const SLOW_LINE_MS = (LOCKSTEP.maxDelay * 2 * 1000) / 60;
 
 const HOW_TO_TIP = 'howToPlay';
 
@@ -155,7 +158,10 @@ function Match({ setup }: { setup: MatchSetup }) {
   // the person's own players, each with their flame meter
   const squad = hud && mine && !setup.spectate && !duo ? built.lineup.flatMap((l, i) => (l.team === local ? [{ id: l.def.id, fire: hud.fire[i] ?? 0, you: i === mine.control }] : [])) : [];
   const showPause = paused || netPaused;
-  const hint = online && view?.phase === 'playing' && !netPaused && view.waiting >= HINT_AFTER ? (runner.m.tick < 60 ? 'Waiting for your friend…' : 'Connecting…') : null;
+  // a line too slow for the input delay to cover: the match keeps stopping for a moment at a time, each stop too short
+  // for "Connecting…". Said steadily, so slow motion is not taken for a broken game
+  const slowLine = online && view?.phase === 'playing' && !netPaused && view.delay >= LOCKSTEP.maxDelay && view.rtt !== null && view.rtt > SLOW_LINE_MS;
+  const hint = online && view?.phase === 'playing' && !netPaused && view.waiting >= HINT_AFTER ? (runner.m.tick < 60 ? 'Waiting for your friend…' : 'Connecting…') : slowLine ? 'Slow connection' : null;
   const failedWords = netFailed ? problemWords(netFailed) : null;
 
   return (

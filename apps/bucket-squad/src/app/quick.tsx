@@ -13,7 +13,7 @@ import { startQuick } from '@/state/play';
 import { useSave } from '@/state/save';
 import { useSession } from '@/state/session';
 import { px, space } from '@/theme/tokens';
-import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
+import { ArcadeScreen, useArcadeBody } from '@/ui/arcade/ArcadeScreen';
 import { GoldButton } from '@/ui/arcade/Buttons';
 import { PickRow, SignHead, Tabs, type Choice } from '@/ui/arcade/Controls';
 import { FadeScroll } from '@/ui/arcade/FadeScroll';
@@ -34,6 +34,8 @@ const LEAGUE_TABS = LEAGUES.map((l) => ({ value: l.id, label: l.name }));
 
 /** the label column beside each choice, so the three rows line up */
 const LABEL_W = px(66);
+/** the body height the roomy left column needs (the panel, the gap and PLAY with its ring); under it everything sits a little closer */
+const ROOMY = px(352);
 
 function Option({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -70,6 +72,8 @@ export default function Quick() {
   // the height of the column the panel stands in, and of the panel's heading
   const [columnH, setColumnH] = useState(0);
   const [headH, setHeadH] = useState(0);
+  // on a phone the panel and PLAY together are taller than the page: PLAY ran off the bottom edge
+  const low = useArcadeBody().height < ROOMY;
 
   const tiles = teams.length + 1;
   const room = columnH - TEAMS_FRAME - headH - GRID_TOP - GLOW_ROOM;
@@ -86,9 +90,9 @@ export default function Quick() {
 
   return (
     <View style={styles.root}>
-    <ArcadeScreen title="QUICK GAME" tube="cyan" style={styles.body} right={LEAGUES.length > 1 ? <Tabs options={LEAGUE_TABS} value={league} onChange={setLeague} tube="cyan" /> : undefined}>
+    <ArcadeScreen title="QUICK GAME" tube="cyan" style={low ? styles.bodyLow : styles.body} right={LEAGUES.length > 1 ? <Tabs options={LEAGUE_TABS} value={league} onChange={setLeague} tube="cyan" /> : undefined}>
       <View style={styles.row}>
-        <Arrive delay={40} from="left" style={styles.left}>
+        <Arrive delay={40} from="left" style={[styles.left, low && styles.leftLow]}>
           <NeonPanel tube="cyan" style={styles.panel}>
             <Option label="YOU">
               <View
@@ -100,10 +104,10 @@ export default function Quick() {
               </View>
             </Option>
             <Option label="PLAYERS">
-              <PickRow options={FORMATS} value={format} onChange={(v) => setSetting('format', v)} tube="cyan" />
+              <PickRow options={FORMATS} value={format} onChange={(v) => setSetting('format', v)} tube="cyan" low={low} />
             </Option>
             <Option label="LEVEL">
-              <PickRow options={LEVELS} value={difficulty} onChange={(v) => setSetting('difficulty', v)} tube="cyan" />
+              <PickRow options={LEVELS} value={difficulty} onChange={(v) => setSetting('difficulty', v)} tube="cyan" low={low} />
             </Option>
             <Option label="COURT">
               {/* the courts that do not fit melt into the panel at its edge; the row's glow room is pulled back out so it starts in line with the rows above */}
@@ -185,6 +189,9 @@ const styles = StyleSheet.create({
   body: {
     paddingTop: space.md,
   },
+  bodyLow: {
+    paddingTop: space.sm,
+  },
   row: {
     flex: 1,
     flexDirection: 'row',
@@ -197,6 +204,9 @@ const styles = StyleSheet.create({
     width: '46%',
     justifyContent: 'center',
     gap: space.md,
+  },
+  leftLow: {
+    gap: space.sm,
   },
   // four rows of choices: they sit a little closer than a panel's usual gap, so the panel and PLAY fit a phone's height
   panel: {

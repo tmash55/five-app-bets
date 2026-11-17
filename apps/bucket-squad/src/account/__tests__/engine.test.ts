@@ -23,11 +23,30 @@ const copy = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 class TableStandIn implements SaveRemote {
   rows = new Map<string, { rev: number; data: SaveData; backup: SaveData | null; at: number }>();
   offline = false;
+  /** the write lands, but its answer never gets back (a line that drops, or a request that ran out of time) */
+  answerLost = false;
+  /** writes wait here until `release()` */
+  private held: Promise<void> | null = null;
+  release: () => void = () => {};
   writes = 0;
   reads = 0;
   constructor(private clock: ManualClock) {}
   private check() {
     if (this.offline) throw new Error('offline');
+  }
+  /** make every write wait until `release()` is called */
+  hold() {
+    this.held = new Promise((done) => {
+      this.release = () => {
+        this.held = null;
+        done();
+      };
+    });
+  }
+  private async answer<T>(value: T): Promise<T> {
+    if (this.held) await this.held;
+    if (this.answerLost) throw new Error('answer lost');
+    return value;
   }
   async read(userId: string) {
     this.check();
@@ -40,7 +59,7 @@ class TableStandIn implements SaveRemote {
     if (this.rows.has(userId)) return 'conflict' as const;
     this.writes++;
     this.rows.set(userId, { rev: 1, data: copy(data), backup: null, at: this.clock.now() });
-    return 1;
+    return this.answer(1);
   }
   async update(userId: string, base: number, data: SaveData | null, backup?: SaveData) {
     this.check();
@@ -48,7 +67,7 @@ class TableStandIn implements SaveRemote {
     if (!row || row.rev !== base) return 'conflict' as const;
     this.writes++;
     this.rows.set(userId, { rev: base + 1, data: data ? copy(data) : row.data, backup: backup ? copy(backup) : row.backup, at: this.clock.now() });
-    return base + 1;
+    return this.answer(base + 1);
   }
   /** another device writes */
   elsewhere(userId: string, data: SaveData) {
@@ -111,6 +130,8 @@ class AuthStandIn implements AuthPort {
   cancel = false;
   failSignIn = false;
   failDelete = false;
+  /** telling the account service about a sign-out never comes back (a dead line) */
+  signOutHangs = false;
   deleted: string[] = [];
   constructor(private table: TableStandIn) {}
   async currentUser() {
@@ -124,7 +145,9 @@ class AuthStandIn implements AuthPort {
     return USER;
   }
   async signOut() {
+    // the session on the device goes first, whatever the line does
     this.session = null;
+    if (this.signOutHangs) await new Promise(() => {});
   }
   async deleteAccount() {
     if (this.failDelete || !this.session) throw new Error('nope');
@@ -301,6 +324,47 @@ describe('while signed in', () => {
     expect(t.save.get().coins).toBe(950);
   });
 
+  it('knows its own write when the answer to it was lost, and does not ask a grown-up to pick', async () => {
+    const t = await signedIn(played());
+    t.table.answerLost = true;
+    t.save.play({ coins: 1000 });
+    await t.later(PUSH_DELAY);
+    // the account has the game, the device was never told
+    expect(t.table.rows.get(USER)).toMatchObject({ rev: 2, data: { coins: 1000 } });
+    expect(t.state()).toMatchObject({ phase: 'signedIn', problem: 'offline', rev: 1, dirty: true });
+    // the child plays on, and the line comes back
+    t.save.play({ coins: 1100 });
+    t.table.answerLost = false;
+    await t.later(60_000);
+    expect(t.state()).toMatchObject({ phase: 'signedIn', problem: null, choice: null, rev: 3, dirty: false });
+    expect(t.table.rows.get(USER)!.data.coins).toBe(1100);
+  });
+
+  it('writes nothing more when its lost write was the newest game', async () => {
+    const t = await signedIn(played());
+    t.table.answerLost = true;
+    t.save.play({ coins: 1000 });
+    await t.later(PUSH_DELAY);
+    t.table.answerLost = false;
+    const writes = t.table.writes;
+    await t.later(60_000);
+    expect(t.state()).toMatchObject({ phase: 'signedIn', problem: null, choice: null, rev: 2, dirty: false });
+    expect(t.table.writes).toBe(writes);
+  });
+
+  it('still asks when the account moved to a game that is not the one it sent', async () => {
+    const t = await signedIn(played());
+    t.table.answerLost = true;
+    t.save.play({ coins: 1000 });
+    await t.later(PUSH_DELAY);
+    t.table.answerLost = false;
+    // another device wrote over it before this one could look
+    t.table.elsewhere(USER, played(4000, 30));
+    t.save.play({ coins: 1100 });
+    await t.later(60_000);
+    expect(t.state()).toMatchObject({ phase: 'choose', choice: { device: { coins: 1100 }, cloud: { coins: 4000 } } });
+  });
+
   it('starts over in the account too when the game is started over', async () => {
     const t = await signedIn(played());
     t.save.play(newSave());
@@ -375,6 +439,33 @@ describe('signing out and deleting', () => {
     expect(t.table.rows.get(USER)!.data.coins).toBe(3333);
   });
 
+  it('says it is saving first while the last write is on its way, and nothing after', async () => {
+    const t = await signedIn(played());
+    t.save.play({ coins: 3333 });
+    t.table.hold();
+    const out = t.engine.signOut();
+    expect(t.state()).toMatchObject({ phase: 'signedIn', leaving: true });
+    t.table.release();
+    await out;
+    expect(t.state()).toMatchObject({ phase: 'signedOut', leaving: false, userId: null });
+    expect(t.table.rows.get(USER)!.data.coins).toBe(3333);
+  });
+
+  it('signs out after a short wait when the last write never comes back', async () => {
+    const t = await signedIn(played());
+    t.save.play({ coins: 3333 });
+    t.table.hold();
+    const out = t.engine.signOut();
+    // the engine starts its wait a moment after the write goes out
+    await Promise.resolve();
+    await Promise.resolve();
+    t.clock.advance(5000);
+    await out;
+    expect(t.state()).toMatchObject({ phase: 'signedOut', leaving: false, userId: null });
+    expect(t.save.get().coins).toBe(3333);
+    t.table.release();
+  });
+
   it('signs out even when the account cannot be reached', async () => {
     const t = await signedIn(played());
     t.table.offline = true;
@@ -391,6 +482,14 @@ describe('signing out and deleting', () => {
     expect(t.table.rows.has(USER)).toBe(false);
     expect(t.state()).toMatchObject({ phase: 'signedOut', userId: null, problem: null });
     expect(sameSave(t.save.get(), played())).toBe(true);
+  });
+
+  it('does not keep the grown-up waiting on the sign-out that follows a delete', async () => {
+    const t = await signedIn(played());
+    t.auth.signOutHangs = true;
+    await t.engine.deleteAccount();
+    expect(t.state()).toMatchObject({ phase: 'signedOut', userId: null, problem: null });
+    expect(t.auth.session).toBeNull();
   });
 
   it('stays signed in and says so when deleting fails', async () => {

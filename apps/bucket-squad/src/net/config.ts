@@ -34,10 +34,21 @@ function defaultRelay(): string {
   return `ws://${host}:${RELAY_PORT}`;
 }
 
-/** `?net=...` on the page's address, in a development build in the browser */
+const NET_KEY = 'bs.net';
+
+/**
+ * `?net=...` on the page's address, in a development build in the browser. The choice is kept for the life of the
+ * tab (as `?insets=` is), because the pages opened after the first no longer carry it in their address.
+ */
 function fromAddress(): string | null {
   if (!__DEV__ || Platform.OS !== 'web' || typeof location === 'undefined') return null;
-  return new URLSearchParams(location.search).get('net');
+  try {
+    const asked = new URLSearchParams(location.search).get('net');
+    if (asked !== null) sessionStorage.setItem(NET_KEY, asked);
+    return asked ?? sessionStorage.getItem(NET_KEY);
+  } catch {
+    return null;
+  }
 }
 
 /** Read a choice as written in `EXPO_PUBLIC_NET` or `?net=`: `supabase`, `relay` or `relay:ws://host:port`. */
@@ -49,9 +60,12 @@ export function parseNet(text: string | null, fallbackRelay: string): NetChoice 
   return null;
 }
 
+/** read as the page loads, while the address still carries it */
+const FROM_ADDRESS = fromAddress();
+
 export function netChoice(): NetChoice | null {
   const relay = defaultRelay();
-  const asked = parseNet(fromAddress(), relay) ?? parseNet(ENV_NET, relay);
+  const asked = parseNet(FROM_ADDRESS, relay) ?? parseNet(ENV_NET, relay);
   if (asked && (asked.kind === 'relay' || ACCOUNTS_SET_UP)) return asked;
   if (ACCOUNTS_SET_UP) return { kind: 'supabase', relay };
   return __DEV__ ? { kind: 'relay', relay } : null;

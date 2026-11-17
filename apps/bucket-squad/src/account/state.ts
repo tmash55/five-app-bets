@@ -45,6 +45,8 @@ export interface AccountState {
   choice: { device: Progress; cloud: Progress } | null;
   /** the choice was put off ("not now"): Settings offers it again */
   choiceHidden: boolean;
+  /** signing out: the newest game is being put in the account first */
+  leaving: boolean;
   /** this device has Sign in with Apple */
   appleAvailable: boolean;
   /** when a grown-up last passed the check, in ms (0: not this run) */
@@ -66,6 +68,7 @@ export function initialAccount(setUp: boolean): AccountState {
     savedAt: null,
     choice: null,
     choiceHidden: false,
+    leaving: false,
     appleAvailable: false,
     gatePassedAt: 0,
   };

@@ -18,7 +18,7 @@ import { useSave } from '@/state/save';
 import { useSession } from '@/state/session';
 import { tube as tubes } from '@/theme/arcade';
 import { px, space } from '@/theme/tokens';
-import { ArcadeScreen } from '@/ui/arcade/ArcadeScreen';
+import { ArcadeScreen, useArcadeBody } from '@/ui/arcade/ArcadeScreen';
 import { GoldButton } from '@/ui/arcade/Buttons';
 import { PickRow, SignHead, Tabs, type Choice } from '@/ui/arcade/Controls';
 import { FadeScroll } from '@/ui/arcade/FadeScroll';
@@ -44,6 +44,8 @@ const LEAGUE_TABS = LEAGUES.map((l) => ({ value: l.id, label: l.name }));
 
 /** the label column beside each choice, so the rows line up */
 const LABEL_W = px(66);
+/** the body height the roomy left column needs (the panel, the gap and PLAY with its ring); under it everything sits a little closer */
+const ROOMY = px(366);
 
 function Option({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -84,6 +86,8 @@ export default function Duo() {
   const [gridW, setGridW] = useState(0);
   const [columnH, setColumnH] = useState(0);
   const [headH, setHeadH] = useState(0);
+  // on a phone the panel and PLAY together are taller than the page: PLAY ran off the bottom edge
+  const low = useArcadeBody().height < ROOMY;
 
   const tiles = teams.length + 1;
   const room = columnH - TEAMS_FRAME - headH - GRID_TOP - GLOW_ROOM;
@@ -98,10 +102,10 @@ export default function Duo() {
 
   return (
     <View style={styles.root}>
-    <ArcadeScreen title="2 PLAYERS" tube="pink" style={styles.body} right={LEAGUES.length > 1 ? <Tabs options={LEAGUE_TABS} value={league} onChange={setLeague} tube="pink" /> : undefined}>
+    <ArcadeScreen title="2 PLAYERS" tube="pink" style={low ? styles.bodyLow : styles.body} right={LEAGUES.length > 1 ? <Tabs options={LEAGUE_TABS} value={league} onChange={setLeague} tube="pink" /> : undefined}>
       <View style={styles.row}>
-        <Arrive delay={40} from="left" style={styles.left}>
-          <NeonPanel tube="pink" style={styles.panel}>
+        <Arrive delay={40} from="left" style={[styles.left, low && styles.leftLow]}>
+          <NeonPanel tube="pink" style={[styles.panel, low && styles.panelLow]}>
             {/* P1 needs no choosing: the squad on this device */}
             <View style={styles.p1}>
               <Glow face="display" size="title" tube="cyan" track="close">
@@ -115,16 +119,17 @@ export default function Duo() {
                 }}>
                 {p1W > 0 && <PlayAsButton team={team} room={p1W} onPress={() => setChoosing(true)} />}
               </View>
-              <OvrMeter value={mine} tube="cyan" />
+              {/* the lamps and the number alone: the word would take the room the team's name needs */}
+              <OvrMeter value={mine} tube="cyan" short />
             </View>
             <Option label="PLAYERS">
-              <PickRow options={FORMATS} value={format} onChange={(v) => setSetting('format', v)} tube="pink" />
+              <PickRow options={FORMATS} value={format} onChange={(v) => setSetting('format', v)} tube="pink" low={low} />
             </Option>
             <Option label="HELP">
               <PickRow options={HELP} value={help} onChange={setHelp} tube="pink" />
             </Option>
             <Option label="COURT">
-              <FadeScroll horizontal showsHorizontalScrollIndicator={false} reach={px(30)} style={styles.courtsBox} contentContainerStyle={styles.courts}>
+              <FadeScroll horizontal showsHorizontalScrollIndicator={false} reach={px(30)} style={[styles.courtsBox, low && styles.courtsLow]} contentContainerStyle={styles.courts}>
                 <CourtPick id={RANDOM_COURT} selected={court === RANDOM_COURT} onPress={() => setCourt(RANDOM_COURT)} tube="pink" />
                 <CourtPick id={null} selected={court === null} onPress={() => setCourt(null)} tube="pink" homeLabel="P2’s court" />
                 {COURT_IDS.map((id) => (
@@ -199,6 +204,9 @@ const styles = StyleSheet.create({
   body: {
     paddingTop: space.md,
   },
+  bodyLow: {
+    paddingTop: space.sm,
+  },
   row: {
     flex: 1,
     flexDirection: 'row',
@@ -212,9 +220,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: space.md,
   },
+  leftLow: {
+    gap: space.sm,
+  },
   panel: {
     padding: PANEL_PAD,
     gap: space.sm,
+  },
+  panelLow: {
+    gap: space.xs,
   },
   p1: {
     flexDirection: 'row',
@@ -235,6 +249,10 @@ const styles = StyleSheet.create({
   courtsBox: {
     marginLeft: -GLOW_ROOM,
     marginRight: -PANEL_PAD,
+  },
+  // the row's glow room is taken back above and below, as on the quick game page
+  courtsLow: {
+    marginVertical: -px(3),
   },
   courts: {
     gap: space.sm,

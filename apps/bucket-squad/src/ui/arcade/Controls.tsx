@@ -100,7 +100,7 @@ const Lamps = memo(function Lamps({ count, lit, tube: tb }: { count: number; lit
   );
 });
 
-function PickCell<T extends string | number>({ option, on, tube: tb, fill, onPick }: { option: Choice<T>; on: boolean; tube: Tube; fill: boolean; onPick: (value: T) => void }) {
+function PickCell<T extends string | number>({ option, on, tube: tb, fill, low, onPick }: { option: Choice<T>; on: boolean; tube: Tube; fill: boolean; low: boolean; onPick: (value: T) => void }) {
   const [width, onLayout] = useWidth(fill ? option.label : undefined);
   const iconSize = px(16);
   const room = fill && width > 0 ? width - PICK_PAD * 2 - arcade.outline * 2 - (option.icon ? iconSize + space.xs : 0) : undefined;
@@ -119,7 +119,7 @@ function PickCell<T extends string | number>({ option, on, tube: tb, fill, onPic
       style={({ pressed }) => [
         styles.pick,
         fill && styles.pickFill,
-        tall && styles.pickTall,
+        tall && (low ? styles.pickLow : styles.pickTall),
         on ? { borderColor: tb.glass, backgroundColor: night.tile, boxShadow: [halo(tb.glass, 10, pressed ? 0.35 : 0.6), inner(tb.glass, 12, 0.3)] } : undefined,
         pressed && styles.pressed,
       ]}>
@@ -141,16 +141,18 @@ export interface PickRowProps<T> {
   tube?: TubeName | Tube;
   /** the choices share the row equally (on by default); off, each is as wide as its label, for a row that scrolls */
   fill?: boolean;
+  /** choices with lamps are no taller than the others: for a page that is short of height, as on a phone */
+  low?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
 /** Pick one of a few: the chosen one is lit, the others are dark outlines. */
-export function PickRow<T extends string | number>({ options, value, onChange, tube: t = 'cyan', fill = true, style }: PickRowProps<T>) {
+export function PickRow<T extends string | number>({ options, value, onChange, tube: t = 'cyan', fill = true, low = false, style }: PickRowProps<T>) {
   const tb = tubeOf(t);
   return (
     <View style={[styles.pickRow, style]}>
       {options.map((o) => (
-        <PickCell key={String(o.value)} option={o} on={o.value === value} tube={tb} fill={fill} onPick={onChange} />
+        <PickCell key={String(o.value)} option={o} on={o.value === value} tube={tb} fill={fill} low={low} onPick={onChange} />
       ))}
     </View>
   );
@@ -165,18 +167,33 @@ export interface LampSwitchProps {
   iconOff?: LineIconName;
   tube?: TubeName | Tube;
   sound?: SfxName;
+  /** a low tile, the picture beside the words instead of over them: for a page that is short of height, as on a phone */
+  compact?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
 /** An on/off switch: a tile whose picture and lamp are lit when it is on and dark when it is off, with the word for which. */
-export function LampSwitch({ label, on, onChange, icon, iconOff, tube: t = 'green', sound, style }: LampSwitchProps) {
+export function LampSwitch({ label, on, onChange, icon, iconOff, tube: t = 'green', sound, compact = false, style }: LampSwitchProps) {
   const tb = tubeOf(t);
   const [width, onLayout] = useWidth(label);
-  const room = width > 0 ? width - SWITCH_PAD * 2 - arcade.outline * 2 : undefined;
+  const beside = compact ? SWITCH_ICON + SWITCH_LAMP + SWITCH_GAP * 2 : 0;
+  const room = width > 0 ? width - SWITCH_PAD * 2 - arcade.outline * 2 - beside : undefined;
   const press = useCallback(() => {
     tapFeedback(sound);
     onChange(!on);
   }, [on, onChange, sound]);
+  const picture = <LineIcon name={on ? icon : (iconOff ?? icon)} size={SWITCH_ICON} tube={on ? tb : undefined} color={on ? undefined : night.textFaint} />;
+  const lamp = <View style={[styles.switchLamp, on && { backgroundColor: tb.glass, borderColor: tb.tint, boxShadow: [halo(tb.glass, 8, 1)] }]} />;
+  const name = (
+    <Print face="bold" size="body" color={on ? 'text' : 'textDim'} room={room} least={MIN_FIT_LABEL}>
+      {label}
+    </Print>
+  );
+  const word = (
+    <Print face="display" size="micro" color={on ? tb.glass : 'textFaint'} track="wider">
+      {on ? 'ON' : 'OFF'}
+    </Print>
+  );
   return (
     <Pressable
       accessibilityRole="switch"
@@ -184,17 +201,26 @@ export function LampSwitch({ label, on, onChange, icon, iconOff, tube: t = 'gree
       accessibilityLabel={`${label}: ${on ? 'on' : 'off'}`}
       onLayout={onLayout}
       onPress={press}
-      style={({ pressed }) => [styles.switch, on ? { borderColor: tb.glass, boxShadow: [halo(tb.glass, 10, pressed ? 0.35 : 0.55), inner(tb.glass, 14, 0.28)] } : undefined, pressed && styles.pressed, style]}>
-      <View style={styles.switchTop}>
-        <LineIcon name={on ? icon : (iconOff ?? icon)} size={px(22)} tube={on ? tb : undefined} color={on ? undefined : night.textFaint} />
-        <View style={[styles.switchLamp, on && { backgroundColor: tb.glass, borderColor: tb.tint, boxShadow: [halo(tb.glass, 8, 1)] }]} />
-      </View>
-      <Print face="bold" size="body" color={on ? 'text' : 'textDim'} room={room} least={MIN_FIT_LABEL}>
-        {label}
-      </Print>
-      <Print face="display" size="micro" color={on ? tb.glass : 'textFaint'} track="wider">
-        {on ? 'ON' : 'OFF'}
-      </Print>
+      style={({ pressed }) => [styles.switch, compact && styles.switchLow, on ? { borderColor: tb.glass, boxShadow: [halo(tb.glass, 10, pressed ? 0.35 : 0.55), inner(tb.glass, 14, 0.28)] } : undefined, pressed && styles.pressed, style]}>
+      {compact ? (
+        <>
+          {picture}
+          <View style={styles.switchWords}>
+            {name}
+            {word}
+          </View>
+          {lamp}
+        </>
+      ) : (
+        <>
+          <View style={styles.switchTop}>
+            {picture}
+            {lamp}
+          </View>
+          {name}
+          {word}
+        </>
+      )}
     </Pressable>
   );
 }
@@ -244,6 +270,9 @@ export function LockVeil({ message, round = arcade.rPanel, style }: { message: s
 
 const PICK_PAD = px(10);
 const SWITCH_PAD = px(10);
+const SWITCH_ICON = px(22);
+const SWITCH_LAMP = px(13);
+const SWITCH_GAP = px(7);
 
 const styles = StyleSheet.create({
   pressed: {
@@ -303,6 +332,10 @@ const styles = StyleSheet.create({
   pickTall: {
     height: px(52),
   },
+  // the lamps and the label, in the height of a plain choice
+  pickLow: {
+    gap: px(2),
+  },
   pickLine: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -334,10 +367,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  // the low tile: picture, words, lamp, in one line
+  switchLow: {
+    minHeight: px(50),
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: SWITCH_GAP,
+  },
+  switchWords: {
+    flex: 1,
+    gap: px(1),
+  },
   switchLamp: {
-    width: px(13),
-    height: px(13),
-    borderRadius: px(6.5),
+    width: SWITCH_LAMP,
+    height: SWITCH_LAMP,
+    borderRadius: SWITCH_LAMP / 2,
     backgroundColor: night.pit,
     borderWidth: arcade.hairline,
     borderColor: night.lineLit,

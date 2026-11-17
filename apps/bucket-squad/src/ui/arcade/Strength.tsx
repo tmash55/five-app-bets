@@ -12,15 +12,17 @@ import { Print } from './Type';
 /** the most a teammate bonus can be (three from one team) */
 const MOST_CHEMISTRY = 3;
 
-/** A squad's overall rating: a row of lamps, then the number. */
-export function OvrMeter({ value, label = 'OVR', tube: t = 'cyan', style }: { value: number; label?: string; tube?: TubeName | Tube; style?: StyleProp<ViewStyle> }) {
+/** A squad's overall rating: a row of lamps, then the number. `short` is the lamps and the number alone, where a line has little room. */
+export function OvrMeter({ value, label = 'OVR', tube: t = 'cyan', short = false, style }: { value: number; label?: string; tube?: TubeName | Tube; short?: boolean; style?: StyleProp<ViewStyle> }) {
   const tb = tubeOf(t);
   return (
     <Chip style={[styles.chip, style]}>
-      <Print face="bold" size="tiny" color="textFaint" track="wide" lines={1}>
-        {label}
-      </Print>
-      <SegBar value={value} tube={tb} small style={styles.bar} />
+      {!short && (
+        <Print face="bold" size="tiny" color="textFaint" track="wide" lines={1}>
+          {label}
+        </Print>
+      )}
+      <SegBar value={value} tube={tb} small style={short ? styles.barShort : styles.bar} />
       <Print face="display" size="large" color={tb.tint} glow={tb.glass} lines={1}>
         {String(value)}
       </Print>
@@ -54,6 +56,9 @@ const styles = StyleSheet.create({
   },
   bar: {
     width: px(58),
+  },
+  barShort: {
+    width: px(40),
   },
   bolts: {
     flexDirection: 'row',
