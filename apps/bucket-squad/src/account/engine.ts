@@ -8,12 +8,15 @@
  *   the app goes to the background. Every write names the rev it expects; if the account has moved, it is read
  *   again and the rules run again.
  * - Offline nothing is lost: the device save is the game, `dirty` remembers it is newer, and it is tried later.
+ * - A write can land in the account while its answer is lost on the way back (a line that drops, a request that ran
+ *   out of time). The engine remembers what it last sent, so at the next read it knows its own game and carries on
+ *   from it instead of taking it for another device's.
  */
 
 import type { SaveData } from '@/state/logic';
 import type { SaveRemote } from './remote';
 import type { AccountMeta, AccountStore } from './state';
-import { PUSH_DELAY, planSync, progressOf, retryDelay, type CloudSave } from './sync';
+import { PUSH_DELAY, planSync, progressOf, retryDelay, sameSave, type CloudSave } from './sync';
 
 /** Signing in and out. */
 export interface AuthPort {
@@ -88,6 +91,8 @@ export function createSyncEngine({ store, remote, auth, save, clock = realClock 
   let pending: CloudSave | null = null;
   /** the next sync reads the account before writing */
   let mustRead = true;
+  /** the write that is on its way, or whose answer never came: the rev it makes and the game it carries */
+  let sent: { rev: number; data: SaveData } | null = null;
   let pushTimer: unknown = null;
   let retryTimer: unknown = null;
   let failures = 0;
@@ -173,7 +178,10 @@ export function createSyncEngine({ store, remote, auth, save, clock = realClock 
         // the usual case: this device changed and the account has not moved: write straight over it
         if (!mustRead && base !== null && dirty) {
           const mark = changes;
-          const rev = await remote.update(userId, base, save.get());
+          const data = save.get();
+          sent = { rev: base + 1, data };
+          const rev = await remote.update(userId, base, data);
+          sent = null;
           if (get().userId !== userId) return;
           if (rev !== 'conflict') return written(rev, mark);
           mustRead = true;
@@ -190,7 +198,14 @@ export function createSyncEngine({ store, remote, auth, save, clock = realClock 
           continue;
         }
         const local = save.get();
-        const plan = planSync({ local, dirty: get().dirty, base, remote: cloud });
+        // the account holds the very game this device sent and never heard back about: that write is this device's own
+        let from = base;
+        if (sent && cloud && cloud.rev === sent.rev && sameSave(cloud.data, sent.data)) {
+          from = cloud.rev;
+          set({ rev: from, dirty: !sameSave(local, cloud.data) });
+        }
+        sent = null;
+        const plan = planSync({ local, dirty: get().dirty, base: from, remote: cloud });
         mustRead = false;
 
         if (plan.kind === 'match') {
@@ -205,7 +220,9 @@ export function createSyncEngine({ store, remote, auth, save, clock = realClock 
           return;
         }
         if (plan.kind === 'upload') {
+          sent = { rev: plan.base === null ? 1 : plan.base + 1, data: local };
           const rev = plan.base === null ? await remote.create(userId, local) : await remote.update(userId, plan.base, local);
+          sent = null;
           if (get().userId !== userId) return;
           if (rev !== 'conflict') return written(rev, mark);
           mustRead = true;
@@ -280,9 +297,11 @@ export function createSyncEngine({ store, remote, auth, save, clock = realClock 
     },
 
     async signOut() {
-      if (!get().userId) return;
+      if (!get().userId || get().leaving) return;
       // one last try to put the newest game in the account; the game stays on the device either way
       if (get().dirty && get().phase === 'signedIn') {
+        // said on the screen: the wait is a few seconds on a slow line, and a button that does nothing gets pressed again
+        set({ leaving: true });
         if (pushTimer !== null) clock.clearTimeout(pushTimer);
         pushTimer = null;
         let timer: unknown = null;
@@ -291,12 +310,10 @@ export function createSyncEngine({ store, remote, auth, save, clock = realClock 
       }
       clearTimers();
       pending = null;
-      try {
-        await auth.signOut();
-      } catch {
-        // the session on this device is dropped either way
-      }
-      set({ ...SIGNED_OUT_META, phase: 'signedOut', choice: null, choiceHidden: false, problem: null });
+      sent = null;
+      // the session on this device is dropped first, whatever the line does; telling the account service is not waited for
+      void auth.signOut().catch(() => {});
+      set({ ...SIGNED_OUT_META, phase: 'signedOut', choice: null, choiceHidden: false, problem: null, leaving: false });
     },
 
     async deleteAccount() {
@@ -312,13 +329,11 @@ export function createSyncEngine({ store, remote, auth, save, clock = realClock 
         return;
       }
       pending = null;
-      try {
-        await auth.signOut();
-      } catch {
-        // the account is gone; the session left on the device is useless anyway
-      }
+      sent = null;
+      // the account is gone and the session left on the device is useless: dropping it is not waited for
+      void auth.signOut().catch(() => {});
       // the game carries on, on this device only
-      set({ ...SIGNED_OUT_META, phase: 'signedOut', choice: null, choiceHidden: false, problem: null });
+      set({ ...SIGNED_OUT_META, phase: 'signedOut', choice: null, choiceHidden: false, problem: null, leaving: false });
     },
 
     async choose(keep) {
@@ -371,7 +386,8 @@ export function createSyncEngine({ store, remote, auth, save, clock = realClock 
       if (!get().userId || get().phase === 'deleting') return;
       clearTimers();
       pending = null;
-      set({ ...SIGNED_OUT_META, phase: 'signedOut', choice: null, choiceHidden: false });
+      sent = null;
+      set({ ...SIGNED_OUT_META, phase: 'signedOut', choice: null, choiceHidden: false, leaving: false });
     },
 
     async idle() {

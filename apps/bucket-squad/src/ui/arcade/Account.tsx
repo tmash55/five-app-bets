@@ -21,6 +21,7 @@ import { Popup } from './Popup';
 import { CoinAmount } from './Rewards';
 import { Tag, Well } from './Surface';
 import { Glow, Print } from './Type';
+import { WaitLamps } from './WaitLamps';
 
 /** the time now, moved on once a minute, for "saved 3 minutes ago" */
 function useMinuteClock(): number {
@@ -30,6 +31,23 @@ function useMinuteClock(): number {
     return () => clearInterval(id);
   }, []);
   return now;
+}
+
+/** how long a wait goes on before the game says it is taking a while */
+const SLOW_AFTER_MS = 4000;
+
+/** True once `waiting` has been true for a few seconds in one go. */
+function useSlow(waiting: boolean): boolean {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!waiting) return;
+    const id = setTimeout(() => setSlow(true), SLOW_AFTER_MS);
+    return () => {
+      clearTimeout(id);
+      setSlow(false);
+    };
+  }, [waiting]);
+  return waiting && slow;
 }
 
 /** what went wrong, in plain words */
@@ -47,7 +65,8 @@ export function problemWords(problem: AccountProblem | null, phase: AccountState
 }
 
 /** The one line the Settings row says about where the game is kept. */
-export function accountLine(s: Pick<AccountState, 'phase' | 'problem' | 'savedAt' | 'dirty'>, now: number): string {
+export function accountLine(s: Pick<AccountState, 'phase' | 'problem' | 'savedAt' | 'dirty'> & { leaving?: boolean }, now: number): string {
+  if (s.leaving) return 'Saving your game, then signing out…';
   switch (s.phase) {
     case 'off':
       return "Your game is saved on this device. Accounts aren't set up in this build.";
@@ -85,13 +104,16 @@ export function AccountRow({ onOpen, note }: { onOpen: () => void; /** small pri
   const problem = useAccount((s) => s.problem);
   const savedAt = useAccount((s) => s.savedAt);
   const dirty = useAccount((s) => s.dirty);
+  const leaving = useAccount((s) => s.leaving);
+  // an account is on this device, whatever it is doing right now: the way in is to manage it, never to sign in again
+  const inAccount = useAccount((s) => s.userId !== null);
   const now = useMinuteClock();
-  const line = accountLine({ phase, problem, savedAt, dirty }, now);
-  const lit = phase === 'signedIn' && problem === null;
+  const line = accountLine({ phase, problem, savedAt, dirty, leaving }, now);
+  const lit = phase === 'signedIn' && problem === null && !leaving;
   const choose = phase === 'choose';
   return (
     <Well style={styles.row}>
-      <LineIcon name={ROW_ICON[phase]} size={px(18)} tube={lit ? 'green' : choose ? 'gold' : 'violet'} weight={2.2} />
+      <LineIcon name={leaving ? 'clock' : ROW_ICON[phase]} size={px(18)} tube={lit ? 'green' : choose ? 'gold' : 'violet'} weight={2.2} />
       <View style={styles.rowWords}>
         <View style={styles.label}>
           <Print face="bold" size="micro" color="textFaint" track="wider" lines={1} style={styles.keep}>
@@ -111,7 +133,7 @@ export function AccountRow({ onOpen, note }: { onOpen: () => void; /** small pri
         (choose ? (
           <GhostButton label="PICK ONE" icon="swap" tube="gold" small onPress={account.showChoice} accessibilityLabel="Pick which saved game to keep, for grown-ups" />
         ) : (
-          <GhostButton label={phase === 'signedIn' ? 'MANAGE' : 'SIGN IN'} icon="lock" tube="violet" small onPress={onOpen} accessibilityLabel="Account, for grown-ups" />
+          <GhostButton label={inAccount ? 'MANAGE' : 'SIGN IN'} icon="lock" tube="violet" small onPress={onOpen} accessibilityLabel="Account, for grown-ups" />
         ))}
     </Well>
   );
@@ -217,12 +239,20 @@ export function AccountSheet({ onClose }: { onClose: () => void }) {
   const problem = useAccount((s) => s.problem);
   const savedAt = useAccount((s) => s.savedAt);
   const dirty = useAccount((s) => s.dirty);
+  const leaving = useAccount((s) => s.leaving);
   const now = useMinuteClock();
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const busy = phase === 'signingIn' || phase === 'syncing' || phase === 'starting' || phase === 'deleting';
-  const close = busy ? undefined : onClose;
+  const busy = phase === 'signingIn' || phase === 'syncing' || phase === 'starting' || phase === 'deleting' || leaving;
+  const slow = useSlow(busy);
+  // a grown-up asked for these three and sees how they end (each has a time limit); a check of the account that the
+  // game started by itself never holds anyone in the pop-up
+  const mustStay = phase === 'signingIn' || phase === 'deleting' || leaving;
+  const close = mustStay ? undefined : onClose;
+  const signedIn = phase === 'signedIn' && !leaving;
+  // looking for the account kept on this device is a check of the account too, as far as a grown-up can tell
+  const waitLine = phase === 'starting' ? 'Checking your account…' : accountLine({ phase, problem, savedAt, dirty, leaving }, now);
 
-  if (phase === 'signedIn' && confirmDelete) {
+  if (signedIn && confirmDelete) {
     return (
       <Popup tube="red" width={px(440)} onDismiss={() => setConfirmDelete(false)} style={styles.center}>
         <Glow face="display" size="title" tube="red" track="close">
@@ -254,7 +284,7 @@ export function AccountSheet({ onClose }: { onClose: () => void }) {
         <Glow face="display" size="title" tube="violet" track="close">
           ACCOUNT
         </Glow>
-        {phase === 'signedIn' && <Tag label="SIGNED IN" tube="green" small />}
+        {signedIn && <Tag label="SIGNED IN" tube="green" small />}
       </View>
 
       {(phase === 'signedOut' || phase === 'starting' || phase === 'off') && (
@@ -270,12 +300,20 @@ export function AccountSheet({ onClose }: { onClose: () => void }) {
       )}
 
       {busy && (
-        <Print face="bold" size="large" color="textSoft" center>
-          {accountLine({ phase, problem, savedAt, dirty }, now)}
-        </Print>
+        <View style={styles.wait}>
+          <WaitLamps tube="violet" label={waitLine} />
+          <Print face="bold" size="large" color="textSoft" center>
+            {waitLine}
+          </Print>
+          {slow && (
+            <Print face="medium" size="small" color="textDim" center>
+              {phase === 'deleting' ? 'This is taking a while. Please keep the game open.' : 'This is taking a while. Your game is safe on this device, and you can keep playing.'}
+            </Print>
+          )}
+        </View>
       )}
 
-      {phase === 'signedIn' && (
+      {signedIn && (
         <>
           <Well style={styles.saved}>
             <LineIcon name="check" size={px(20)} tube={problem ? 'orange' : 'green'} weight={2.4} />
@@ -304,7 +342,7 @@ export function AccountSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-function GameCard({ title, progress, tube, onPress, label }: { title: string; progress: Progress; tube: 'cyan' | 'gold'; onPress: () => void; label: string }) {
+function GameCard({ title, progress, tube, onPress, label, disabled }: { title: string; progress: Progress; tube: 'cyan' | 'gold'; onPress: () => void; label: string; disabled?: boolean }) {
   return (
     <Well style={[styles.game, { borderColor: tubes[tube].glass }]}>
       <Print face="bold" size="small" color={tubes[tube].tint} track="wider" lines={1}>
@@ -336,7 +374,7 @@ function GameCard({ title, progress, tube, onPress, label }: { title: string; pr
           </Print>
         </View>
       </View>
-      {tube === 'gold' ? <GoldButton label={label} size="small" onPress={onPress} style={styles.stretch} /> : <GhostButton label={label} tube={tube} onPress={onPress} style={styles.stretch} />}
+      {tube === 'gold' ? <GoldButton label={label} size="small" onPress={onPress} disabled={disabled} style={styles.stretch} /> : <GhostButton label={label} tube={tube} onPress={onPress} disabled={disabled} style={styles.stretch} />}
     </Well>
   );
 }
@@ -352,7 +390,10 @@ export function SaveChoice() {
   const problem = useAccount((s) => s.problem);
   const path = usePathname();
   const [gate, ask] = useGate();
-  if (phase !== 'choose' || !choice || hidden || path === '/match') return null;
+  // the pick is on its way to the account: the pop-up stays and says so, instead of going away with nothing changed yet
+  const saving = phase === 'syncing' && choice !== null;
+  const slow = useSlow(saving);
+  if ((phase !== 'choose' && !saving) || !choice || hidden || path === '/match') return null;
   return (
     <>
       <Popup tube="gold" width={px(600)} style={styles.center}>
@@ -363,11 +404,29 @@ export function SaveChoice() {
           This device and your account both have a game. A grown-up picks the one to keep playing; the other is kept in the account as a backup.
         </Print>
         <View style={styles.games}>
-          <GameCard title="THIS DEVICE" progress={choice.device} tube="cyan" label="KEEP THIS DEVICE'S GAME" onPress={() => ask(() => void account.choose('device'))} />
-          <GameCard title="IN YOUR ACCOUNT" progress={choice.cloud} tube="gold" label="USE THE SAVED GAME" onPress={() => ask(() => void account.choose('cloud'))} />
+          <GameCard title="THIS DEVICE" progress={choice.device} tube="cyan" label="KEEP THIS DEVICE'S GAME" disabled={saving} onPress={() => ask(() => void account.choose('device'))} />
+          <GameCard title="IN YOUR ACCOUNT" progress={choice.cloud} tube="gold" label="USE THE SAVED GAME" disabled={saving} onPress={() => ask(() => void account.choose('cloud'))} />
         </View>
-        <Problem text={problemWords(problem, phase)} />
-        <GhostButton label="NOT NOW" tube="steel" small onPress={account.hideChoice} accessibilityLabel="Not now. Keep playing this device's game for now." />
+        {saving ? (
+          <View style={styles.wait}>
+            <View style={styles.waitLine}>
+              <WaitLamps tube="gold" size={px(8)} label="Saving your pick" />
+              <Print face="bold" size="body" color="textSoft">
+                Saving your pick…
+              </Print>
+            </View>
+            {slow && (
+              <Print face="medium" size="small" color="textDim" center>
+                This is taking a while. Nothing is lost: both games are kept until it is done.
+              </Print>
+            )}
+          </View>
+        ) : (
+          <>
+            <Problem text={problemWords(problem, phase)} />
+            <GhostButton label="NOT NOW" tube="steel" small onPress={account.hideChoice} accessibilityLabel="Not now. Keep playing this device's game for now." />
+          </>
+        )}
       </Popup>
       {gate}
     </>
@@ -401,6 +460,16 @@ const styles = StyleSheet.create({
   center: {
     alignItems: 'center',
     gap: space.md,
+  },
+  wait: {
+    alignItems: 'center',
+    gap: space.sm,
+  },
+  waitLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    minHeight: sizes.tap * 0.8,
   },
   title: {
     flexDirection: 'row',

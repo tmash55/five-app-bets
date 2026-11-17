@@ -41,6 +41,11 @@ const ROW_PAD = px(10);
 /** the room for a game's name: its row less the padding, the stars, the prize and the gaps between them */
 const TITLE_ROOM = CARD_ROOM - ROW_PAD * 2 - PRIZE_W - px(55) - space.sm * 2;
 const PLAY_ICON = px(16);
+/** the line at the foot of a card: the pack, then the words in the room that is left (a little spare, as a phone can draw a line a point wider than it measures) */
+const FOOT_ICON = px(16);
+const FOOT_GAP = px(6);
+const FOOT_PAD = px(2);
+const FOOT_ROOM = CARD_ROOM - FOOT_PAD * 2 - FOOT_ICON - FOOT_GAP - px(2);
 
 function GameRow({ game, stars, open, next, onPress }: { game: TourGame; stars: number; open: boolean; /** the next game to play: the one yellow thing on the page */ next: boolean; onPress: () => void }) {
   const won = stars > 0;
@@ -136,11 +141,11 @@ function StageCard({ tour, index, progress, owned, packDone, next, onPlay }: { t
         ))}
       </View>
       <View style={styles.foot}>
-        <FoilPack pack={pack} width={px(16)} flat={!packDone} />
-        <Print face="medium" size="tiny" color={packDone ? tube.green.soft : 'textDim'} lines={1} style={styles.grow}>
+        <FoilPack pack={pack} width={FOOT_ICON} flat={!packDone} />
+        <Print face="medium" size="tiny" color={packDone ? tube.green.soft : 'textDim'} room={FOOT_ROOM - (packDone ? FOOT_GAP + FOOT_ICON : 0)} least={MIN_FIT_LABEL} style={styles.grow}>
           {packDone ? `You won the ${pack.name}!` : `Get all ${all} stars to win the ${pack.name}`}
         </Print>
-        {packDone && <LineIcon name="check" size={px(16)} tube="green" weight={3} />}
+        {packDone && <LineIcon name="check" size={FOOT_ICON} tube="green" weight={3} />}
       </View>
       {!open && <LockVeil message={`Beat the ${tour.stages[index - 1].team.name} first`} />}
     </NeonPanel>
@@ -310,7 +315,7 @@ const styles = StyleSheet.create({
   foot: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: px(6),
-    paddingHorizontal: px(2),
+    gap: FOOT_GAP,
+    paddingHorizontal: FOOT_PAD,
   },
 });

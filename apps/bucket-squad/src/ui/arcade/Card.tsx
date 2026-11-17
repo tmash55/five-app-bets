@@ -295,11 +295,17 @@ export interface HeadCellProps {
   width?: number;
   height?: number;
   onPress?: () => void;
+  /**
+   * The same press, told which player: one function for a whole grid. A grid that hands each cell its own `onPress`
+   * makes a new one for every cell every time anything changes, and then every cell is drawn again for one tap.
+   */
+  onPick?: (id: string) => void;
   style?: StyleProp<ViewStyle>;
 }
 
 /** One face in the collection grid: lit in its rarity's colour when owned, a dark outline when not. */
-export const HeadCell = memo(function HeadCell({ player, level = 0, selected, fresh, width = px(66), height = px(44), onPress, style }: HeadCellProps) {
+export const HeadCell = memo(function HeadCell({ player, level = 0, selected, fresh, width = px(66), height = px(44), onPress, onPick, style }: HeadCellProps) {
+  const pressable = onPress !== undefined || onPick !== undefined;
   const rp = rarityPaint[player.rarity];
   const tb = tubes[rp.tube];
   const owned = level > 0;
@@ -344,14 +350,14 @@ export const HeadCell = memo(function HeadCell({ player, level = 0, selected, fr
   );
   // the level's frame sits over the cell, outside its clipped edge, so the chrome and the crest can stand round it
   const body = (
-    <View style={[{ width, height }, onPress ? undefined : style]}>
+    <View style={[{ width, height }, pressable ? undefined : style]}>
       {face}
       {owned && <LevelFrame level={level} glow={tb} width={width} height={height} round={arcade.rCell} rim={selected ? arcade.outline : arcade.hairline} small />}
     </View>
   );
   // a player just found and not looked at yet springs into its place as the grid opens
   const cell = fresh && owned ? <Found>{body}</Found> : body;
-  if (!onPress) return cell;
+  if (!pressable) return cell;
   return (
     <Pressable
       accessibilityRole="button"
@@ -359,7 +365,8 @@ export const HeadCell = memo(function HeadCell({ player, level = 0, selected, fr
       accessibilityLabel={owned ? `${player.name}, ${RARITY_LABEL[player.rarity]}, level ${level}, ${playerOverall(player, level)} overall` : `${player.name}, ${RARITY_LABEL[player.rarity]}, not found yet`}
       onPress={() => {
         tapFeedback();
-        onPress();
+        onPress?.();
+        onPick?.(player.id);
       }}
       style={({ pressed }) => [pressed && styles.pressed, style]}>
       {cell}

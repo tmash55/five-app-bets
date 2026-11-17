@@ -1,6 +1,7 @@
 /**
  * The account, over the network: the Supabase client, the save row and account deletion.
  * Every call either answers or throws; a throw means "could not reach the account" and the engine tries later.
+ * Every request has a time limit (`timedFetch`), so a throw is never more than a few seconds away.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,6 +11,7 @@ import { Platform } from 'react-native';
 import { SAVE_VERSION, type SaveData } from '@/state/logic';
 import { ACCOUNT_KEY, ACCOUNT_URL, ACCOUNTS_SET_UP, DELETE_ACCOUNT_FUNCTION, SAVES_TABLE } from './config';
 import { cloudFromRow, type CloudSave, type SaveRow } from './sync';
+import { timedFetch } from './timedFetch';
 
 /** What the sync engine needs from the account. The app has one, backed by Supabase; tests use their own. */
 export interface SaveRemote {
@@ -38,6 +40,8 @@ export function accountClient(): SupabaseClient {
         autoRefreshToken: true,
         detectSessionInUrl: false,
       },
+      // no request waits longer than a grown-up will: a slow one fails and is tried again later
+      global: { fetch: timedFetch((input, init) => fetch(input, init)) },
     });
   }
   return client;
@@ -51,7 +55,9 @@ const UNIQUE_VIOLATION = '23505';
 
 export const supabaseSaves: SaveRemote = {
   async read(userId) {
-    const { data, error } = await accountClient().from(SAVES_TABLE).select('rev, data, updated_at').eq('user_id', userId).maybeSingle<SaveRow>();
+    // one try: the engine has its own "try again later", and the client's own retries (three more, seconds apart) would
+    // keep "Checking your account…" up that much longer before the game says it is offline
+    const { data, error } = await accountClient().from(SAVES_TABLE).select('rev, data, updated_at').eq('user_id', userId).maybeSingle<SaveRow>().retry(false);
     if (error) throw error;
     return data ? cloudFromRow(data) : null;
   },

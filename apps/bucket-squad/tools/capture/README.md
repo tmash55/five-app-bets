@@ -81,6 +81,48 @@ On a phone, start the bundler with `EXPO_PUBLIC_BS_PERF=1` and look for the `BSP
 a match (see `src/game/perf.ts`): frame gaps, frames over 20 and 33 ms, the time in each part and the graphics
 level with each change of it.
 
+## Checking sizes, touch, slow lines and slow devices
+
+Four tools walk the game the way a tester would. All of them drive the headless browser from `chrome.sh`, and
+share their helpers in `lib.js`. Nothing here ships in the app.
+
+```sh
+# every screen at one size, pressed with a finger, with a ruler held to each: things past the edge, words cut
+# short, buttons too small, buttons on top of each other or in the phone's home-bar strip. Writes the pictures
+# and report.json (the faults, and how long each page took to come up)
+node qa.js --size 844x390@1 --touch --out qa/844
+node qa.js --size 874x402@1 --touch --insets iphone --out qa/874-notch
+node qa.js --size 844x390@1 --touch --cpu 6 --only home,play,shelf --out qa/slow
+
+# the account while the account service takes its time (or never answers, or fails). The page talks to a
+# pretend account answered by this tool: nothing leaves the machine and no real account is touched. Start the
+# web build with EXPO_PUBLIC_SUPABASE_URL=https://bucket-squad-test.invalid EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_test
+node slowapi.js --scenario launch  --delay 8000 --out slow     # also: signout, delete, choose; --hang, --fail
+
+# two devices playing each other over a slow line, in real time (a second and third browser:
+# CDP_PORT=9334 and 9335 with their own CAPTURE_PROFILE). Starts the room relay itself, with the delay
+node slowline.js --delay 250 --jitter 60 --seconds 25
+
+# how heavy each menu page is on a slow processor. Needs a production web build (npx expo export -p web, served
+# from a folder, its address in APP_URL) and a save to start from (the text of the bucket-squad-save entry)
+APP_URL=http://127.0.0.1:8090/ node perfmenu.js --size 1024x768@1 --cpu 6 --save save.json --out menu.json
+```
+
+What the numbers do and do not say:
+
+- A phone with a notch gets a smaller scale than the browser gives the same screen (`usableScreen` in
+  `src/theme/tokens.ts` takes the notch and home bar off before it works the scale out, and the browser has
+  neither). `--insets iphone` shows where the notch and the bar sit, but keeps the browser's bigger scale, so it
+  is harsher on width than the phone is. To see a notch phone's real room, give its usable screen as a plain
+  size instead: 780x376 for an iPhone 13 to 15, 763x379 for an iPhone 16, 779x388 for a 16 Pro, 865x427 for a
+  Pro Max.
+- `hitSlop` (the invisible room round a small button) does not exist in the browser, so `small` faults
+  overstate a little: a 36 point button with 4 points of slop is a 44 point target on a phone.
+- The home page's 3D stage is drawn by the software GPU here. Making and freeing its WebGL context takes about
+  a second in the browser and next to nothing on a device, so "back to home" looks far slower than it is.
+- The slow-line match cannot run faster than the software GPU lets it (about half speed). Compare a slow line
+  with a fast one on the same machine, not with 60.
+
 ## Needs
 
 Node 22 or newer, Python 3 with numpy and Pillow, ffmpeg, and a Chromium binary

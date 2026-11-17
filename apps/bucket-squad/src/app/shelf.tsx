@@ -5,7 +5,7 @@
  */
 
 import { useRouter } from 'expo-router';
-import { Fragment, useState } from 'react';
+import { Fragment, useCallback, useDeferredValue, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { LEAGUES, MAX_LEVEL, PLAYERS, byValue, leagueOf, leagueTeams, playerOverall, teamById } from '@/data/roster';
@@ -118,6 +118,36 @@ function byTeam(order: readonly PlayerDef[]): { team: TeamDef; players: PlayerDe
     else runs.push({ team: teamById(p.team), players: [p] });
   }
   return runs;
+}
+
+/**
+ * The grid's cells. It opens with the rows the screen shows, and the rows below them are made straight after, in
+ * pieces between frames: a league of 150 players made in one go is a long freeze on an old iPad as the page opens,
+ * and on every change of sort or league. It is made anew for each (see its `key`), so each opens this way.
+ */
+function GridCells({ order, teams, owned, fresh, shown, first, cellW, cellH, onPick }: { order: readonly PlayerDef[]; /** in runs under team headings */ teams: boolean; owned: Owned; fresh: readonly string[]; shown: string; /** how many cells the first frame gets */ first: number; cellW: number; cellH: number; onPick: (id: string) => void }) {
+  const count = useDeferredValue(order.length, Math.min(first, order.length));
+  const cell = (p: PlayerDef) => <HeadCell key={p.id} player={p} level={levelOf(owned[p.id] ?? 0)} selected={p.id === shown} fresh={fresh.includes(p.id)} width={cellW} height={cellH} onPick={onPick} />;
+  if (!teams) return (count < order.length ? order.slice(0, count) : order).map(cell);
+  return firstOf(byTeam(order), count).map((run) => (
+    <Fragment key={run.team.id}>
+      <TeamHead team={run.team} have={countOwned(owned, run.all.map((p) => p.id))} of={run.all.length} />
+      {run.players.map(cell)}
+    </Fragment>
+  ));
+}
+
+/** The runs that hold the first `count` players, the last of them cut short; `all` is still the whole team, for its heading. */
+function firstOf(runs: readonly { team: TeamDef; players: PlayerDef[] }[], count: number): { team: TeamDef; players: PlayerDef[]; all: PlayerDef[] }[] {
+  const out: { team: TeamDef; players: PlayerDef[]; all: PlayerDef[] }[] = [];
+  let left = count;
+  for (const run of runs) {
+    if (left <= 0) break;
+    const players = left < run.players.length ? run.players.slice(0, left) : run.players;
+    out.push({ team: run.team, players, all: run.players });
+    left -= players.length;
+  }
+  return out;
 }
 
 /** The level as lamps, and the copies still to find for the next one. */
@@ -243,10 +273,16 @@ export default function Collection() {
   const cellW = Math.floor((inside - GAP * (cols - 1)) / cols);
   const cellH = Math.round(cellW * CELL_SHAPE);
 
-  const pick = (id: string) => {
-    setPicked(id);
-    markSeen(id);
-  };
+  // one function for every cell, the same from one draw to the next: a tap then draws two cells again, not the whole grid
+  const pick = useCallback(
+    (id: string) => {
+      setPicked(id);
+      markSeen(id);
+    },
+    [markSeen],
+  );
+  // the rows that show as the page opens, and one more for the row that peeks in at the bottom
+  const firstCells = cols * (Math.ceil(height / (cellH + GAP)) + 1);
   const changeLeague = (id: string) => {
     const next = lineUp(id, sort, owned);
     setLeague(id);
@@ -257,8 +293,6 @@ export default function Collection() {
     setSort(to);
     setOrder(lineUp(league, to, owned));
   };
-
-  const cell = (p: PlayerDef) => <HeadCell key={p.id} player={p} level={levelOf(owned[p.id] ?? 0)} selected={p.id === shown} fresh={fresh.includes(p.id)} width={cellW} height={cellH} onPress={() => pick(p.id)} />;
 
   const have = countOwned(owned, ALL_IDS);
   return (
@@ -282,14 +316,7 @@ export default function Collection() {
             <LitTabs tabs={SHELF_SORTS} value={sort} onChange={changeSort} />
           </View>
           <FadeScroll key={`${league}:${sort}`} reach={px(30)} style={styles.grow} contentContainerStyle={styles.grid} showsVerticalScrollIndicator={false}>
-            {sort === 'team'
-              ? byTeam(order).map((run) => (
-                  <Fragment key={run.team.id}>
-                    <TeamHead team={run.team} have={countOwned(owned, run.players.map((p) => p.id))} of={run.players.length} />
-                    {run.players.map(cell)}
-                  </Fragment>
-                ))
-              : order.map(cell)}
+            <GridCells order={order} teams={sort === 'team'} owned={owned} fresh={fresh} shown={shown} first={firstCells} cellW={cellW} cellH={cellH} onPick={pick} />
           </FadeScroll>
         </NeonPanel>
         <Detail player={player} width={panelW} height={height} />
