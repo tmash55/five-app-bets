@@ -1,0 +1,7 @@
+{
+  "name": "Shell Template",
+  "slug": "shell-template",
+  "scheme": "shelltemplate",
+  "iosBundleIdentifier": "bet.unjuiced.shelltemplate",
+  "androidPackage": "bet.unjuiced.shelltemplate"
+}

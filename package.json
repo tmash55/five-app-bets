@@ -1,0 +1,14 @@
+{
+  "name": "five-app-bets",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "node --test 'scripts/*.test.mjs' && npm run test --workspaces --if-present",
+    "new-app": "node scripts/new-app.mjs"
+  }
+}
