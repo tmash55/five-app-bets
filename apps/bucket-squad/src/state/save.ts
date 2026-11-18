@@ -140,7 +140,7 @@ export const useSave = create<SaveStore>()(
         return true;
       },
       nameTeam: (name, colors) => set(logic.colorTeam(logic.nameTeam(dataOf(get()), name), colors)),
-      addCoins: (n) => set({ coins: Math.max(0, get().coins + n) }),
+      addCoins: (n) => set(logic.addCoins(dataOf(get()), n)),
       resetAll: () => set(logic.newSave()),
     }),
     {

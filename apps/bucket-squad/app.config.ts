@@ -28,8 +28,8 @@ const config: ExpoConfig = {
   backgroundColor: brand.splash,
   ios: {
     bundleIdentifier: identity.iosBundleIdentifier,
-    // TestFlight build number: App Store Connect refuses a number it already has (1 to 3 were archived by 2026-11-17), so raise it before every upload
-    buildNumber: '3',
+    // TestFlight build number: App Store Connect refuses a number it already has (1 to 3 were used by 2026-11-18), so raise it before every upload
+    buildNumber: '4',
     supportsTablet: true,
     requireFullScreen: true,
     // Sign in with Apple, for the optional account that keeps the save (src/account)

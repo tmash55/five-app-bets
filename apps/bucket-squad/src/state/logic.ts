@@ -282,6 +282,14 @@ export function squadUniform(data: Pick<SaveData, 'squad' | 'uniform' | 'homeTea
   return { def, wear: def ? wearOf(def) : teamWear(captainTeam), captainTeam };
 }
 
+/** What a grown-up can give the player at a tap, from the account sheet behind the times-table check. */
+export const GIFT_COINS = [1_000, 10_000] as const;
+
+/** Add (or take) coins, never below zero. */
+export function addCoins(data: SaveData, n: number): SaveData {
+  return { ...data, coins: Math.max(0, data.coins + n) };
+}
+
 /** Buy a special uniform: one this build has, not yours yet, and coins enough. A limited edition is sold only in the Daily Shop. */
 export function buyUniform(data: SaveData, id: string): SaveData | null {
   const def = uniformById(id);

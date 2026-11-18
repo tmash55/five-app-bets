@@ -13,10 +13,12 @@ import { StyleSheet, View } from 'react-native';
 import { account, gateFresh, useAccount, type AccountProblem, type AccountState } from '@/account';
 import { gateQuestion, type GateQuestion } from '@/account/gate';
 import { savedAgo, type Progress } from '@/account/sync';
+import { GIFT_COINS } from '@/state/logic';
+import { useSave } from '@/state/save';
 import { arcade, night, tube as tubes } from '@/theme/arcade';
 import { px, size as sizes, space } from '@/theme/tokens';
 import { GhostButton, GoldButton } from './Buttons';
-import { LineIcon, type LineIconName } from './LineIcon';
+import { Coin, LineIcon, type LineIconName } from './LineIcon';
 import { Popup } from './Popup';
 import { CoinAmount } from './Rewards';
 import { Tag, Well } from './Surface';
@@ -107,12 +109,19 @@ export function AccountRow({ onOpen, note }: { onOpen: () => void; /** small pri
           {line}
         </Print>
       </View>
-      {phase !== 'off' &&
-        (choose ? (
-          <GhostButton label="PICK ONE" icon="swap" tube="gold" small onPress={account.showChoice} accessibilityLabel="Pick which saved game to keep, for grown-ups" />
-        ) : (
-          <GhostButton label={phase === 'signedIn' ? 'MANAGE' : 'SIGN IN'} icon="lock" tube="violet" small onPress={onOpen} accessibilityLabel="Account, for grown-ups" />
-        ))}
+      {choose ? (
+        <GhostButton label="PICK ONE" icon="swap" tube="gold" small onPress={account.showChoice} accessibilityLabel="Pick which saved game to keep, for grown-ups" />
+      ) : (
+        // with accounts off the sheet still holds the grown-ups' coin gift, so the way in stays
+        <GhostButton
+          label={phase === 'signedIn' ? 'MANAGE' : phase === 'off' ? 'GROWN-UPS' : 'SIGN IN'}
+          icon="lock"
+          tube="violet"
+          small
+          onPress={onOpen}
+          accessibilityLabel="Account, for grown-ups"
+        />
+      )}
     </Well>
   );
 }
@@ -263,9 +272,11 @@ export function AccountSheet({ onClose }: { onClose: () => void }) {
             {phase === 'off' ? "Accounts aren't set up in this build. Your game is saved on this device." : 'Sign in to keep this game in your account. It stays safe if this device is lost, and comes back when you sign in on another iPhone or iPad.'}
           </Print>
           {phase === 'signedOut' && <AppleButton />}
-          <Print face="medium" size="tiny" color="textFaint" center>
-            Only the game is saved with the account. Apple lets you hide your email.
-          </Print>
+          {phase !== 'off' && (
+            <Print face="medium" size="tiny" color="textFaint" center>
+              Only the game is saved with the account. Apple lets you hide your email.
+            </Print>
+          )}
         </>
       )}
 
@@ -298,9 +309,44 @@ export function AccountSheet({ onClose }: { onClose: () => void }) {
         </>
       )}
 
+      {!busy && <GiftCoins />}
+
       <Problem text={problemWords(problem, phase)} />
       {close && <GhostButton label="CLOSE" icon="close" tube="steel" small onPress={close} />}
     </Popup>
+  );
+}
+
+/** Grown-ups only (this sheet opens behind the times-table check): a coin gift for the player, on this device. */
+function GiftCoins() {
+  const coins = useSave((s) => s.coins);
+  const addCoins = useSave((s) => s.addCoins);
+  const [given, setGiven] = useState(0);
+  return (
+    <Well style={styles.saved}>
+      <Coin size={px(22)} />
+      <View style={styles.rowWords}>
+        <Print face="bold" size="small" color="text" track="wider" lines={1}>
+          GIFT COINS
+        </Print>
+        <Print face="medium" size="tiny" color="textDim" lines={2}>
+          {given > 0 ? `Added ${given.toLocaleString('en-US')}. Now ${coins.toLocaleString('en-US')}.` : `${coins.toLocaleString('en-US')} coins now.`}
+        </Print>
+      </View>
+      {GIFT_COINS.map((n) => (
+        <GhostButton
+          key={n}
+          label={`+${n.toLocaleString('en-US')}`}
+          tube="gold"
+          small
+          accessibilityLabel={`Give ${n.toLocaleString('en-US')} coins`}
+          onPress={() => {
+            addCoins(n);
+            setGiven(given + n);
+          }}
+        />
+      ))}
+    </Well>
   );
 }
 
