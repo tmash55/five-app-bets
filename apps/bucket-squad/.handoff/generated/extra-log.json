@@ -1,0 +1,202 @@
+[
+ {
+  "file": "el-basketball-dunk-1.mp3",
+  "text": "Basketball slam dunk on an outdoor court: the ball slams through a metal hoop, the rim rattles and the net snaps",
+  "seconds": 2.5,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 100,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-basketball-dunk-2.mp3",
+  "text": "Basketball slam dunk on an outdoor court: the ball slams through a metal hoop, the rim rattles and the net snaps",
+  "seconds": 2.5,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 100,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-rim-clank-1.mp3",
+  "text": "A basketball hits the metal rim and bounces off with a loud ringing clank, outdoor court, close up",
+  "seconds": 1.5,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 60,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-rim-clank-2.mp3",
+  "text": "A basketball hits the metal rim and bounces off with a loud ringing clank, outdoor court, close up",
+  "seconds": 1.5,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 60,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-backboard-bank-in-1.mp3",
+  "text": "A basketball banks off a backboard with a hollow thump and drops through the net",
+  "seconds": 2.0,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 80,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-chain-net-swish-1.mp3",
+  "text": "A basketball swishes through a metal chain net on a playground hoop, bright jingling chain rattle, no rim hit",
+  "seconds": 1.5,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 60,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-chain-net-swish-2.mp3",
+  "text": "A basketball swishes through a metal chain net on a playground hoop, bright jingling chain rattle, no rim hit",
+  "seconds": 1.5,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 60,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-nylon-net-swish-1.mp3",
+  "text": "A clean basketball swish through a nylon net, soft whip of the net, no rim",
+  "seconds": 1.0,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 40,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-nylon-net-swish-2.mp3",
+  "text": "A clean basketball swish through a nylon net, soft whip of the net, no rim",
+  "seconds": 1.0,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 40,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-pass-catch-1.mp3",
+  "text": "A basketball chest pass caught with two hands, sharp leather slap of the catch, close up",
+  "seconds": 1.0,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 40,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-pass-catch-2.mp3",
+  "text": "A basketball chest pass caught with two hands, sharp leather slap of the catch, close up",
+  "seconds": 1.0,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 40,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-sneakers-running-asphalt-1.mp3",
+  "text": "A kid in sneakers running quickly across an outdoor asphalt basketball court, light gritty footsteps",
+  "seconds": 4.0,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 160,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-jump-landing-concrete-1.mp3",
+  "text": "Sneakers landing after a jump on a concrete basketball court, soft thud with a short shoe scuff",
+  "seconds": 1.0,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 40,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-jump-landing-concrete-2.mp3",
+  "text": "Sneakers landing after a jump on a concrete basketball court, soft thud with a short shoe scuff",
+  "seconds": 1.0,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 40,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-sneaker-squeak-gym-1.mp3",
+  "text": "Basketball shoes squeaking on a polished hardwood gym floor, two quick sharp squeaks",
+  "seconds": 1.5,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 60,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-sneaker-squeak-gym-2.mp3",
+  "text": "Basketball shoes squeaking on a polished hardwood gym floor, two quick sharp squeaks",
+  "seconds": 1.5,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 60,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-scoreboard-horn-1.mp3",
+  "text": "Basketball arena scoreboard horn at the end of a quarter, loud electronic buzzer blast",
+  "seconds": 2.0,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 80,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-scoreboard-horn-2.mp3",
+  "text": "Basketball arena scoreboard horn at the end of a quarter, loud electronic buzzer blast",
+  "seconds": 2.0,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 80,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-city-rooftop-ambience-1.mp3",
+  "text": "City rooftop ambience: distant traffic hum, light wind, faint far-off city sounds, no music, no voices",
+  "seconds": 30.0,
+  "loop": true,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 1200,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ },
+ {
+  "file": "el-card-pack-rip-1.mp3",
+  "text": "Tearing open a foil trading card pack, crinkly foil rip, close up",
+  "seconds": 1.5,
+  "loop": false,
+  "model": "service default (no model_id sent)",
+  "prompt_influence": 0.5,
+  "credits": 60,
+  "credits_note": "seconds x 40; the service cost header was not read"
+ }
+]

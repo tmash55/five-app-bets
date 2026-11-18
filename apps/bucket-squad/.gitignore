@@ -1,0 +1,48 @@
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native (generated with `npx expo prebuild`)
+ios/
+android/
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files (the account settings go in .env.local; .env.example is the committed template)
+.env
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# coverage
+coverage/
+
+# Python
+__pycache__/
+*.pyc
+
+# Private roster pack (real pro players for a family build). Never commit, never ship.
+private/
