@@ -18,6 +18,8 @@ const hasPrivateRoster =
 const config: ExpoConfig = {
   name: identity.name,
   slug: identity.slug,
+  // the Expo account that uploads to TestFlight with its stored App Store Connect key, like the other apps
+  owner: 'unjuicedbet',
   scheme: identity.scheme,
   version: '1.0.0',
   orientation: 'landscape',
@@ -81,6 +83,7 @@ const config: ExpoConfig = {
   },
   extra: {
     privateRoster: hasPrivateRoster,
+    eas: { projectId: '78ca8638-7d60-4932-870a-c356a91316c4' },
   },
 };
 
